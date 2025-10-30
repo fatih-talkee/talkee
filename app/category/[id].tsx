@@ -71,7 +71,7 @@ export default function CategoryScreen() {
         backPosition="right"
         rightButtons={
           <TouchableOpacity
-            style={[styles.headerIconButton, { backgroundColor: theme.colors.overlay }]}
+            style={styles.headerIconButton}
             onPress={() => setFilterVisible(true)}
           >
             <Filter size={20} color={theme.colors.text} />
@@ -100,7 +100,6 @@ export default function CategoryScreen() {
               },
             ]}
           />
-          
         </View>
 
         <View style={styles.resultsHeader}>
