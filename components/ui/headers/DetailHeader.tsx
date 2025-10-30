@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
 import { ArrowLeft } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
 
 interface DetailHeaderProps {
@@ -13,6 +14,7 @@ interface DetailHeaderProps {
 
 export function DetailHeader({ title, onBack, rightButtons, containerStyle, backPosition = 'left' }: DetailHeaderProps) {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const renderRight = Array.isArray(rightButtons) ? rightButtons : rightButtons ? [rightButtons] : [];
 
@@ -22,6 +24,7 @@ export function DetailHeader({ title, onBack, rightButtons, containerStyle, back
         styles.header,
         {
           backgroundColor: theme.colors.surface,
+          paddingTop: insets.top,
         },
         containerStyle,
       ]}
