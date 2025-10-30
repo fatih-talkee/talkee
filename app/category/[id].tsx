@@ -6,7 +6,6 @@ import {
   SafeAreaView,
   TouchableOpacity,
   FlatList,
-  Platform,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Search, Filter } from 'lucide-react-native';
@@ -163,14 +162,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f8fafc',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   searchSection: {
     paddingHorizontal: 0,
     paddingVertical: 20,
@@ -179,35 +170,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    gap: 0,
   },
   searchInput: {
     flex: 1,
     minWidth: 0,
-    marginRight: 0,
-    width: '100%',
     marginHorizontal: 16,
-    marginBottom: 0,
-  },
-  filterButton: {
-    width: 40,
-    height: 40,
-    flexShrink: 0,
-    borderRadius: 20,
-    backgroundColor: '#fef3c7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#f59e0b',
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0 2px 6px rgba(0,0,0,0.08)' }
-      : {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.08,
-          shadowRadius: 6,
-          elevation: 2,
-        }),
   },
   headerIconButton: {
     width: 40,
@@ -224,12 +191,10 @@ const styles = StyleSheet.create({
   resultsCount: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-    color: '#64748b',
   },
   clearFilters: {
     fontSize: 14,
     fontFamily: 'Inter-Medium',
-    color: '#f59e0b',
   },
   listContent: {
     padding: 24,
@@ -242,13 +207,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontFamily: 'Inter-Bold',
-    color: '#374151',
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-    color: '#64748b',
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: 40,
