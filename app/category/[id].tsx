@@ -172,19 +172,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   searchSection: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 0,
     paddingVertical: 20,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    gap: 4,
+    gap: 0,
   },
   searchInput: {
     flex: 1,
     minWidth: 0,
     marginRight: 0,
+    width: '100%',
+    marginHorizontal: 16,
     marginBottom: 0,
   },
   filterButton: {
