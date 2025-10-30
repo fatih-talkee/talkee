@@ -11,7 +11,7 @@ interface DetailHeaderProps {
   backPosition?: 'left' | 'right';
 }
 
-export function DetailHeader({ title, onBack, rightButtons, containerStyle, backPosition = 'right' }: DetailHeaderProps) {
+export function DetailHeader({ title, onBack, rightButtons, containerStyle, backPosition = 'left' }: DetailHeaderProps) {
   const { theme } = useTheme();
 
   const renderRight = Array.isArray(rightButtons) ? rightButtons : rightButtons ? [rightButtons] : [];
