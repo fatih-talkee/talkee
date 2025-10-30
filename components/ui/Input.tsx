@@ -1,5 +1,11 @@
 import React from 'react';
-import { TextInput, View, Text, StyleSheet, TextInputProps } from 'react-native';
+import {
+  TextInput,
+  View,
+  Text,
+  StyleSheet,
+  TextInputProps,
+} from 'react-native';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -8,21 +14,26 @@ interface InputProps extends TextInputProps {
   rightIcon?: React.ReactNode;
 }
 
-export function Input({ 
-  label, 
-  error, 
-  leftIcon, 
-  rightIcon, 
-  style, 
-  ...props 
+export function Input({
+  label,
+  error,
+  leftIcon,
+  rightIcon,
+  style,
+  ...props
 }: InputProps) {
   return (
     <View style={styles.container}>
       {label && <Text style={styles.label}>{label}</Text>}
-      <View style={[styles.inputContainer, error && styles.inputError, style]}>
+      <View style={[styles.inputContainer, error ? styles.inputError : undefined]}>
         {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
         <TextInput
-          style={[styles.input, leftIcon && styles.inputWithLeftIcon, rightIcon && styles.inputWithRightIcon]}
+          style={[
+            styles.input,
+            leftIcon ? styles.inputWithLeftIcon : undefined,
+            rightIcon ? styles.inputWithRightIcon : undefined,
+            style as any,
+          ]}
           placeholderTextColor="#6B7280"
           {...props}
         />
@@ -84,5 +95,18 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: '#FF6B6B',
     marginTop: 4,
+  },
+  inputTextLight: {
+    color: '#000000',
+  },
+  inputTextDark: {
+    color: '#FFFFFF',
+  },
+  inputText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+  },
+  inputTextError: {
+    color: '#FF6B6B',
   },
 });
