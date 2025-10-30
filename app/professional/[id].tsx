@@ -642,7 +642,7 @@ export default function ProfessionalProfileScreen() {
         edges={['bottom']}
         style={[
           styles.callActionsWrapper,
-          { backgroundColor: theme.colors.surface },
+          { backgroundColor: theme.colors.tabBarBackground },
         ]}
       >
         <View
@@ -1078,12 +1078,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    // background: theme.colors.surface
+    // background: theme.colors.tabBarBackground
+    height: 90,
+    zIndex: 10,
   },
   callActions: {
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 10,
+    width: '100%',
     // 1px divider to match tabs
     borderTopWidth: 1,
     // Upward shadow to match tabs
