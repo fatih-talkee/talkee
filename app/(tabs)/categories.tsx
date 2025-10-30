@@ -213,7 +213,13 @@ export default function CategoriesScreen() {
         >
           {section.title}
         </Text>
-        <TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => {
+            const inferredCategoryName = section.professionals[0]?.category || 'Technology';
+            const category = mockCategories.find(c => c.name === inferredCategoryName) || mockCategories[1];
+            router.push(`/category/${category.id}?name=${encodeURIComponent(category.name)}`);
+          }}
+        >
           <Text
             style={[
               styles.seeAllText,
