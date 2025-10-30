@@ -41,7 +41,6 @@ export default function ForgotPasswordScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.content}
           >
-            
             <View style={styles.headerCentered}>
               <Image
                 source={require('@/assets/images/talkee_logoF.png')}
@@ -77,19 +76,12 @@ export default function ForgotPasswordScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.content}
         >
-          
-
           <View style={styles.headerCentered}>
             <Image
               source={require('@/assets/images/talkee_logoF.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />
-            <Text style={styles.titleLight}>Reset Password</Text>
-            <Text style={styles.subtitleLight}>
-              Enter your email address and we'll send you a link to reset your
-              password
-            </Text>
           </View>
 
           <View style={styles.form}>
@@ -137,7 +129,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
   },
-  
+
   headerCentered: {
     marginBottom: 40,
     alignItems: 'center',
