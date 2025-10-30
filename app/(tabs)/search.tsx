@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  FlatList,
+  ScrollView,
+} from 'react-native';
 import { Search, Star, DollarSign, Clock, Shield } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
@@ -33,31 +41,42 @@ export default function SearchScreen() {
     { label: '$15+', value: [15, 20] },
   ];
 
-  const filteredProfessionals = mockProfessionals.filter(professional => {
-    const matchesSearch = professional.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         professional.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         professional.category.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesPrice = professional.ratePerMinute >= filters.priceRange[0] && 
-                        professional.ratePerMinute <= filters.priceRange[1];
-    
+  const filteredProfessionals = mockProfessionals.filter((professional) => {
+    const matchesSearch =
+      professional.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      professional.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      professional.category.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesPrice =
+      professional.ratePerMinute >= filters.priceRange[0] &&
+      professional.ratePerMinute <= filters.priceRange[1];
+
     const matchesRating = professional.rating >= filters.rating;
-    
-    const matchesAvailability = filters.availability === 'all' || 
-                               (filters.availability === 'online' && professional.isOnline) ||
-                               (filters.availability === 'offline' && !professional.isOnline);
-    
-    const matchesCategories = filters.categories.length === 0 || 
-                             filters.categories.includes(professional.category);
 
-    const matchesVerification = !filters.verifiedOnly || professional.isVerified;
+    const matchesAvailability =
+      filters.availability === 'all' ||
+      (filters.availability === 'online' && professional.isOnline) ||
+      (filters.availability === 'offline' && !professional.isOnline);
 
-    return matchesSearch && matchesPrice && matchesRating && matchesAvailability && 
-           matchesCategories && matchesVerification;
+    const matchesCategories =
+      filters.categories.length === 0 ||
+      filters.categories.includes(professional.category);
+
+    const matchesVerification =
+      !filters.verifiedOnly || professional.isVerified;
+
+    return (
+      matchesSearch &&
+      matchesPrice &&
+      matchesRating &&
+      matchesAvailability &&
+      matchesCategories &&
+      matchesVerification
+    );
   });
 
   const updateFilter = (key: keyof FilterState, value: any) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
+    setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
   const clearAllFilters = () => {
@@ -71,38 +90,73 @@ export default function SearchScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <Header showLogo={true} />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Search Section */}
-        <View style={[styles.searchSection, { backgroundColor: theme.colors.surface }]}>
+        <View
+          style={[
+            styles.searchSection,
+            { backgroundColor: theme.colors.surface },
+          ]}
+        >
           <Input
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search professionals..."
             leftIcon={<Search size={20} color={theme.colors.textMuted} />}
-            style={[styles.searchInput, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+            style={[
+              styles.searchInput,
+              {
+                backgroundColor: theme.colors.card,
+                borderColor: theme.colors.border,
+              },
+            ]}
           />
-          
+
           <View style={styles.resultsHeader}>
-            <Text style={[styles.resultsCount, { color: theme.colors.textSecondary }]}>
+            <Text
+              style={[
+                styles.resultsCount,
+                { color: theme.colors.textSecondary },
+              ]}
+            >
               {filteredProfessionals.length} professionals found
             </Text>
             <TouchableOpacity onPress={clearAllFilters}>
-              <Text style={[styles.clearFilters, { color: theme.colors.primary }]}>Clear all</Text>
+              <Text
+                style={[styles.clearFilters, { color: theme.colors.primary }]}
+              >
+                Clear all
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Filters Section */}
-        <View style={[styles.filtersSection, { backgroundColor: theme.colors.surface }]}>
-          <Text style={[styles.filtersTitle, { color: theme.colors.text }]}>Filters</Text>
-          
+        <View
+          style={[
+            styles.filtersSection,
+            { backgroundColor: theme.colors.surface },
+          ]}
+        >
+          <Text style={[styles.filtersTitle, { color: theme.colors.text }]}>
+            Filters
+          </Text>
+
           {/* Category Filter */}
           <View style={styles.filterGroup}>
-            <Text style={[styles.filterLabel, { color: theme.colors.text }]}>Category</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+            <Text style={[styles.filterLabel, { color: theme.colors.text }]}>
+              Category
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.horizontalScroll}
+            >
               <View style={styles.categoryRow}>
                 {mockCategories.slice(0, 6).map((category) => (
                   <TouchableOpacity
@@ -111,25 +165,37 @@ export default function SearchScreen() {
                       styles.categoryChip,
                       {
                         // theme.colors.card → chip background
-                        backgroundColor: filters.categories.includes(category.name) ? theme.colors.primary : theme.colors.card,
+                        backgroundColor: filters.categories.includes(
+                          category.name
+                        )
+                          ? theme.colors.primary
+                          : theme.colors.card,
                         // theme.colors.border → chip border
-                        borderColor: filters.categories.includes(category.name) ? theme.colors.primary : theme.colors.border
-                      }
+                        borderColor: filters.categories.includes(category.name)
+                          ? theme.colors.primary
+                          : theme.colors.border,
+                      },
                     ]}
                     onPress={() => {
-                      const newCategories = filters.categories.includes(category.name)
-                        ? filters.categories.filter(c => c !== category.name)
+                      const newCategories = filters.categories.includes(
+                        category.name
+                      )
+                        ? filters.categories.filter((c) => c !== category.name)
                         : [...filters.categories, category.name];
                       updateFilter('categories', newCategories);
                     }}
                   >
-                    <Text style={[
-                      styles.categoryChipText,
-                      {
-                        // theme.colors.text → chip text / theme.colors.surface → selected chip text
-                        color: filters.categories.includes(category.name) ? theme.colors.surface : theme.colors.text
-                      }
-                    ]}>
+                    <Text
+                      style={[
+                        styles.categoryChipText,
+                        {
+                          // theme.colors.text → chip text / theme.colors.surface → selected chip text
+                          color: filters.categories.includes(category.name)
+                            ? theme.colors.surface
+                            : theme.colors.text,
+                        },
+                      ]}
+                    >
                       {category.name}
                     </Text>
                   </TouchableOpacity>
@@ -142,7 +208,9 @@ export default function SearchScreen() {
           <View style={styles.filterGroup}>
             <View style={styles.filterHeader}>
               <DollarSign size={18} color={theme.colors.accent} />
-              <Text style={[styles.filterLabel, { color: theme.colors.text }]}>Price Range (per minute)</Text>
+              <Text style={[styles.filterLabel, { color: theme.colors.text }]}>
+                Price Range (per minute)
+              </Text>
             </View>
             <View style={styles.priceGrid}>
               {priceRanges.map((range, index) => (
@@ -152,20 +220,36 @@ export default function SearchScreen() {
                     styles.priceOption,
                     {
                       // theme.colors.card → price option background
-                      backgroundColor: (filters.priceRange[0] === range.value[0] && filters.priceRange[1] === range.value[1]) ? theme.colors.primary : theme.colors.card,
+                      backgroundColor:
+                        filters.priceRange[0] === range.value[0] &&
+                        filters.priceRange[1] === range.value[1]
+                          ? theme.colors.primary
+                          : theme.colors.card,
                       // theme.colors.border → price option border
-                      borderColor: (filters.priceRange[0] === range.value[0] && filters.priceRange[1] === range.value[1]) ? theme.colors.primary : theme.colors.border
-                    }
+                      borderColor:
+                        filters.priceRange[0] === range.value[0] &&
+                        filters.priceRange[1] === range.value[1]
+                          ? theme.colors.primary
+                          : theme.colors.border,
+                    },
                   ]}
-                  onPress={() => updateFilter('priceRange', range.value as [number, number])}
+                  onPress={() =>
+                    updateFilter('priceRange', range.value as [number, number])
+                  }
                 >
-                  <Text style={[
-                    styles.priceOptionText,
-                    {
-                      // theme.colors.text → price option text / theme.colors.surface → selected price option text
-                      color: (filters.priceRange[0] === range.value[0] && filters.priceRange[1] === range.value[1]) ? theme.colors.surface : theme.colors.text
-                    }
-                  ]}>
+                  <Text
+                    style={[
+                      styles.priceOptionText,
+                      {
+                        // theme.colors.text → price option text / theme.colors.surface → selected price option text
+                        color:
+                          filters.priceRange[0] === range.value[0] &&
+                          filters.priceRange[1] === range.value[1]
+                            ? theme.colors.surface
+                            : theme.colors.text,
+                      },
+                    ]}
+                  >
                     {range.label}
                   </Text>
                 </TouchableOpacity>
@@ -177,7 +261,9 @@ export default function SearchScreen() {
           <View style={styles.filterGroup}>
             <View style={styles.filterHeader}>
               <Star size={18} color={theme.colors.accent} />
-              <Text style={[styles.filterLabel, { color: theme.colors.text }]}>Minimum Rating</Text>
+              <Text style={[styles.filterLabel, { color: theme.colors.text }]}>
+                Minimum Rating
+              </Text>
             </View>
             <View style={styles.ratingGrid}>
               {[0, 4.0, 4.5, 4.8].map((rating) => (
@@ -187,26 +273,37 @@ export default function SearchScreen() {
                     styles.ratingOption,
                     {
                       // theme.colors.card → rating option background
-                      backgroundColor: filters.rating === rating ? theme.colors.primary : theme.colors.card,
+                      backgroundColor:
+                        filters.rating === rating
+                          ? theme.colors.primary
+                          : theme.colors.card,
                       // theme.colors.border → rating option border
-                      borderColor: filters.rating === rating ? theme.colors.primary : theme.colors.border
-                    }
+                      borderColor:
+                        filters.rating === rating
+                          ? theme.colors.primary
+                          : theme.colors.border,
+                    },
                   ]}
                   onPress={() => updateFilter('rating', rating)}
                 >
                   <View style={styles.ratingContent}>
-                    <Star 
-                      size={14} 
-                      color={theme.colors.accent} 
-                      fill={rating > 0 ? theme.colors.accent : "transparent"} 
+                    <Star
+                      size={14}
+                      color={theme.colors.accent}
+                      fill={rating > 0 ? theme.colors.accent : 'transparent'}
                     />
-                    <Text style={[
-                      styles.ratingOptionText,
-                      {
-                        // theme.colors.text → rating option text / theme.colors.surface → selected rating option text
-                        color: filters.rating === rating ? theme.colors.surface : theme.colors.text
-                      }
-                    ]}>
+                    <Text
+                      style={[
+                        styles.ratingOptionText,
+                        {
+                          // theme.colors.text → rating option text / theme.colors.surface → selected rating option text
+                          color:
+                            filters.rating === rating
+                              ? theme.colors.surface
+                              : theme.colors.text,
+                        },
+                      ]}
+                    >
                       {rating === 0 ? 'Any' : `${rating}+`}
                     </Text>
                   </View>
@@ -219,7 +316,9 @@ export default function SearchScreen() {
           <View style={styles.filterGroup}>
             <View style={styles.filterHeader}>
               <Clock size={18} color={theme.colors.success} />
-              <Text style={[styles.filterLabel, { color: theme.colors.text }]}>Availability</Text>
+              <Text style={[styles.filterLabel, { color: theme.colors.text }]}>
+                Availability
+              </Text>
             </View>
             <View style={styles.availabilityGrid}>
               {[
@@ -233,20 +332,31 @@ export default function SearchScreen() {
                     styles.availabilityOption,
                     {
                       // theme.colors.card → availability option background
-                      backgroundColor: filters.availability === option.key ? theme.colors.primary : theme.colors.card,
+                      backgroundColor:
+                        filters.availability === option.key
+                          ? theme.colors.primary
+                          : theme.colors.card,
                       // theme.colors.border → availability option border
-                      borderColor: filters.availability === option.key ? theme.colors.primary : theme.colors.border
-                    }
+                      borderColor:
+                        filters.availability === option.key
+                          ? theme.colors.primary
+                          : theme.colors.border,
+                    },
                   ]}
                   onPress={() => updateFilter('availability', option.key)}
                 >
-                  <Text style={[
-                    styles.availabilityOptionText,
-                    {
-                      // theme.colors.text → availability option text / theme.colors.surface → selected availability option text
-                      color: filters.availability === option.key ? theme.colors.surface : theme.colors.text
-                    }
-                  ]}>
+                  <Text
+                    style={[
+                      styles.availabilityOptionText,
+                      {
+                        // theme.colors.text → availability option text / theme.colors.surface → selected availability option text
+                        color:
+                          filters.availability === option.key
+                            ? theme.colors.surface
+                            : theme.colors.text,
+                      },
+                    ]}
+                  >
                     {option.label}
                   </Text>
                 </TouchableOpacity>
@@ -258,39 +368,73 @@ export default function SearchScreen() {
           <View style={styles.filterGroup}>
             <View style={styles.filterHeader}>
               <Shield size={18} color={theme.colors.primary} />
-              <Text style={[styles.filterLabel, { color: theme.colors.text }]}>Verification</Text>
+              <Text style={[styles.filterLabel, { color: theme.colors.text }]}>
+                Verification
+              </Text>
             </View>
             <TouchableOpacity
               style={styles.verificationToggle}
-              onPress={() => updateFilter('verifiedOnly', !filters.verifiedOnly)}
+              onPress={() =>
+                updateFilter('verifiedOnly', !filters.verifiedOnly)
+              }
             >
-              <View style={[
-                styles.checkbox,
-                {
-                  // theme.colors.border → checkbox border / theme.colors.primary → selected checkbox
-                  backgroundColor: filters.verifiedOnly ? theme.colors.primary : 'transparent',
-                  borderColor: filters.verifiedOnly ? theme.colors.primary : theme.colors.border
-                }
-              ]}>
-                {filters.verifiedOnly && <Text style={[styles.checkmark, { color: theme.colors.surface }]}>✓</Text>}
+              <View
+                style={[
+                  styles.checkbox,
+                  {
+                    // theme.colors.border → checkbox border / theme.colors.primary → selected checkbox
+                    backgroundColor: filters.verifiedOnly
+                      ? theme.colors.primary
+                      : 'transparent',
+                    borderColor: filters.verifiedOnly
+                      ? theme.colors.primary
+                      : theme.colors.border,
+                  },
+                ]}
+              >
+                {filters.verifiedOnly && (
+                  <Text
+                    style={[styles.checkmark, { color: theme.colors.surface }]}
+                  >
+                    ✓
+                  </Text>
+                )}
               </View>
-              <Text style={[styles.verificationText, { color: theme.colors.text }]}>Verified professionals only</Text>
+              <Text
+                style={[styles.verificationText, { color: theme.colors.text }]}
+              >
+                Verified professionals only
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Results Section */}
-        <View style={[styles.resultsSection, { backgroundColor: theme.colors.background }]}>
-          <Text style={[styles.resultsTitle, { color: theme.colors.text }]}>Results</Text>
+        <View
+          style={[
+            styles.resultsSection,
+            { backgroundColor: theme.colors.background },
+          ]}
+        >
+          <Text style={[styles.resultsTitle, { color: theme.colors.text }]}>
+            Results
+          </Text>
           {filteredProfessionals.length > 0 ? (
             filteredProfessionals.map((professional) => (
-              <ProfessionalCard key={professional.id} professional={professional} />
+              <ProfessionalCard
+                key={professional.id}
+                professional={professional}
+              />
             ))
           ) : (
             <View style={styles.emptyState}>
               <Search size={48} color={theme.colors.textMuted} />
-              <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No professionals found</Text>
-              <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
+              <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+                No professionals found
+              </Text>
+              <Text
+                style={[styles.emptyText, { color: theme.colors.textMuted }]}
+              >
                 Try adjusting your search terms or filters
               </Text>
             </View>
