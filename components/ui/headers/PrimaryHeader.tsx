@@ -30,7 +30,6 @@ export function PrimaryHeader({
         styles.header,
         {
           backgroundColor: theme.colors.surface,
-          borderBottomColor: theme.colors.divider,
         },
         containerStyle,
       ]}
@@ -64,13 +63,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     minHeight: 60,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    // subtle shadow/elevation
+    // shiny shadow/elevation (no divider)
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
   leftSection: {
     flex: 2,
