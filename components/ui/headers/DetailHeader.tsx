@@ -8,9 +8,10 @@ interface DetailHeaderProps {
   onBack?: () => void;
   rightButtons?: React.ReactNode | React.ReactNode[];
   containerStyle?: ViewStyle;
+  backPosition?: 'left' | 'right';
 }
 
-export function DetailHeader({ title, onBack, rightButtons, containerStyle }: DetailHeaderProps) {
+export function DetailHeader({ title, onBack, rightButtons, containerStyle, backPosition = 'right' }: DetailHeaderProps) {
   const { theme } = useTheme();
 
   const renderRight = Array.isArray(rightButtons) ? rightButtons : rightButtons ? [rightButtons] : [];
@@ -18,13 +19,15 @@ export function DetailHeader({ title, onBack, rightButtons, containerStyle }: De
   return (
     <View style={[styles.header, { backgroundColor: theme.colors.background }, containerStyle]}>
       <View style={styles.leftSection}>
-        <TouchableOpacity
-          onPress={onBack}
-          disabled={!onBack}
-          style={[styles.backButton, { backgroundColor: theme.colors.surface }]}
-        >
-          <ArrowLeft size={22} color={theme.colors.text} />
-        </TouchableOpacity>
+        {backPosition === 'left' ? (
+          <TouchableOpacity
+            onPress={onBack}
+            disabled={!onBack}
+            style={[styles.backButton, { backgroundColor: theme.colors.surface }]}
+          >
+            <ArrowLeft size={22} color={theme.colors.text} />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       <View style={styles.centerSection}>
@@ -34,6 +37,17 @@ export function DetailHeader({ title, onBack, rightButtons, containerStyle }: De
       </View>
 
       <View style={styles.rightSection}>
+        {backPosition === 'right' && (
+          <View style={styles.rightButtonWrapper}>
+            <TouchableOpacity
+              onPress={onBack}
+              disabled={!onBack}
+              style={[styles.backButton, { backgroundColor: theme.colors.surface }]}
+            >
+              <ArrowLeft size={22} color={theme.colors.text} />
+            </TouchableOpacity>
+          </View>
+        )}
         {renderRight.map((btn, idx) => (
           <View key={idx} style={styles.rightButtonWrapper}>
             {btn}
