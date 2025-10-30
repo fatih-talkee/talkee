@@ -30,7 +30,11 @@ export default function LoginScreen() {
     setTimeout(() => {
       if (isMountedRef.current) {
         setLoading(false);
-        Toast.show({ type: 'success', text1: 'Logged in', text2: 'Welcome back!' });
+        Toast.show({
+          type: 'success',
+          text1: 'Logged in',
+          text2: 'Welcome back!',
+        });
         router.replace('/(tabs)');
       }
     }, 800);
@@ -335,12 +339,15 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   footerText: {
-    fontSize: 14,
+    fontSize: 16,
     fontFamily: 'Inter-Regular',
     color: '#FFFFFF',
   },
   footerLink: {
     color: '#2e2461',
-    fontFamily: 'Inter-Medium',
+    fontFamily: 'Inter-Bold',
+    fontSize: 16,
+    letterSpacing: 0.2,
+    fontWeight: 'bold',
   },
 });

@@ -1,9 +1,7 @@
 import { Stack } from 'expo-router';
-import Toast from 'react-native-toast-message';
 
 export default function AuthLayout() {
   return (
-    <>
     <Stack>
       <Stack.Screen
         name="login"
@@ -34,7 +32,5 @@ export default function AuthLayout() {
         }}
       />
     </Stack>
-    <Toast />
-    </>
   );
 }
