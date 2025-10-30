@@ -178,14 +178,14 @@ const styles = StyleSheet.create({
     // ensure input can take maximum available space
   },
   searchInput: {
-    flexGrow: 1,
-    flexBasis: 0,
+    flex: 1,
     marginRight: 8,
     marginBottom: 0,
   },
   filterButton: {
     width: 44,
     height: 44,
+    flexShrink: 0,
     borderRadius: 12,
     backgroundColor: '#fef3c7',
     alignItems: 'center',
