@@ -95,7 +95,6 @@ export default function CategoryScreen() {
               {
                 backgroundColor: theme.colors.card,
                 borderColor: theme.colors.border,
-                marginBottom: 0,
               },
             ]}
           />
@@ -163,18 +162,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   searchSection: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 20,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
+    marginBottom: 16,
   },
   searchInput: {
     flex: 1,
     minWidth: 0,
     marginHorizontal: 0,
+    marginBottom: 0,
   },
   headerIconButton: {
     width: 40,
@@ -187,7 +188,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
   },
   resultsCount: {
     fontSize: 14,
