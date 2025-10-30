@@ -28,7 +28,8 @@ export default function ForgotPasswordScreen() {
     setTimeout(() => {
       if (isMountedRef.current) {
         setLoading(false);
-        setSent(true);
+        const to = encodeURIComponent(email || '');
+        router.push(`/auth/otp?context=forgot&to=${to}`);
       }
     }, 1500);
   };
@@ -41,12 +42,17 @@ export default function ForgotPasswordScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.content}
           >
-            <View style={styles.headerCentered}>
+            <View style={styles.header}>
               <Image
                 source={require('@/assets/images/talkee_logoF.png')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
+              <Text style={styles.titleLight}>Reset Password</Text>
+              <Text style={styles.subtitleLight}>
+                Enter your email address and we'll send you a link to reset your
+                password
+              </Text>
             </View>
             <View style={styles.successContainer}>
               <View style={styles.successIcon}>
@@ -76,12 +82,17 @@ export default function ForgotPasswordScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.content}
         >
-          <View style={styles.headerCentered}>
+          <View style={styles.header}>
             <Image
               source={require('@/assets/images/talkee_logoF.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />
+            <Text style={styles.titleLight}>Reset Password</Text>
+            <Text style={styles.subtitleLight}>
+              Enter your email address and we'll send you a link to reset your
+              password
+            </Text>
           </View>
 
           <View style={styles.form}>
@@ -129,8 +140,8 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
   },
-
-  headerCentered: {
+  header: {
+    marginTop: 40,
     marginBottom: 40,
     alignItems: 'center',
   },
