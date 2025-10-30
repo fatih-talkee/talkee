@@ -102,7 +102,7 @@ export default function CategoryScreen() {
 
         <View style={styles.resultsHeader}>
           <Text
-            style={[styles.resultsCount, { color: theme.colors.textMuted }]}
+            style={[styles.resultsCount, { color: theme.colors.textSecondary }]}
           >
             {filteredProfessionals.length} {categoryName.toLowerCase()}{' '}
             professionals
@@ -119,7 +119,7 @@ export default function CategoryScreen() {
               }
             >
               <Text
-                style={[styles.clearFilters, { color: theme.colors.accent }]}
+                style={[styles.clearFilters, { color: theme.colors.primary }]}
               >
                 Clear filters
               </Text>
