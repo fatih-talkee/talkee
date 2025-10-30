@@ -1088,6 +1088,8 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 10,
     width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
     // 1px divider to match tabs
     borderTopWidth: 1,
     // Upward shadow to match tabs
@@ -1103,6 +1105,8 @@ const styles = StyleSheet.create({
   callButtonsRow: {
     flexDirection: 'row',
     gap: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   callTypeButton: {
     flex: 1,
