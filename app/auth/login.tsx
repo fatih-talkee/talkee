@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
+  Image,
+} from 'react-native';
 import { Link, router } from 'expo-router';
 import { Phone, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,124 +43,134 @@ export default function LoginScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#2e2461', '#d60f83']}
-      style={styles.container}
-    >
+    <LinearGradient colors={['#2e2461', '#d60f83']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.content}
-      >
-        <View style={styles.header}>
-          <Image
-            source={require('@/assets/images/talkee_logoF.png')}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to connect with professionals</Text>
-        </View>
-
-        <View style={styles.form}>
-          <Input
-            style={styles.input}
-            label="Phone Number"
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="Enter your phone number"
-            keyboardType="phone-pad"
-            leftIcon={<Phone size={20} color="#9E9E9E" />}
-          />
-
-          <Input
-            style={styles.input}
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Enter your password"
-            secureTextEntry={!showPassword}
-            leftIcon={<Lock size={20} color="#9E9E9E" />}
-            rightIcon={
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                {showPassword ? (
-                  <EyeOff size={20} color="#9E9E9E" />
-                ) : (
-                  <Eye size={20} color="#9E9E9E" />
-                )}
-              </TouchableOpacity>
-            }
-          />
-
-          <TouchableOpacity style={styles.forgotPassword} onPress={() => router.push('/auth/forgot-password')}>
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-          </TouchableOpacity>
-
-          <Button
-            title={loading ? "Signing In..." : "Log In"}
-            onPress={handleLogin}
-            disabled={loading}
-            style={styles.loginButton}
-          />
-
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or continue with</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <View style={styles.socialButtons}>
-            <TouchableOpacity 
-              style={[styles.socialButton, styles.googleButton]}
-              onPress={() => handleSocialLogin('Google')}
-            >
-              <View style={styles.socialButtonContent}>
-                <View style={styles.googleIcon}>
-                  <Text style={styles.googleIconText}>G</Text>
-                </View>
-                <Text style={styles.googleButtonText}>Continue with Google</Text>
-              </View>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.socialButton, styles.facebookButton]}
-              onPress={() => handleSocialLogin('Facebook')}
-            >
-              <View style={styles.socialButtonContent}>
-                <View style={styles.facebookIcon}>
-                  <Text style={styles.facebookIconText}>f</Text>
-                </View>
-                <Text style={styles.facebookButtonText}>Continue with Facebook</Text>
-              </View>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.socialButton, styles.linkedinButton]}
-              onPress={() => handleSocialLogin('LinkedIn')}
-            >
-              <View style={styles.socialButtonContent}>
-                <View style={styles.linkedinIcon}>
-                  <Text style={styles.linkedinIconText}>in</Text>
-                </View>
-                <Text style={styles.linkedinButtonText}>Continue with LinkedIn</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.dividerBottom}>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>
-              Don't have an account?{' '}
-              <Link href="/auth/register" asChild>
-                <Text style={styles.footerLink}>Sign Up</Text>
-              </Link>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.content}
+        >
+          <View style={styles.header}>
+            <Image
+              source={require('@/assets/images/talkee_logoF.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+            <Text style={styles.title}>Welcome Back</Text>
+            <Text style={styles.subtitle}>
+              Sign in to connect with professionals
             </Text>
           </View>
-        </View>
-      </KeyboardAvoidingView>
+
+          <View style={styles.form}>
+            <Input
+              variant="light"
+              label="Phone Number"
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="Enter your phone number"
+              keyboardType="phone-pad"
+              leftIcon={<Phone size={20} color="#9E9E9E" />}
+            />
+
+            <Input
+              variant="light"
+              label="Password"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Enter your password"
+              secureTextEntry={!showPassword}
+              leftIcon={<Lock size={20} color="#9E9E9E" />}
+              rightIcon={
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff size={20} color="#9E9E9E" />
+                  ) : (
+                    <Eye size={20} color="#9E9E9E" />
+                  )}
+                </TouchableOpacity>
+              }
+            />
+
+            <TouchableOpacity
+              style={styles.forgotPassword}
+              onPress={() => router.push('/auth/forgot-password')}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+
+            <Button
+              title={loading ? 'Signing In...' : 'Log In'}
+              onPress={handleLogin}
+              disabled={loading}
+              style={styles.loginButton}
+            />
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or continue with</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <View style={styles.socialButtons}>
+              <TouchableOpacity
+                style={[styles.socialButton, styles.googleButton]}
+                onPress={() => handleSocialLogin('Google')}
+              >
+                <View style={styles.socialButtonContent}>
+                  <View style={styles.googleIcon}>
+                    <Text style={styles.googleIconText}>G</Text>
+                  </View>
+                  <Text style={styles.googleButtonText}>
+                    Continue with Google
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.socialButton, styles.facebookButton]}
+                onPress={() => handleSocialLogin('Facebook')}
+              >
+                <View style={styles.socialButtonContent}>
+                  <View style={styles.facebookIcon}>
+                    <Text style={styles.facebookIconText}>f</Text>
+                  </View>
+                  <Text style={styles.facebookButtonText}>
+                    Continue with Facebook
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.socialButton, styles.linkedinButton]}
+                onPress={() => handleSocialLogin('LinkedIn')}
+              >
+                <View style={styles.socialButtonContent}>
+                  <View style={styles.linkedinIcon}>
+                    <Text style={styles.linkedinIconText}>in</Text>
+                  </View>
+                  <Text style={styles.linkedinButtonText}>
+                    Continue with LinkedIn
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.dividerBottom}>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>
+                Don't have an account?{' '}
+                <Link href="/auth/register" asChild>
+                  <Text style={styles.footerLink}>Sign Up</Text>
+                </Link>
+              </Text>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -194,7 +213,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   input: {
-    backgroundColor:'#FFFFFF',
+    backgroundColor: '#FFFFFF',
     color: '#000000',
   },
   forgotPassword: {
@@ -208,7 +227,7 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     marginBottom: 24,
-    backgroundColor:'#2e2461',
+    backgroundColor: '#2e2461',
   },
   divider: {
     flexDirection: 'row',

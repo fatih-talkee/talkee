@@ -59,7 +59,7 @@ export default function RegisterScreen() {
 
           <View style={styles.form}>
             <Input
-              style={styles.input}
+              variant="light"
               label="Phone Number"
               value={phone}
               onChangeText={setPhone}
@@ -69,7 +69,7 @@ export default function RegisterScreen() {
             />
 
             <Input
-              style={styles.input}
+              variant="light"
               label="Password"
               value={password}
               onChangeText={setPassword}
@@ -88,7 +88,7 @@ export default function RegisterScreen() {
             />
 
             <Input
-              style={styles.input}
+              variant="light"
               label="Confirm Password"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
