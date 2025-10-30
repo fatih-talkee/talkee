@@ -130,9 +130,12 @@ export default function ProfessionalSettings() {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header
-        title="Professional Settings"
-        leftButton={
-          <TouchableOpacity onPress={() => router.back()}>
+        showLogo
+        rightButtons={
+          <TouchableOpacity
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
+            style={{ padding: 8 }}
+          >
             <ArrowLeft size={24} color={theme.colors.text} />
           </TouchableOpacity>
         }
