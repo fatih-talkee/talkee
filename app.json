@@ -9,7 +9,13 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "net.talkee.app",
+      "supportsTablet": true,
+      "googleServicesFile": "./firebase/ios/GoogleService-Info.plist"
+    },
+    "android": {
+      "package": "net.talkee.app",
+      "googleServicesFile": "./firebase/android/google-services.json"
     },
     "web": {
       "bundler": "metro",
@@ -19,6 +25,21 @@
     "plugins": ["expo-router", "expo-font", "expo-web-browser"],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "firebase": {
+        "apiKey": "AIzaSyDEfmC53rDYrwAJdL-HwB-sYJ4_h_HWnA0",
+        "authDomain": "talkee-d41d6.firebaseapp.com",
+        "projectId": "talkee-d41d6",
+        "storageBucket": "talkee-d41d6.firebasestorage.app",
+        "messagingSenderId": "968951986533",
+        "appId": "1:968951986533:web:3f3ac36597a2184cad898c",
+        "measurementId": "G-QETSVPW4F7"
+      },
+      "eas": {
+        "projectId": "dfd312c3-0e23-42cb-b37e-5cc26f629eb2"
+      }
     }
   }
 }

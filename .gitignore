@@ -27,6 +27,11 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# local caches (created by npm/eas in this repo)
+.npm/
+.npm-cache/
+Library/
+
 # local env files
 .env*.local
 .env
