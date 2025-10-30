@@ -121,7 +121,7 @@ export const darkTheme: Theme = {
     disabled: '#8E8E93',
     
     tabBarBackground: '#2C2C2E',
-    tabBarBorder: 'rgba(255, 255, 255, 0.1)',
+    tabBarBorder: 'rgb(216, 216, 216)',
     tabBarActive: '#007AFF',
     tabBarInactive: '#8E8E93',
   },
