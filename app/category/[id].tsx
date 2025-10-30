@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Search, Filter } from 'lucide-react-native';
-import { DetailHeader } from '@/components/ui/headers/DetailHeader';
+import { Search, Filter } from 'lucide-react-native';
+import { Header } from '@/components/ui/Header';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
 import { FilterModal } from '@/components/filters/FilterModal';
 import { Input } from '@/components/ui/Input';
@@ -49,7 +49,7 @@ export default function CategoryScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <DetailHeader title={categoryName} onBack={() => router.back()} />
+      <Header showLogo showBack backPosition="right" />
 
       <View style={[styles.searchSection, { backgroundColor: theme.colors.card }]}>
         <View style={styles.searchRow}>
