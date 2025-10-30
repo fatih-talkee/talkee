@@ -51,14 +51,14 @@ export default function CategoryScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header showLogo showBack backPosition="right" />
 
-      <View style={[styles.searchSection, { backgroundColor: theme.colors.card }]}>
+      <View style={[styles.searchSection, { backgroundColor: theme.colors.surface }]}>
         <View style={styles.searchRow}>
           <Input
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder={`Search ${categoryName.toLowerCase()} professionals...`}
             leftIcon={<Search size={20} color={theme.colors.textMuted} />}
-            style={styles.searchInput}
+            style={[styles.searchInput, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
           />
           <TouchableOpacity 
             style={[styles.filterButton, { backgroundColor: theme.colors.accentLight }]}
@@ -114,7 +114,7 @@ export default function CategoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    
   },
   backButton: {
     width: 40,
@@ -125,9 +125,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   searchSection: {
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 24,
-    paddingBottom: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    marginBottom: 8,
   },
   searchRow: {
     flexDirection: 'row',
