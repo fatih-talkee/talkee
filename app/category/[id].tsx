@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  FlatList,
+} from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Search, Filter } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
@@ -22,46 +29,68 @@ export default function CategoryScreen() {
   });
 
   // Find the category details
-  const category = mockCategories.find(cat => cat.id === id);
-  const categoryName = name as string || category?.name || 'Category';
+  const category = mockCategories.find((cat) => cat.id === id);
+  const categoryName = (name as string) || category?.name || 'Category';
 
   // Filter professionals by category
-  const categoryProfessionals = mockProfessionals.filter(professional => 
-    professional.category === categoryName
+  const categoryProfessionals = mockProfessionals.filter(
+    (professional) => professional.category === categoryName
   );
 
   // Apply additional filters
-  const filteredProfessionals = categoryProfessionals.filter(professional => {
-    const matchesSearch = professional.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         professional.title.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesPrice = professional.ratePerMinute >= filters.priceRange[0] && 
-                        professional.ratePerMinute <= filters.priceRange[1];
-    
-    const matchesRating = professional.rating >= filters.rating;
-    
-    const matchesAvailability = filters.availability === 'all' || 
-                               (filters.availability === 'online' && professional.isOnline) ||
-                               (filters.availability === 'quick-response' && professional.responseTime.includes('< 5'));
+  const filteredProfessionals = categoryProfessionals.filter((professional) => {
+    const matchesSearch =
+      professional.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      professional.title.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return matchesSearch && matchesPrice && matchesRating && matchesAvailability;
+    const matchesPrice =
+      professional.ratePerMinute >= filters.priceRange[0] &&
+      professional.ratePerMinute <= filters.priceRange[1];
+
+    const matchesRating = professional.rating >= filters.rating;
+
+    const matchesAvailability =
+      filters.availability === 'all' ||
+      (filters.availability === 'online' && professional.isOnline) ||
+      (filters.availability === 'quick-response' &&
+        professional.responseTime.includes('< 5'));
+
+    return (
+      matchesSearch && matchesPrice && matchesRating && matchesAvailability
+    );
   });
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <Header showLogo showBack backPosition="right" />
 
-      <View style={[styles.searchSection, { backgroundColor: theme.colors.surface }]}>
+      <View
+        style={[
+          styles.searchSection,
+          { backgroundColor: theme.colors.surface },
+        ]}
+      >
         <View style={styles.searchRow}>
           <Input
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder={`Search ${categoryName.toLowerCase()} professionals...`}
             leftIcon={<Search size={20} color={theme.colors.textMuted} />}
-            style={[styles.searchInput, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+            style={[
+              styles.searchInput,
+              {
+                backgroundColor: theme.colors.card,
+                borderColor: theme.colors.border,
+              },
+            ]}
           />
-          <TouchableOpacity 
-            style={[styles.filterButton, { backgroundColor: theme.colors.accentLight }]}
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              { backgroundColor: theme.colors.accentLight },
+            ]}
             onPress={() => setFilterVisible(true)}
           >
             <Filter size={20} color={theme.colors.accent} />
@@ -69,17 +98,28 @@ export default function CategoryScreen() {
         </View>
 
         <View style={styles.resultsHeader}>
-          <Text style={[styles.resultsCount, { color: theme.colors.textMuted }]}>
-            {filteredProfessionals.length} {categoryName.toLowerCase()} professionals
+          <Text
+            style={[styles.resultsCount, { color: theme.colors.textMuted }]}
+          >
+            {filteredProfessionals.length} {categoryName.toLowerCase()}{' '}
+            professionals
           </Text>
           {(filters.rating > 0 || filters.availability !== 'all') && (
-            <TouchableOpacity onPress={() => setFilters({
-              priceRange: [0, 100],
-              rating: 0,
-              availability: 'all',
-              categories: [],
-            })}>
-              <Text style={[styles.clearFilters, { color: theme.colors.accent }]}>Clear filters</Text>
+            <TouchableOpacity
+              onPress={() =>
+                setFilters({
+                  priceRange: [0, 100],
+                  rating: 0,
+                  availability: 'all',
+                  categories: [],
+                })
+              }
+            >
+              <Text
+                style={[styles.clearFilters, { color: theme.colors.accent }]}
+              >
+                Clear filters
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -93,9 +133,12 @@ export default function CategoryScreen() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No professionals found</Text>
+            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+              No professionals found
+            </Text>
             <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
-              Try adjusting your search or filters to find more {categoryName.toLowerCase()} professionals
+              Try adjusting your search or filters to find more{' '}
+              {categoryName.toLowerCase()} professionals
             </Text>
           </View>
         }
@@ -114,7 +157,6 @@ export default function CategoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    
   },
   backButton: {
     width: 40,
@@ -133,15 +175,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
+    // ensure input can take maximum available space
   },
   searchInput: {
-    flex: 1,
-    marginRight: 12,
+    flexGrow: 1,
+    flexBasis: 0,
+    marginRight: 8,
     marginBottom: 0,
   },
   filterButton: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     backgroundColor: '#fef3c7',
     alignItems: 'center',
