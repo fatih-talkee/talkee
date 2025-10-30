@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Image, ViewStyle } from 'react-native';
 import { ArrowLeft } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -25,6 +26,7 @@ export function PrimaryHeader({
 }: PrimaryHeaderProps) {
   const { theme } = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const logo =
     theme.name === 'dark'
@@ -51,6 +53,7 @@ export function PrimaryHeader({
         styles.header,
         {
           backgroundColor: theme.colors.surface,
+          paddingTop: insets.top,
         },
         containerStyle,
       ]}
