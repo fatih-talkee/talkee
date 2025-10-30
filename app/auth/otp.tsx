@@ -132,7 +132,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   form: { flex: 1 },
-  input: { backgroundColor: 'transparent', color: '#FFFFFF' },
   verifyButton: { marginTop: 12 },
   resendRow: {
     marginTop: 16,

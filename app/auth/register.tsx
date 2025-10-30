@@ -222,10 +222,6 @@ const styles = StyleSheet.create({
   form: {
     flex: 1,
   },
-  input: {
-    backgroundColor:'#FFFFFF',
-    color: '#000000',
-  },
   registerButton: {
     marginBottom: 24,
     backgroundColor:'#2e2461',

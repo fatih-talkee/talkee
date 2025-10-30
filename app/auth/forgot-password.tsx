@@ -166,10 +166,6 @@ const styles = StyleSheet.create({
   form: {
     flex: 1,
   },
-  inputLight: {
-    backgroundColor: '#FFFFFF',
-    color: '#000000',
-  },
   resetButton: {
     marginTop: 8,
   },
