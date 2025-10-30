@@ -111,9 +111,9 @@ export default function SearchScreen() {
                       styles.categoryChip,
                       {
                         // theme.colors.card → chip background
-                        backgroundColor: filters.categories.includes(category.name) ? theme.colors.pinkTwo : theme.colors.card,
+                        backgroundColor: filters.categories.includes(category.name) ? theme.colors.primary : theme.colors.card,
                         // theme.colors.border → chip border
-                        borderColor: filters.categories.includes(category.name) ? theme.colors.pinkTwo : theme.colors.border
+                        borderColor: filters.categories.includes(category.name) ? theme.colors.primary : theme.colors.border
                       }
                     ]}
                     onPress={() => {
@@ -152,9 +152,9 @@ export default function SearchScreen() {
                     styles.priceOption,
                     {
                       // theme.colors.card → price option background
-                      backgroundColor: (filters.priceRange[0] === range.value[0] && filters.priceRange[1] === range.value[1]) ? theme.colors.pinkTwo : theme.colors.card,
+                      backgroundColor: (filters.priceRange[0] === range.value[0] && filters.priceRange[1] === range.value[1]) ? theme.colors.primary : theme.colors.card,
                       // theme.colors.border → price option border
-                      borderColor: (filters.priceRange[0] === range.value[0] && filters.priceRange[1] === range.value[1]) ? theme.colors.pinkTwo : theme.colors.border
+                      borderColor: (filters.priceRange[0] === range.value[0] && filters.priceRange[1] === range.value[1]) ? theme.colors.primary : theme.colors.border
                     }
                   ]}
                   onPress={() => updateFilter('priceRange', range.value as [number, number])}
@@ -187,9 +187,9 @@ export default function SearchScreen() {
                     styles.ratingOption,
                     {
                       // theme.colors.card → rating option background
-                      backgroundColor: filters.rating === rating ? theme.colors.pinkTwo : theme.colors.card,
+                      backgroundColor: filters.rating === rating ? theme.colors.primary : theme.colors.card,
                       // theme.colors.border → rating option border
-                      borderColor: filters.rating === rating ? theme.colors.pinkTwo : theme.colors.border
+                      borderColor: filters.rating === rating ? theme.colors.primary : theme.colors.border
                     }
                   ]}
                   onPress={() => updateFilter('rating', rating)}
@@ -233,9 +233,9 @@ export default function SearchScreen() {
                     styles.availabilityOption,
                     {
                       // theme.colors.card → availability option background
-                      backgroundColor: filters.availability === option.key ? theme.colors.pinkTwo : theme.colors.card,
+                      backgroundColor: filters.availability === option.key ? theme.colors.primary : theme.colors.card,
                       // theme.colors.border → availability option border
-                      borderColor: filters.availability === option.key ? theme.colors.pinkTwo : theme.colors.border
+                      borderColor: filters.availability === option.key ? theme.colors.primary : theme.colors.border
                     }
                   ]}
                   onPress={() => updateFilter('availability', option.key)}
