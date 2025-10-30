@@ -6,6 +6,7 @@ import {
   SafeAreaView,
   TouchableOpacity,
   FlatList,
+  Platform,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Search, Filter } from 'lucide-react-native';
@@ -187,10 +188,21 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     flexShrink: 0,
-    borderRadius: 12,
+    borderRadius: 20,
     backgroundColor: '#fef3c7',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0 2px 6px rgba(0,0,0,0.08)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 6,
+          elevation: 2,
+        }),
   },
   resultsHeader: {
     flexDirection: 'row',
