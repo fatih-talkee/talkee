@@ -74,19 +74,17 @@ export default function ProfessionalProfileScreen() {
     >
       <Header
         showLogo={true}
-        leftButton={
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[
-              styles.backButton,
-              { backgroundColor: theme.colors.surface },
-            ]}
-          >
-            <ArrowLeft size={24} color={theme.colors.primary} />
-          </TouchableOpacity>
-        }
         rightButton={
           <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                { backgroundColor: theme.colors.surface },
+              ]}
+              onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
+            >
+              <ArrowLeft size={20} color={theme.colors.text} />
+            </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.actionButton,
