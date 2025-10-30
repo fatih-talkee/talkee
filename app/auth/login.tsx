@@ -212,10 +212,6 @@ const styles = StyleSheet.create({
   form: {
     flex: 1,
   },
-  input: {
-    backgroundColor: '#FFFFFF',
-    color: '#000000',
-  },
   forgotPassword: {
     alignSelf: 'flex-end',
     marginBottom: 24,
