@@ -420,7 +420,7 @@ export default function ProfessionalProfileScreen() {
                   { backgroundColor: theme.colors.surface },
                 ]}
               >
-                <X size={20} color={theme.colors.primary} />
+                <X size={28} color={theme.colors.primary} />
               </TouchableOpacity>
             </View>
 
@@ -985,12 +985,22 @@ const styles = StyleSheet.create({
     // color: theme.colors.text
   },
   modalCloseButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     // background: theme.colors.surface
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    // border: theme.colors.border
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 2px 8px rgba(0,0,0,0.12)' }
+      : {
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.12,
+          shadowRadius: 8,
+          elevation: 3,
+        }),
   },
   modalBody: {
     paddingHorizontal: 24,
