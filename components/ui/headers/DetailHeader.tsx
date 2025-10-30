@@ -17,7 +17,16 @@ export function DetailHeader({ title, onBack, rightButtons, containerStyle, back
   const renderRight = Array.isArray(rightButtons) ? rightButtons : rightButtons ? [rightButtons] : [];
 
   return (
-    <View style={[styles.header, { backgroundColor: theme.colors.background }, containerStyle]}>
+    <View
+      style={[
+        styles.header,
+        {
+          backgroundColor: theme.colors.surface,
+          borderBottomColor: theme.colors.divider,
+        },
+        containerStyle,
+      ]}
+    >
       <View style={styles.leftSection}>
         {backPosition === 'left' ? (
           <TouchableOpacity
@@ -64,8 +73,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     minHeight: 60,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    // subtle shadow/elevation
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   },
   leftSection: {
     flex: 2,
