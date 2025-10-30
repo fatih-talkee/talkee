@@ -1,6 +1,29 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Image } from 'react-native';
-import { Settings, Heart, Clock, FileText, Mic, ChevronRight, Bell, Shield, CircleHelp as HelpCircle, LogOut, QrCode, Share2, Palette } from 'lucide-react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  ScrollView,
+  Image,
+} from 'react-native';
+import {
+  Settings,
+  Heart,
+  Clock,
+  FileText,
+  Mic,
+  ChevronRight,
+  Bell,
+  Shield,
+  CircleHelp as HelpCircle,
+  LogOut,
+  QrCode,
+  Share2,
+  Palette,
+  Languages,
+} from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -22,7 +45,8 @@ export default function ProfileScreen() {
   const [userProfile] = useState({
     name: 'Mila Victoria',
     email: 'mila@example.com',
-    avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=400',
+    avatar:
+      'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=400',
     memberSince: 'January 2024',
     totalCalls: 23,
     favoriteCount: 8,
@@ -103,11 +127,15 @@ export default function ProfileScreen() {
   ];
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Header 
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <Header
         showLogo={true}
         rightButton={
-          <TouchableOpacity style={[styles.iconButton, { backgroundColor: theme.colors.card }]}>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: theme.colors.card }]}
+          >
             <Settings size={24} color={theme.colors.text} />
           </TouchableOpacity>
         }
@@ -115,63 +143,149 @@ export default function ProfileScreen() {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Header */}
-        <Card style={[styles.profileCard, { backgroundColor: theme.colors.card }]}>
+        <Card
+          style={[styles.profileCard, { backgroundColor: theme.colors.card }]}
+        >
           <View style={styles.profileHeader}>
             <Image source={{ uri: userProfile.avatar }} style={styles.avatar} />
             <View style={styles.profileInfo}>
-              <Text style={[styles.profileName, { color: theme.colors.text }]}>{userProfile.name}</Text>
-              <Text style={[styles.profileEmail, { color: theme.colors.textSecondary }]}>{userProfile.email}</Text>
-              <Text style={[styles.memberSince, { color: theme.colors.textMuted }]}>Member since {userProfile.memberSince}</Text>
+              <Text style={[styles.profileName, { color: theme.colors.text }]}>
+                {userProfile.name}
+              </Text>
+              <Text
+                style={[
+                  styles.profileEmail,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                {userProfile.email}
+              </Text>
+              <Text
+                style={[styles.memberSince, { color: theme.colors.textMuted }]}
+              >
+                Member since {userProfile.memberSince}
+              </Text>
             </View>
           </View>
-          
-          <View style={[styles.statsRow, { borderTopColor: theme.colors.divider }]}>
+
+          <View
+            style={[styles.statsRow, { borderTopColor: theme.colors.divider }]}
+          >
             <View style={styles.stat}>
-              <Text style={[styles.statNumber, { color: theme.colors.text }]}>{userProfile.totalCalls}</Text>
-              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Total Calls</Text>
+              <Text style={[styles.statNumber, { color: theme.colors.text }]}>
+                {userProfile.totalCalls}
+              </Text>
+              <Text
+                style={[
+                  styles.statLabel,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Total Calls
+              </Text>
             </View>
-            <View style={[styles.statDivider, { backgroundColor: theme.colors.divider }]} />
+            <View
+              style={[
+                styles.statDivider,
+                { backgroundColor: theme.colors.divider },
+              ]}
+            />
             <View style={styles.stat}>
-              <Text style={[styles.statNumber, { color: theme.colors.text }]}>{userProfile.favoriteCount}</Text>
-              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Favorites</Text>
+              <Text style={[styles.statNumber, { color: theme.colors.text }]}>
+                {userProfile.favoriteCount}
+              </Text>
+              <Text
+                style={[
+                  styles.statLabel,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Favorites
+              </Text>
             </View>
-            <View style={[styles.statDivider, { backgroundColor: theme.colors.divider }]} />
+            <View
+              style={[
+                styles.statDivider,
+                { backgroundColor: theme.colors.divider },
+              ]}
+            />
             <View style={styles.stat}>
-              <Text style={[styles.statNumber, { color: theme.colors.text }]}>4.8</Text>
-              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Avg Rating</Text>
+              <Text style={[styles.statNumber, { color: theme.colors.text }]}>
+                4.8
+              </Text>
+              <Text
+                style={[
+                  styles.statLabel,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Avg Rating
+              </Text>
             </View>
           </View>
         </Card>
 
         {/* I'm a Professional Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>I'm a Professional</Text>
-          <Card style={[styles.professionalCard, { backgroundColor: theme.colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+            I'm a Professional
+          </Text>
+          <Card
+            style={[
+              styles.professionalCard,
+              { backgroundColor: theme.colors.card },
+            ]}
+          >
             <View style={styles.professionalLayout}>
               <View style={styles.qrContainer}>
                 <QrCode size={45} color={theme.colors.text} />
               </View>
-              
-              <View style={[styles.verticalDivider, { backgroundColor: theme.colors.divider }]} />
-              
+
+              <View
+                style={[
+                  styles.verticalDivider,
+                  { backgroundColor: theme.colors.divider },
+                ]}
+              />
+
               <View style={styles.buttonsContainer}>
                 <TouchableOpacity
-                  style={[styles.professionalSettingsButton, {
-                    backgroundColor: theme.colors.background,
-                    borderColor: theme.colors.border
-                  }]}
+                  style={[
+                    styles.professionalSettingsButton,
+                    {
+                      backgroundColor: theme.colors.background,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
                   onPress={() => router.push('/profile/professional-settings')}
                 >
                   <Settings size={16} color={theme.colors.text} />
-                  <Text style={[styles.professionalSettingsText, { color: theme.colors.text }]}>Professional Settings</Text>
+                  <Text
+                    style={[
+                      styles.professionalSettingsText,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    Professional Settings
+                  </Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.shareProfileButton, { backgroundColor: theme.colors.primary + '20' }]}
+
+                <TouchableOpacity
+                  style={[
+                    styles.shareProfileButton,
+                    { backgroundColor: theme.colors.primary + '20' },
+                  ]}
                   onPress={() => console.log('Share profile')}
                 >
                   <Share2 size={14} color={theme.colors.primary} />
-                  <Text style={[styles.shareProfileText, { color: theme.colors.primary }]}>Share Profile</Text>
+                  <Text
+                    style={[
+                      styles.shareProfileText,
+                      { color: theme.colors.primary },
+                    ]}
+                  >
+                    Share Profile
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -180,17 +294,47 @@ export default function ProfileScreen() {
 
         {/* Menu Sections */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Theme Settings</Text>
-          <Card style={[styles.menuCard, { backgroundColor: theme.colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+            App Settings
+          </Text>
+          <Card
+            style={[styles.menuCard, { backgroundColor: theme.colors.card }]}
+          >
             <TouchableOpacity
-              style={[styles.menuItem, { borderBottomColor: theme.colors.divider }]}
+              style={[
+                styles.menuItem,
+                { borderBottomColor: theme.colors.divider },
+              ]}
               onPress={() => router.push('/settings/theme')}
             >
               <View style={styles.menuItemLeft}>
                 <View style={styles.menuItemIcon}>
                   <Palette size={20} color={theme.colors.primary} />
                 </View>
-                <Text style={[styles.menuItemText, { color: theme.colors.text }]}>Theme Settings</Text>
+                <Text
+                  style={[styles.menuItemText, { color: theme.colors.text }]}
+                >
+                  Theme Settings
+                </Text>
+              </View>
+              <View style={styles.menuItemRight}>
+                <ChevronRight size={16} color={theme.colors.textMuted} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuItem, styles.lastMenuItem]}
+              onPress={() => router.push('/settings/language')}
+            >
+              <View style={styles.menuItemLeft}>
+                <View style={styles.menuItemIcon}>
+                  <Languages size={20} color={theme.colors.primary} />
+                </View>
+                <Text
+                  style={[styles.menuItemText, { color: theme.colors.text }]}
+                >
+                  Language
+                </Text>
               </View>
               <View style={styles.menuItemRight}>
                 <ChevronRight size={16} color={theme.colors.textMuted} />
@@ -201,28 +345,45 @@ export default function ProfileScreen() {
 
         {menuSections.map((section, sectionIndex) => (
           <View key={sectionIndex} style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{section.title}</Text>
-            <Card style={[styles.menuCard, { backgroundColor: theme.colors.card }]}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              {section.title}
+            </Text>
+            <Card
+              style={[styles.menuCard, { backgroundColor: theme.colors.card }]}
+            >
               {section.items.map((item, itemIndex) => (
                 <TouchableOpacity
                   key={item.id}
                   style={[
                     styles.menuItem,
-                    itemIndex === section.items.length - 1 && styles.lastMenuItem,
-                    { borderBottomColor: theme.colors.divider }
+                    itemIndex === section.items.length - 1 &&
+                      styles.lastMenuItem,
+                    { borderBottomColor: theme.colors.divider },
                   ]}
                   onPress={item.onPress}
                 >
                   <View style={styles.menuItemLeft}>
-                    <View style={styles.menuItemIcon}>
-                      {item.icon}
-                    </View>
-                    <Text style={[styles.menuItemText, { color: theme.colors.text }]}>{item.label}</Text>
+                    <View style={styles.menuItemIcon}>{item.icon}</View>
+                    <Text
+                      style={[
+                        styles.menuItemText,
+                        { color: theme.colors.text },
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
                   </View>
                   <View style={styles.menuItemRight}>
                     {item.badge && (
-                      <View style={[styles.badge, { backgroundColor: theme.colors.primary }]}>
-                        <Text style={[styles.badgeText, { color: '#ffffff' }]}>{item.badge}</Text>
+                      <View
+                        style={[
+                          styles.badge,
+                          { backgroundColor: theme.colors.primary },
+                        ]}
+                      >
+                        <Text style={[styles.badgeText, { color: '#ffffff' }]}>
+                          {item.badge}
+                        </Text>
                       </View>
                     )}
                     <ChevronRight size={16} color={theme.colors.textMuted} />

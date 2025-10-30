@@ -1,5 +1,14 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, FlatList, Dimensions } from 'react-native';
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  FlatList,
+  Dimensions,
+  Platform,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowRight } from 'lucide-react-native';
 import { router } from 'expo-router';
@@ -32,22 +41,19 @@ export function PromotionCarousel({ promotions }: PromotionCarouselProps) {
   };
 
   const renderPromotion = ({ item }: { item: Promotion }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.promotionCard}
       activeOpacity={0.9}
       onPress={() => handlePromotionPress(item)}
     >
       <Image source={{ uri: item.image }} style={styles.backgroundImage} />
-      <LinearGradient
-        colors={item.gradient}
-        style={styles.overlay}
-      >
+      <LinearGradient colors={item.gradient} style={styles.overlay}>
         <View style={styles.content}>
           <View style={styles.textContent}>
             <Text style={styles.title}>{item.title}</Text>
             <Text style={styles.subtitle}>{item.subtitle}</Text>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.ctaContainer}
             onPress={() => handlePromotionPress(item)}
           >
@@ -89,14 +95,15 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     marginRight: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 12,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 8px 16px rgba(0,0,0,0.3)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.4,
+          shadowRadius: 16,
+          elevation: 12,
+        }),
   },
   backgroundImage: {
     width: '100%',

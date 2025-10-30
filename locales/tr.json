@@ -1,0 +1,18 @@
+{
+  "appName": "Talkee",
+  "hello": "Merhaba",
+  "language": {
+    "title": "Dil",
+    "choose_title": "Dili Seç",
+    "choose_description": "Tercih ettiğiniz dile geçin. Seçiminiz kaydedilir ve uygulamanın tamamına uygulanır.",
+    "names": {
+      "en": "İngilizce",
+      "tr": "Türkçe",
+      "es": "İspanyolca",
+      "de": "Almanca",
+      "fr": "Fransızca"
+    }
+  },
+  "login": "Giriş Yap",
+  "register": "Kayıt Ol"
+}

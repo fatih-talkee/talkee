@@ -1,5 +1,16 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, FlatList, Image, Dimensions } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  ScrollView,
+  TouchableOpacity,
+  FlatList,
+  Image,
+  Dimensions,
+  Platform,
+} from 'react-native';
 import { router } from 'expo-router';
 import { ArrowRight, Search } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
@@ -20,52 +31,49 @@ const professionalSections: ProfessionalSection[] = [
     id: 'top-coaches',
     title: 'Top Life Coaches',
     professionals: [
-      ...mockProfessionals.filter(p => p.category === 'Lifestyle'),
-      ...mockProfessionals.filter(p => p.category === 'Health'),
-      ...mockProfessionals.filter(p => p.category === 'Business'),
-      ...mockProfessionals.filter(p => p.category === 'Finance')
-    ].slice(0, 10)
+      ...mockProfessionals.filter((p) => p.category === 'Lifestyle'),
+      ...mockProfessionals.filter((p) => p.category === 'Health'),
+      ...mockProfessionals.filter((p) => p.category === 'Business'),
+      ...mockProfessionals.filter((p) => p.category === 'Finance'),
+    ].slice(0, 10),
   },
   {
     id: 'mental-health',
     title: 'Mental Health Experts',
     professionals: [
-      ...mockProfessionals.filter(p => p.category === 'Health'),
-      ...mockProfessionals.filter(p => p.category === 'Lifestyle'),
-      ...mockProfessionals.filter(p => p.category === 'Technology'),
-      ...mockProfessionals.filter(p => p.category === 'Business')
-    ].slice(0, 10)
+      ...mockProfessionals.filter((p) => p.category === 'Health'),
+      ...mockProfessionals.filter((p) => p.category === 'Lifestyle'),
+      ...mockProfessionals.filter((p) => p.category === 'Technology'),
+      ...mockProfessionals.filter((p) => p.category === 'Business'),
+    ].slice(0, 10),
   },
   {
     id: 'business-advisors',
     title: 'Business Advisors',
     professionals: [
-      ...mockProfessionals.filter(p => p.category === 'Business'),
-      ...mockProfessionals.filter(p => p.category === 'Finance'),
-      ...mockProfessionals.filter(p => p.category === 'Technology'),
-      ...mockProfessionals.filter(p => p.category === 'Lifestyle')
-    ].slice(0, 10)
+      ...mockProfessionals.filter((p) => p.category === 'Business'),
+      ...mockProfessionals.filter((p) => p.category === 'Finance'),
+      ...mockProfessionals.filter((p) => p.category === 'Technology'),
+      ...mockProfessionals.filter((p) => p.category === 'Lifestyle'),
+    ].slice(0, 10),
   },
   {
     id: 'tech-experts',
     title: 'Tech Innovators',
     professionals: [
-      ...mockProfessionals.filter(p => p.category === 'Technology'),
-      ...mockProfessionals.filter(p => p.category === 'Business'),
-      ...mockProfessionals.filter(p => p.category === 'Finance'),
-      ...mockProfessionals.filter(p => p.category === 'Health')
-    ].slice(0, 10)
-  }
+      ...mockProfessionals.filter((p) => p.category === 'Technology'),
+      ...mockProfessionals.filter((p) => p.category === 'Business'),
+      ...mockProfessionals.filter((p) => p.category === 'Finance'),
+      ...mockProfessionals.filter((p) => p.category === 'Health'),
+    ].slice(0, 10),
+  },
 ];
 
 export default function CategoriesScreen() {
   const { theme } = useTheme();
 
   const renderPromotionBanner = ({ item }: { item: any }) => (
-    <TouchableOpacity 
-      style={styles.bannerCard}
-      activeOpacity={0.9}
-    >
+    <TouchableOpacity style={styles.bannerCard} activeOpacity={0.9}>
       <Image source={{ uri: item.image }} style={styles.bannerImage} />
       <View style={styles.bannerOverlay}>
         <View style={styles.bannerContent}>
@@ -81,7 +89,7 @@ export default function CategoriesScreen() {
   );
 
   const renderProfessionalCard = ({ item }: { item: any }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={[
         styles.professionalCard,
         {
@@ -89,7 +97,7 @@ export default function CategoriesScreen() {
           backgroundColor: theme.colors.card,
           // theme.colors.border → card border
           borderColor: theme.colors.border,
-        }
+        },
       ]}
       onPress={() => router.push(`/professional/${item.id}`)}
       activeOpacity={0.8}
@@ -98,39 +106,57 @@ export default function CategoriesScreen() {
         <Image source={{ uri: item.avatar }} style={styles.cardAvatar} />
         {item.isOnline && <View style={styles.onlineIndicator} />}
       </View>
-      
+
       <View style={styles.cardContent}>
-        <Text style={[
-          styles.cardName,
-          {
-            // theme.colors.text → professional name
-            color: theme.colors.text,
-          }
-        ]} numberOfLines={1}>{item.name}</Text>
-        <Text style={[
-          styles.cardTitle,
-          {
-            // theme.colors.textSecondary → professional role/title
-            color: theme.colors.textSecondary,
-          }
-        ]} numberOfLines={2}>{item.title}</Text>
-        
+        <Text
+          style={[
+            styles.cardName,
+            {
+              // theme.colors.text → professional name
+              color: theme.colors.text,
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {item.name}
+        </Text>
+        <Text
+          style={[
+            styles.cardTitle,
+            {
+              // theme.colors.textSecondary → professional role/title
+              color: theme.colors.textSecondary,
+            },
+          ]}
+          numberOfLines={2}
+        >
+          {item.title}
+        </Text>
+
         <View style={styles.cardFooter}>
           <View style={styles.rateContainer}>
-            <Text style={[
-              styles.rate,
-              {
-                // theme.colors.pinkTwo → price highlight
-                color: theme.colors.pinkTwo,
-              }
-            ]}>${item.ratePerMinute}</Text>
-            <Text style={[
-              styles.rateUnit,
-              {
-                // theme.colors.textMuted → price unit
-                color: theme.colors.textMuted,
-              }
-            ]}>/min</Text>
+            <Text
+              style={[
+                styles.rate,
+                {
+                  // theme.colors.pinkTwo → price highlight
+                  color: theme.colors.pinkTwo,
+                },
+              ]}
+            >
+              ${item.ratePerMinute}
+            </Text>
+            <Text
+              style={[
+                styles.rateUnit,
+                {
+                  // theme.colors.textMuted → price unit
+                  color: theme.colors.textMuted,
+                },
+              ]}
+            >
+              /min
+            </Text>
           </View>
 
           <TouchableOpacity
@@ -138,24 +164,35 @@ export default function CategoriesScreen() {
               styles.profileButton,
               {
                 // theme.colors.surface → bg (Light) / theme.colors.primaryLight → bg (Dark)
-                backgroundColor: theme.name === 'light' ? theme.colors.surface : theme.colors.primaryLight,
+                backgroundColor:
+                  theme.name === 'light'
+                    ? theme.colors.surface
+                    : theme.colors.primaryLight,
                 // theme.colors.primary → border (Light only)
-                borderColor: theme.name === 'light' ? theme.colors.pinkTwo : 'transparent',
+                borderColor:
+                  theme.name === 'light' ? theme.colors.pinkTwo : 'transparent',
                 borderWidth: theme.name === 'light' ? 1 : 0,
-              }
+              },
             ]}
             onPress={(e) => {
               e.stopPropagation();
               router.push(`/professional/${item.id}`);
             }}
           >
-            <Text style={[
-              styles.profileButtonText,
-              {
-                // theme.colors.primary → text (Light) / theme.colors.surface → text (Dark)
-                color: theme.name === 'light' ? theme.colors.pinkTwo : theme.colors.surface,
-              }
-            ]}>Profile</Text>
+            <Text
+              style={[
+                styles.profileButtonText,
+                {
+                  // theme.colors.primary → text (Light) / theme.colors.surface → text (Dark)
+                  color:
+                    theme.name === 'light'
+                      ? theme.colors.pinkTwo
+                      : theme.colors.surface,
+                },
+              ]}
+            >
+              Profile
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -165,24 +202,32 @@ export default function CategoriesScreen() {
   const renderSection = (section: ProfessionalSection) => (
     <View key={section.id} style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Text style={[
-          styles.sectionTitle,
-          {
-            // theme.colors.text → section title
-            color: theme.colors.text,
-          }
-        ]}>{section.title}</Text>
-        <TouchableOpacity>
-          <Text style={[
-            styles.seeAllText,
+        <Text
+          style={[
+            styles.sectionTitle,
             {
-              // theme.colors.primary → see all link
-              color: theme.colors.primary,
-            }
-          ]}>See All</Text>
+              // theme.colors.text → section title
+              color: theme.colors.text,
+            },
+          ]}
+        >
+          {section.title}
+        </Text>
+        <TouchableOpacity>
+          <Text
+            style={[
+              styles.seeAllText,
+              {
+                // theme.colors.primary → see all link
+                color: theme.colors.primary,
+              },
+            ]}
+          >
+            See All
+          </Text>
         </TouchableOpacity>
       </View>
-      
+
       <FlatList
         data={section.professionals}
         renderItem={renderProfessionalCard}
@@ -201,23 +246,27 @@ export default function CategoriesScreen() {
   );
 
   return (
-    <SafeAreaView style={[
-      styles.container,
-      {
-        // theme.colors.background → screen background
-        backgroundColor: theme.colors.background,
-      }
-    ]}>
-      <Header 
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          // theme.colors.background → screen background
+          backgroundColor: theme.colors.background,
+        },
+      ]}
+    >
+      <Header
         showLogo={true}
         rightButton={
-          <TouchableOpacity style={[
-            styles.iconButton,
-            {
-              // theme.colors.overlay → icon button background
-              backgroundColor: theme.colors.overlay,
-            }
-          ]}>
+          <TouchableOpacity
+            style={[
+              styles.iconButton,
+              {
+                // theme.colors.overlay → icon button background
+                backgroundColor: theme.colors.overlay,
+              },
+            ]}
+          >
             <Search size={24} color={theme.colors.text} />
           </TouchableOpacity>
         }
@@ -235,7 +284,9 @@ export default function CategoriesScreen() {
             snapToInterval={width - 32}
             decelerationRate="fast"
             contentContainerStyle={styles.bannerCarousel}
-            ItemSeparatorComponent={() => <View style={styles.bannerSeparator} />}
+            ItemSeparatorComponent={() => (
+              <View style={styles.bannerSeparator} />
+            )}
           />
         </View>
 
@@ -262,7 +313,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  
+
   // Banner Section
   bannerSection: {
     marginTop: 16,
@@ -277,11 +328,15 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 12,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 8px 16px rgba(0,0,0,0.3)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.3,
+          shadowRadius: 16,
+          elevation: 12,
+        }),
   },
   bannerImage: {
     width: '100%',
@@ -364,11 +419,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 4px 8px rgba(0,0,0,0.2)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.2,
+          shadowRadius: 8,
+          elevation: 6,
+        }),
   },
   cardImageContainer: {
     position: 'relative',

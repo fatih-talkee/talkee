@@ -1,19 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Image } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  Image,
+  Platform,
+} from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Phone, PhoneOff, Video, VideoOff, Mic, MicOff, MessageCircle, MoveVertical as MoreVertical, Minimize2 } from 'lucide-react-native';
+import {
+  Phone,
+  PhoneOff,
+  Video,
+  VideoOff,
+  Mic,
+  MicOff,
+  MessageCircle,
+  MoveVertical as MoreVertical,
+  Minimize2,
+} from 'lucide-react-native';
 import { mockProfessionals } from '@/mockData/professionals';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function CallScreen() {
   const { id, type } = useLocalSearchParams();
-  const professional = mockProfessionals.find(p => p.id === id);
+  const professional = mockProfessionals.find((p) => p.id === id);
   const [isConnected, setIsConnected] = useState(false);
   const [duration, setDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [costPerSecond] = useState(professional ? professional.ratePerMinute / 60 : 0);
+  const [costPerSecond] = useState(
+    professional ? professional.ratePerMinute / 60 : 0
+  );
 
   useEffect(() => {
     // Simulate call connection
@@ -28,7 +48,7 @@ export default function CallScreen() {
     let interval: NodeJS.Timeout;
     if (isConnected) {
       interval = setInterval(() => {
-        setDuration(prev => prev + 1);
+        setDuration((prev) => prev + 1);
       }, 1000);
     }
     return () => clearInterval(interval);
@@ -37,7 +57,9 @@ export default function CallScreen() {
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, '0')}:${secs
+      .toString()
+      .padStart(2, '0')}`;
   };
 
   const currentCost = duration * costPerSecond;
@@ -57,16 +79,21 @@ export default function CallScreen() {
   if (isMinimized) {
     return (
       <View style={styles.minimizedCall}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.minimizedContent}
           onPress={() => setIsMinimized(false)}
         >
-          <Image source={{ uri: professional.avatar }} style={styles.minimizedAvatar} />
+          <Image
+            source={{ uri: professional.avatar }}
+            style={styles.minimizedAvatar}
+          />
           <View style={styles.minimizedInfo}>
             <Text style={styles.minimizedName}>{professional.name}</Text>
-            <Text style={styles.minimizedDuration}>{formatDuration(duration)}</Text>
+            <Text style={styles.minimizedDuration}>
+              {formatDuration(duration)}
+            </Text>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.minimizedEndCall}
             onPress={handleEndCall}
           >
@@ -79,13 +106,10 @@ export default function CallScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={['#1f2937', '#374151']}
-        style={styles.background}
-      >
+      <LinearGradient colors={['#1f2937', '#374151']} style={styles.background}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.minimizeButton}
             onPress={() => setIsMinimized(true)}
           >
@@ -107,7 +131,10 @@ export default function CallScreen() {
         {/* Professional Info */}
         <View style={styles.professionalInfo}>
           <View style={styles.professionalCard}>
-            <Image source={{ uri: professional.avatar }} style={styles.professionalAvatar} />
+            <Image
+              source={{ uri: professional.avatar }}
+              style={styles.professionalAvatar}
+            />
             <Text style={styles.professionalName}>{professional.name}</Text>
             <Text style={styles.professionalTitle}>{professional.title}</Text>
           </View>
@@ -127,7 +154,9 @@ export default function CallScreen() {
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Rate</Text>
-            <Text style={styles.statValue}>${professional.ratePerMinute}/min</Text>
+            <Text style={styles.statValue}>
+              ${professional.ratePerMinute}/min
+            </Text>
           </View>
         </View>
 
@@ -144,8 +173,11 @@ export default function CallScreen() {
 
         {/* Call Controls */}
         <View style={styles.callControls}>
-          <TouchableOpacity 
-            style={[styles.controlButton, isMuted && styles.controlButtonActive]}
+          <TouchableOpacity
+            style={[
+              styles.controlButton,
+              isMuted && styles.controlButtonActive,
+            ]}
             onPress={() => setIsMuted(!isMuted)}
           >
             {isMuted ? (
@@ -156,8 +188,11 @@ export default function CallScreen() {
           </TouchableOpacity>
 
           {type === 'video' && (
-            <TouchableOpacity 
-              style={[styles.controlButton, isVideoOff && styles.controlButtonActive]}
+            <TouchableOpacity
+              style={[
+                styles.controlButton,
+                isVideoOff && styles.controlButtonActive,
+              ]}
               onPress={() => setIsVideoOff(!isVideoOff)}
             >
               {isVideoOff ? (
@@ -172,7 +207,7 @@ export default function CallScreen() {
             <MessageCircle size={24} color="#ffffff" />
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.endCallButton}
             onPress={handleEndCall}
           >
@@ -348,11 +383,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 4px 8px rgba(0,0,0,0.3)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+          elevation: 8,
+        }),
   },
   minimizedAvatar: {
     width: 32,

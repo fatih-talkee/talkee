@@ -1,0 +1,18 @@
+{
+  "appName": "Talkee",
+  "hello": "Hello",
+  "language": {
+    "title": "Language",
+    "choose_title": "Choose Language",
+    "choose_description": "Select your preferred language. Your choice will be saved and applied across the app.",
+    "names": {
+      "en": "English",
+      "tr": "Turkish",
+      "es": "Spanish",
+      "de": "German",
+      "fr": "French"
+    }
+  },
+  "login": "Login",
+  "register": "Register"
+}

@@ -1,5 +1,16 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Image, Modal, Pressable } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  ScrollView,
+  Image,
+  Modal,
+  Pressable,
+  Platform,
+} from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   ArrowLeft,
@@ -17,7 +28,7 @@ import {
   X,
   Briefcase,
   GraduationCap,
-  Award
+  Award,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
@@ -27,14 +38,16 @@ import { useTheme } from '@/contexts/ThemeContext';
 
 export default function ProfessionalProfileScreen() {
   const { id } = useLocalSearchParams();
-  const professional = mockProfessionals.find(p => p.id === id);
+  const professional = mockProfessionals.find((p) => p.id === id);
   const [isFavorite, setIsFavorite] = useState(false);
   const [cvModalVisible, setCvModalVisible] = useState(false);
   const { theme } = useTheme();
 
   if (!professional) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
         <Text style={{ color: theme.colors.text }}>Professional not found</Text>
       </SafeAreaView>
     );
@@ -45,27 +58,43 @@ export default function ProfessionalProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <Header
         showLogo={true}
         leftButton={
-          <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { backgroundColor: theme.colors.surface }]}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={[
+              styles.backButton,
+              { backgroundColor: theme.colors.surface },
+            ]}
+          >
             <ArrowLeft size={24} color={theme.colors.primary} />
           </TouchableOpacity>
         }
         rightButton={
           <View style={styles.headerActions}>
             <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: theme.colors.surface }]}
+              style={[
+                styles.actionButton,
+                { backgroundColor: theme.colors.surface },
+              ]}
               onPress={() => setIsFavorite(!isFavorite)}
             >
               <Heart
                 size={20}
                 color={isFavorite ? theme.colors.error : theme.colors.textMuted}
-                fill={isFavorite ? theme.colors.error : "transparent"}
+                fill={isFavorite ? theme.colors.error : 'transparent'}
               />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionButton, { backgroundColor: theme.colors.surface }]}>
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                { backgroundColor: theme.colors.surface },
+              ]}
+            >
               <Share2 size={20} color={theme.colors.textMuted} />
             </TouchableOpacity>
           </View>
@@ -81,29 +110,72 @@ export default function ProfessionalProfileScreen() {
         <Card style={styles.profileCard}>
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
-              <Image source={{ uri: professional.avatar }} style={[styles.avatar, { borderColor: theme.colors.border }]} />
-              {professional.isOnline && <View style={[styles.onlineIndicator, { borderColor: theme.colors.card }]} />}
+              <Image
+                source={{ uri: professional.avatar }}
+                style={[styles.avatar, { borderColor: theme.colors.border }]}
+              />
+              {professional.isOnline && (
+                <View
+                  style={[
+                    styles.onlineIndicator,
+                    { borderColor: theme.colors.card },
+                  ]}
+                />
+              )}
             </View>
             <View style={styles.profileInfo}>
               <View style={styles.nameRow}>
-                <Text style={[styles.name, { color: theme.colors.text }]}>{professional.name}</Text>
+                <Text style={[styles.name, { color: theme.colors.text }]}>
+                  {professional.name}
+                </Text>
                 {professional.isVerified && (
-                  <Badge size={20} color={theme.colors.primary} strokeWidth={2} />
+                  <Badge
+                    size={20}
+                    color={theme.colors.primary}
+                    strokeWidth={2}
+                  />
                 )}
               </View>
-              <Text style={[styles.title, { color: theme.colors.textSecondary }]}>{professional.title}</Text>
+              <Text
+                style={[styles.title, { color: theme.colors.textSecondary }]}
+              >
+                {professional.title}
+              </Text>
               <View style={styles.ratingRow}>
-                <Star size={16} color={theme.colors.warning} fill={theme.colors.warning} />
-                <Text style={[styles.rating, { color: theme.colors.text }]}>{professional.rating}</Text>
-                <Text style={[styles.callCount, { color: theme.colors.textMuted }]}>({professional.totalCalls} calls)</Text>
+                <Star
+                  size={16}
+                  color={theme.colors.warning}
+                  fill={theme.colors.warning}
+                />
+                <Text style={[styles.rating, { color: theme.colors.text }]}>
+                  {professional.rating}
+                </Text>
+                <Text
+                  style={[styles.callCount, { color: theme.colors.textMuted }]}
+                >
+                  ({professional.totalCalls} calls)
+                </Text>
               </View>
             </View>
           </View>
 
           <View style={styles.badges}>
             {professional.badges.map((badge, index) => (
-              <View key={index} style={[styles.badge, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                <Text style={[styles.badgeText, { color: theme.colors.primary }]}>{badge}</Text>
+              <View
+                key={index}
+                style={[
+                  styles.badge,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[styles.badgeText, { color: theme.colors.primary }]}
+                >
+                  {badge}
+                </Text>
               </View>
             ))}
           </View>
@@ -111,28 +183,64 @@ export default function ProfessionalProfileScreen() {
           <View style={styles.quickStats}>
             <View style={styles.quickStat}>
               <Clock size={16} color={theme.colors.textMuted} />
-              <Text style={[styles.quickStatText, { color: theme.colors.textMuted }]}>{professional.responseTime}</Text>
+              <Text
+                style={[
+                  styles.quickStatText,
+                  { color: theme.colors.textMuted },
+                ]}
+              >
+                {professional.responseTime}
+              </Text>
             </View>
             <View style={styles.quickStat}>
               <MapPin size={16} color={theme.colors.textMuted} />
-              <Text style={[styles.quickStatText, { color: theme.colors.textMuted }]}>{professional.languages.join(', ')}</Text>
+              <Text
+                style={[
+                  styles.quickStatText,
+                  { color: theme.colors.textMuted },
+                ]}
+              >
+                {professional.languages.join(', ')}
+              </Text>
             </View>
           </View>
         </Card>
 
         {/* About */}
         <Card style={styles.aboutCard}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>About</Text>
-          <Text style={[styles.bio, { color: theme.colors.textSecondary }]}>{professional.bio}</Text>
+          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
+            About
+          </Text>
+          <Text style={[styles.bio, { color: theme.colors.textSecondary }]}>
+            {professional.bio}
+          </Text>
         </Card>
 
         {/* Specialties */}
         <Card style={styles.specialtiesCard}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Specialties</Text>
+          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
+            Specialties
+          </Text>
           <View style={styles.specialties}>
             {professional.specialties.map((specialty, index) => (
-              <View key={index} style={[styles.specialtyTag, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                <Text style={[styles.specialtyText, { color: theme.colors.primary }]}>{specialty}</Text>
+              <View
+                key={index}
+                style={[
+                  styles.specialtyTag,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.specialtyText,
+                    { color: theme.colors.primary },
+                  ]}
+                >
+                  {specialty}
+                </Text>
               </View>
             ))}
           </View>
@@ -140,11 +248,19 @@ export default function ProfessionalProfileScreen() {
 
         {/* Pricing */}
         <Card style={styles.pricingCard}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Pricing</Text>
+          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
+            Pricing
+          </Text>
           <View style={styles.pricingInfo}>
             <View style={styles.priceMain}>
-              <Text style={[styles.price, { color: theme.colors.warning }]}>${professional.ratePerMinute}</Text>
-              <Text style={[styles.priceUnit, { color: theme.colors.textMuted }]}>per minute</Text>
+              <Text style={[styles.price, { color: theme.colors.warning }]}>
+                ${professional.ratePerMinute}
+              </Text>
+              <Text
+                style={[styles.priceUnit, { color: theme.colors.textMuted }]}
+              >
+                per minute
+              </Text>
             </View>
             <Text style={[styles.pricingNote, { color: theme.colors.success }]}>
               First 2 minutes are always free for new connections
@@ -154,55 +270,116 @@ export default function ProfessionalProfileScreen() {
 
         {/* Recent Reviews */}
         <Card style={styles.reviewsCard}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Recent Reviews</Text>
-          <View style={[styles.review, { borderBottomColor: theme.colors.divider }]}>
+          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
+            Recent Reviews
+          </Text>
+          <View
+            style={[styles.review, { borderBottomColor: theme.colors.divider }]}
+          >
             <View style={styles.reviewHeader}>
               <View style={styles.reviewerInfo}>
-                <Text style={[styles.reviewerName, { color: theme.colors.text }]}>Sarah M.</Text>
+                <Text
+                  style={[styles.reviewerName, { color: theme.colors.text }]}
+                >
+                  Sarah M.
+                </Text>
                 <View style={styles.reviewRating}>
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <Star key={star} size={12} color={theme.colors.warning} fill={theme.colors.warning} />
+                    <Star
+                      key={star}
+                      size={12}
+                      color={theme.colors.warning}
+                      fill={theme.colors.warning}
+                    />
                   ))}
                 </View>
               </View>
-              <Text style={[styles.reviewDate, { color: theme.colors.textMuted }]}>2 days ago</Text>
+              <Text
+                style={[styles.reviewDate, { color: theme.colors.textMuted }]}
+              >
+                2 days ago
+              </Text>
             </View>
-            <Text style={[styles.reviewText, { color: theme.colors.textSecondary }]}>
-              "Incredible session! Dr. Chen provided exactly the guidance I needed for my career transition. Highly recommend!"
+            <Text
+              style={[styles.reviewText, { color: theme.colors.textSecondary }]}
+            >
+              "Incredible session! Dr. Chen provided exactly the guidance I
+              needed for my career transition. Highly recommend!"
             </Text>
           </View>
 
-          <View style={[styles.review, { borderBottomColor: theme.colors.divider }]}>
+          <View
+            style={[styles.review, { borderBottomColor: theme.colors.divider }]}
+          >
             <View style={styles.reviewHeader}>
               <View style={styles.reviewerInfo}>
-                <Text style={[styles.reviewerName, { color: theme.colors.text }]}>Michael R.</Text>
+                <Text
+                  style={[styles.reviewerName, { color: theme.colors.text }]}
+                >
+                  Michael R.
+                </Text>
                 <View style={styles.reviewRating}>
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <Star key={star} size={12} color={theme.colors.warning} fill={theme.colors.warning} />
+                    <Star
+                      key={star}
+                      size={12}
+                      color={theme.colors.warning}
+                      fill={theme.colors.warning}
+                    />
                   ))}
                 </View>
               </View>
-              <Text style={[styles.reviewDate, { color: theme.colors.textMuted }]}>1 week ago</Text>
+              <Text
+                style={[styles.reviewDate, { color: theme.colors.textMuted }]}
+              >
+                1 week ago
+              </Text>
             </View>
-            <Text style={[styles.reviewText, { color: theme.colors.textSecondary }]}>
-              "Professional, insightful, and genuinely helpful. Worth every minute!"
+            <Text
+              style={[styles.reviewText, { color: theme.colors.textSecondary }]}
+            >
+              "Professional, insightful, and genuinely helpful. Worth every
+              minute!"
             </Text>
           </View>
         </Card>
 
         {/* CV / Resume Section */}
         <Card style={styles.cvCard}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>CV / Resume</Text>
+          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
+            CV / Resume
+          </Text>
           <TouchableOpacity
-            style={[styles.cvPreview, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+            style={[
+              styles.cvPreview,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+            ]}
             onPress={() => setCvModalVisible(true)}
           >
             <FileText size={24} color={theme.colors.primary} />
             <View style={styles.cvPreviewText}>
-              <Text style={[styles.cvPreviewTitle, { color: theme.colors.text }]}>View Professional CV</Text>
-              <Text style={[styles.cvPreviewSubtitle, { color: theme.colors.textMuted }]}>Experience, Education & Skills</Text>
+              <Text
+                style={[styles.cvPreviewTitle, { color: theme.colors.text }]}
+              >
+                View Professional CV
+              </Text>
+              <Text
+                style={[
+                  styles.cvPreviewSubtitle,
+                  { color: theme.colors.textMuted },
+                ]}
+              >
+                Experience, Education & Skills
+              </Text>
             </View>
-            <ArrowLeft size={20} color={theme.colors.textMuted} style={{ transform: [{ rotate: '180deg' }] }} />
+            <ArrowLeft
+              size={20}
+              color={theme.colors.textMuted}
+              style={{ transform: [{ rotate: '180deg' }] }}
+            />
           </TouchableOpacity>
         </Card>
       </ScrollView>
@@ -214,43 +391,131 @@ export default function ProfessionalProfileScreen() {
         visible={cvModalVisible}
         onRequestClose={() => setCvModalVisible(false)}
       >
-        <View style={[styles.modalOverlay, { backgroundColor: theme.colors.overlay }]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            { backgroundColor: theme.colors.overlay },
+          ]}
+        >
           <Pressable
             style={styles.modalOverlayPressable}
             onPress={() => setCvModalVisible(false)}
           />
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.card }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Professional CV</Text>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.colors.card },
+            ]}
+          >
+            <View
+              style={[
+                styles.modalHeader,
+                { borderBottomColor: theme.colors.border },
+              ]}
+            >
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+                Professional CV
+              </Text>
               <TouchableOpacity
                 onPress={() => setCvModalVisible(false)}
-                style={[styles.modalCloseButton, { backgroundColor: theme.colors.surface }]}
+                style={[
+                  styles.modalCloseButton,
+                  { backgroundColor: theme.colors.surface },
+                ]}
               >
                 <X size={20} color={theme.colors.primary} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.modalBody}
+              showsVerticalScrollIndicator={false}
+            >
               {/* Experience Section */}
               <View style={styles.cvSection}>
                 <View style={styles.cvSectionHeader}>
                   <Briefcase size={20} color={theme.colors.primary} />
-                  <Text style={[styles.cvSectionTitle, { color: theme.colors.text }]}>Experience</Text>
-                </View>
-                <View style={[styles.cvItem, { borderLeftColor: theme.colors.border }]}>
-                  <Text style={[styles.cvItemTitle, { color: theme.colors.text }]}>Senior Career Coach</Text>
-                  <Text style={[styles.cvItemSubtitle, { color: theme.colors.textSecondary }]}>TalkConnect Inc.</Text>
-                  <Text style={[styles.cvItemDate, { color: theme.colors.textMuted }]}>2020 - Present</Text>
-                  <Text style={[styles.cvItemDescription, { color: theme.colors.textSecondary }]}>
-                    Providing career guidance and professional development coaching to 500+ clients worldwide.
+                  <Text
+                    style={[
+                      styles.cvSectionTitle,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    Experience
                   </Text>
                 </View>
-                <View style={[styles.cvItem, { borderLeftColor: theme.colors.border }]}>
-                  <Text style={[styles.cvItemTitle, { color: theme.colors.text }]}>Career Development Specialist</Text>
-                  <Text style={[styles.cvItemSubtitle, { color: theme.colors.textSecondary }]}>Global Careers LLC</Text>
-                  <Text style={[styles.cvItemDate, { color: theme.colors.textMuted }]}>2017 - 2020</Text>
-                  <Text style={[styles.cvItemDescription, { color: theme.colors.textSecondary }]}>
-                    Specialized in leadership coaching and career transitions for mid to senior-level professionals.
+                <View
+                  style={[
+                    styles.cvItem,
+                    { borderLeftColor: theme.colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[styles.cvItemTitle, { color: theme.colors.text }]}
+                  >
+                    Senior Career Coach
+                  </Text>
+                  <Text
+                    style={[
+                      styles.cvItemSubtitle,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    TalkConnect Inc.
+                  </Text>
+                  <Text
+                    style={[
+                      styles.cvItemDate,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    2020 - Present
+                  </Text>
+                  <Text
+                    style={[
+                      styles.cvItemDescription,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Providing career guidance and professional development
+                    coaching to 500+ clients worldwide.
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.cvItem,
+                    { borderLeftColor: theme.colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[styles.cvItemTitle, { color: theme.colors.text }]}
+                  >
+                    Career Development Specialist
+                  </Text>
+                  <Text
+                    style={[
+                      styles.cvItemSubtitle,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Global Careers LLC
+                  </Text>
+                  <Text
+                    style={[
+                      styles.cvItemDate,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    2017 - 2020
+                  </Text>
+                  <Text
+                    style={[
+                      styles.cvItemDescription,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Specialized in leadership coaching and career transitions
+                    for mid to senior-level professionals.
                   </Text>
                 </View>
               </View>
@@ -259,17 +524,70 @@ export default function ProfessionalProfileScreen() {
               <View style={styles.cvSection}>
                 <View style={styles.cvSectionHeader}>
                   <GraduationCap size={20} color={theme.colors.primary} />
-                  <Text style={[styles.cvSectionTitle, { color: theme.colors.text }]}>Education</Text>
+                  <Text
+                    style={[
+                      styles.cvSectionTitle,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    Education
+                  </Text>
                 </View>
-                <View style={[styles.cvItem, { borderLeftColor: theme.colors.border }]}>
-                  <Text style={[styles.cvItemTitle, { color: theme.colors.text }]}>Ph.D. in Organizational Psychology</Text>
-                  <Text style={[styles.cvItemSubtitle, { color: theme.colors.textSecondary }]}>Stanford University</Text>
-                  <Text style={[styles.cvItemDate, { color: theme.colors.textMuted }]}>2013 - 2017</Text>
+                <View
+                  style={[
+                    styles.cvItem,
+                    { borderLeftColor: theme.colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[styles.cvItemTitle, { color: theme.colors.text }]}
+                  >
+                    Ph.D. in Organizational Psychology
+                  </Text>
+                  <Text
+                    style={[
+                      styles.cvItemSubtitle,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Stanford University
+                  </Text>
+                  <Text
+                    style={[
+                      styles.cvItemDate,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    2013 - 2017
+                  </Text>
                 </View>
-                <View style={[styles.cvItem, { borderLeftColor: theme.colors.border }]}>
-                  <Text style={[styles.cvItemTitle, { color: theme.colors.text }]}>M.A. in Counseling Psychology</Text>
-                  <Text style={[styles.cvItemSubtitle, { color: theme.colors.textSecondary }]}>Columbia University</Text>
-                  <Text style={[styles.cvItemDate, { color: theme.colors.textMuted }]}>2011 - 2013</Text>
+                <View
+                  style={[
+                    styles.cvItem,
+                    { borderLeftColor: theme.colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[styles.cvItemTitle, { color: theme.colors.text }]}
+                  >
+                    M.A. in Counseling Psychology
+                  </Text>
+                  <Text
+                    style={[
+                      styles.cvItemSubtitle,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Columbia University
+                  </Text>
+                  <Text
+                    style={[
+                      styles.cvItemDate,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    2011 - 2013
+                  </Text>
                 </View>
               </View>
 
@@ -277,12 +595,42 @@ export default function ProfessionalProfileScreen() {
               <View style={styles.cvSection}>
                 <View style={styles.cvSectionHeader}>
                   <Award size={20} color={theme.colors.primary} />
-                  <Text style={[styles.cvSectionTitle, { color: theme.colors.text }]}>Skills & Certifications</Text>
+                  <Text
+                    style={[
+                      styles.cvSectionTitle,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    Skills & Certifications
+                  </Text>
                 </View>
                 <View style={styles.cvSkills}>
-                  {['Career Coaching', 'Leadership Development', 'Executive Coaching', 'Performance Management', 'Talent Development', 'Change Management'].map((skill, index) => (
-                    <View key={index} style={[styles.cvSkillTag, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                      <Text style={[styles.cvSkillText, { color: theme.colors.primary }]}>{skill}</Text>
+                  {[
+                    'Career Coaching',
+                    'Leadership Development',
+                    'Executive Coaching',
+                    'Performance Management',
+                    'Talent Development',
+                    'Change Management',
+                  ].map((skill, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.cvSkillTag,
+                        {
+                          backgroundColor: theme.colors.surface,
+                          borderColor: theme.colors.border,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.cvSkillText,
+                          { color: theme.colors.primary },
+                        ]}
+                      >
+                        {skill}
+                      </Text>
                     </View>
                   ))}
                 </View>
@@ -295,32 +643,68 @@ export default function ProfessionalProfileScreen() {
       {/* Call Actions */}
       <SafeAreaView
         edges={['bottom']}
-        style={[styles.callActionsWrapper, { backgroundColor: theme.colors.card }]}
+        style={[
+          styles.callActionsWrapper,
+          { backgroundColor: theme.colors.card },
+        ]}
       >
-        <View style={[styles.callActions, { borderTopColor: theme.colors.border, shadowColor: theme.colors.text }]}>
+        <View
+          style={[
+            styles.callActions,
+            {
+              borderTopColor: theme.colors.border,
+              shadowColor: theme.colors.text,
+            },
+          ]}
+        >
           <View style={styles.callButtonsRow}>
             <TouchableOpacity
-              style={[styles.callTypeButton, { backgroundColor: theme.colors.warning }]}
+              style={[
+                styles.callTypeButton,
+                { backgroundColor: theme.colors.warning },
+              ]}
               onPress={() => handleCallNow('voice')}
             >
               <Phone size={18} color={theme.colors.surface} />
-              <Text style={[styles.callTypeText, { color: theme.colors.surface }]}>Voice</Text>
+              <Text
+                style={[styles.callTypeText, { color: theme.colors.surface }]}
+              >
+                Voice
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.callTypeButton, { backgroundColor: theme.colors.primary }]}
+              style={[
+                styles.callTypeButton,
+                { backgroundColor: theme.colors.primary },
+              ]}
               onPress={() => handleCallNow('video')}
             >
               <Video size={18} color={theme.colors.surface} />
-              <Text style={[styles.callTypeText, { color: theme.colors.surface }]}>Video</Text>
+              <Text
+                style={[styles.callTypeText, { color: theme.colors.surface }]}
+              >
+                Video
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.callTypeButton, styles.scheduleCallButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.primary }]}
+              style={[
+                styles.callTypeButton,
+                styles.scheduleCallButton,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.primary,
+                },
+              ]}
               onPress={() => console.log('Schedule call')}
             >
               <Calendar size={18} color={theme.colors.primary} />
-              <Text style={[styles.callTypeText, { color: theme.colors.primary }]}>Schedule</Text>
+              <Text
+                style={[styles.callTypeText, { color: theme.colors.primary }]}
+              >
+                Schedule
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -704,10 +1088,14 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     borderTopWidth: 1,
     // border: theme.colors.border
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 4,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px -2px 8px rgba(0,0,0,0.05)' }
+      : {
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 8,
+          elevation: 4,
+        }),
   },
   callButtonsRow: {
     flexDirection: 'row',
