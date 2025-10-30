@@ -66,10 +66,9 @@ const styles = StyleSheet.create({
   },
   rightSection: {
     flex: 2,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
     flexDirection: 'row',
-    gap: 8,
   },
   rightButtonWrapper: {
     marginLeft: 8,
