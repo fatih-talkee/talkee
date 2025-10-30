@@ -195,6 +195,7 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor:'#FFFFFF',
+    color: '#000000',
   },
   forgotPassword: {
     alignSelf: 'flex-end',
