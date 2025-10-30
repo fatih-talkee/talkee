@@ -168,6 +168,7 @@ const styles = StyleSheet.create({
   },
   inputLight: {
     backgroundColor: '#FFFFFF',
+    color: '#000000',
   },
   resetButton: {
     marginTop: 8,

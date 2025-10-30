@@ -18,13 +18,14 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     setLoading(true);
-    // Mock register - navigate directly to home without validation
+    // Mock: after basic client checks, go to OTP verification
     setTimeout(() => {
       if (isMountedRef.current) {
         setLoading(false);
-        router.replace('/(tabs)');
+        const to = encodeURIComponent(phone || '');
+        router.push(`/auth/otp?context=register&to=${to}`);
       }
-    }, 800);
+    }, 400);
   };
 
   const handleSocialRegister = (provider: string) => {
@@ -108,7 +109,7 @@ export default function RegisterScreen() {
             <Button
               title={loading ? "Creating Account..." : "Sign Up"}
               onPress={handleRegister}
-              disabled={loading}
+              disabled={loading || !phone || !password || password !== confirmPassword}
               style={styles.registerButton}
             />
 
@@ -223,6 +224,7 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor:'#FFFFFF',
+    color: '#000000',
   },
   registerButton: {
     marginBottom: 24,
