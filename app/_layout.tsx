@@ -59,7 +59,7 @@ export default function RootLayout() {
         <Stack.Screen name="settings/language" />
         <Stack.Screen name="+not-found" />
       </Stack>
-      <StatusBar style="auto" />
+      <StatusBar style="auto" translucent={false} />
     </ThemeProvider>
   );
 }
