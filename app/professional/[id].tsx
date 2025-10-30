@@ -415,10 +415,7 @@ export default function ProfessionalProfileScreen() {
               </Text>
               <TouchableOpacity
                 onPress={() => setCvModalVisible(false)}
-                style={[
-                  styles.modalCloseButton,
-                  { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
-                ]}
+                style={[styles.modalCloseButton, { backgroundColor: theme.colors.surface }]}
               >
                 <X size={28} color="#ffffff" />
               </TouchableOpacity>
@@ -991,8 +988,6 @@ const styles = StyleSheet.create({
     // background: theme.colors.surface
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    // border: theme.colors.border
     ...(Platform.OS === 'web'
       ? { boxShadow: '0px 2px 8px rgba(0,0,0,0.12)' }
       : {
