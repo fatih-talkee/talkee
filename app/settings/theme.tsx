@@ -21,7 +21,17 @@ export default function ThemeSettingsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.surface }]}>
-      <Header showLogo />
+      <Header
+        showLogo
+        rightButtons={
+          <TouchableOpacity
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
+            style={[styles.backButton, { backgroundColor: theme.colors.card }]}
+          >
+            <ArrowLeft size={24} color={theme.colors.text} />
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
