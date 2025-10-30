@@ -14,7 +14,7 @@ import {
 import { router } from 'expo-router';
 import { ArrowRight, Search } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
-import { mockProfessionals, mockPromotions } from '@/mockData/professionals';
+import { mockProfessionals, mockPromotions, mockCategories } from '@/mockData/professionals';
 import { useTheme } from '@/contexts/ThemeContext';
 
 const { width } = Dimensions.get('window');
