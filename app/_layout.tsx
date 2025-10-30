@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { useFonts } from 'expo-font';
+import Toast from 'react-native-toast-message';
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -60,6 +61,7 @@ export default function RootLayout() {
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" translucent={false} />
+      <Toast />
     </ThemeProvider>
   );
 }
