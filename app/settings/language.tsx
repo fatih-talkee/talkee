@@ -24,14 +24,12 @@ export default function LanguageSettings() {
       style={[styles.container, { backgroundColor: theme.colors.surface }]}
     >
       <Header
-        title={t('language.title')}
-        leftButton={
+        showLogo
+        rightButtons={
           <TouchableOpacity
             style={[styles.navBtn, { backgroundColor: theme.colors.card }]}
             onPress={() => {
-              // Fallback if there's no history
-              // @ts-ignore
-              if (router?.canGoBack?.()) router.back();
+              if (router.canGoBack()) router.back();
               else router.replace('/(tabs)/profile');
             }}
           >
