@@ -7,9 +7,11 @@ import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
 import { FilterModal } from '@/components/filters/FilterModal';
 import { Input } from '@/components/ui/Input';
 import { mockProfessionals, mockCategories } from '@/mockData/professionals';
+import { useTheme } from '@/contexts/ThemeContext';
 
 export default function CategoryScreen() {
   const { id, name } = useLocalSearchParams();
+  const { theme } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterVisible, setFilterVisible] = useState(false);
   const [filters, setFilters] = useState({
@@ -46,35 +48,35 @@ export default function CategoryScreen() {
   });
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header 
         title={categoryName}
         leftButton={
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color="#374151" />
+          <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { backgroundColor: theme.colors.surface }]}>
+            <ArrowLeft size={24} color={theme.colors.text} />
           </TouchableOpacity>
         }
       />
 
-      <View style={styles.searchSection}>
+      <View style={[styles.searchSection, { backgroundColor: theme.colors.card }]}>
         <View style={styles.searchRow}>
           <Input
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder={`Search ${categoryName.toLowerCase()} professionals...`}
-            leftIcon={<Search size={20} color="#64748b" />}
+            leftIcon={<Search size={20} color={theme.colors.textMuted} />}
             style={styles.searchInput}
           />
           <TouchableOpacity 
-            style={styles.filterButton}
+            style={[styles.filterButton, { backgroundColor: theme.colors.accentLight }]}
             onPress={() => setFilterVisible(true)}
           >
-            <Filter size={20} color="#f59e0b" />
+            <Filter size={20} color={theme.colors.accent} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.resultsHeader}>
-          <Text style={styles.resultsCount}>
+          <Text style={[styles.resultsCount, { color: theme.colors.textMuted }]}>
             {filteredProfessionals.length} {categoryName.toLowerCase()} professionals
           </Text>
           {(filters.rating > 0 || filters.availability !== 'all') && (
@@ -84,7 +86,7 @@ export default function CategoryScreen() {
               availability: 'all',
               categories: [],
             })}>
-              <Text style={styles.clearFilters}>Clear filters</Text>
+              <Text style={[styles.clearFilters, { color: theme.colors.accent }]}>Clear filters</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -98,8 +100,8 @@ export default function CategoryScreen() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No professionals found</Text>
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No professionals found</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
               Try adjusting your search or filters to find more {categoryName.toLowerCase()} professionals
             </Text>
           </View>
