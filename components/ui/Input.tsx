@@ -25,7 +25,13 @@ export function Input({
   return (
     <View style={styles.container}>
       {label && <Text style={styles.label}>{label}</Text>}
-      <View style={[styles.inputContainer, error ? styles.inputError : undefined]}>
+      <View
+        style={[
+          styles.inputContainer,
+          error ? styles.inputError : undefined,
+          style as any,
+        ]}
+      >
         {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
         <TextInput
           style={[
