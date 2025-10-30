@@ -126,14 +126,13 @@ export default function CallHistoryScreen() {
               style={[
                 styles.filterButton,
                 { backgroundColor: theme.colors.background, borderColor: theme.colors.border },
-                selectedFilter === filter.key && { backgroundColor: '#000000', borderColor: '#000000' }
               ]}
               onPress={() => setSelectedFilter(filter.key as any)}
             >
               <Text style={[
                 styles.filterText,
                 { color: theme.colors.textSecondary },
-                selectedFilter === filter.key && { color: '#ffffff' }
+                selectedFilter === filter.key && { color: '#000000' }
               ]}>
                 {filter.label} ({filter.count})
               </Text>
