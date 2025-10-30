@@ -82,17 +82,17 @@ export default function ProfessionalProfileScreen() {
               style={[styles.actionButton, { backgroundColor: theme.colors.surface }]}
               onPress={() => setIsFavorite(!isFavorite)}
             >
-              <Heart
-                size={20}
-                color={isFavorite ? theme.colors.error : theme.colors.textMuted}
-                fill={isFavorite ? theme.colors.error : 'transparent'}
-              />
+              {isFavorite ? (
+                <Heart size={20} color={theme.colors.error} fill={theme.colors.error} />
+              ) : (
+                <Heart size={20} color="#ffffff" />
+              )}
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: theme.colors.surface }]}
               onPress={handleShare}
             >
-              <Share2 size={20} color={theme.colors.textMuted} />
+              <Share2 size={20} color="#ffffff" />
             </TouchableOpacity>
           </View>
         }
