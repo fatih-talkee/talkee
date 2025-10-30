@@ -10,6 +10,7 @@ import {
   Modal,
   Pressable,
   Platform,
+  Share,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
@@ -57,6 +58,16 @@ export default function ProfessionalProfileScreen() {
     router.push(`/call/${professional.id}?type=${type}`);
   };
 
+  const handleShare = async () => {
+    try {
+      const url = `https://talkee.app/professional/${professional.id}`;
+      const message = `${professional.name} - ${professional.title}\n${url}`;
+      await Share.share({ message, url, title: professional.name });
+    } catch (e) {
+      // no-op
+    }
+  };
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -94,6 +105,7 @@ export default function ProfessionalProfileScreen() {
                 styles.actionButton,
                 { backgroundColor: theme.colors.surface },
               ]}
+              onPress={handleShare}
             >
               <Share2 size={20} color={theme.colors.textMuted} />
             </TouchableOpacity>
