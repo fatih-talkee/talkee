@@ -169,18 +169,17 @@ const styles = StyleSheet.create({
   searchSection: {
     paddingHorizontal: 16,
     paddingVertical: 20,
-    marginBottom: 8,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    // ensure input can take maximum available space
+    width: '100%',
+    gap: 4,
   },
   searchInput: {
     flex: 1,
     minWidth: 0,
-    marginRight: 4,
+    marginRight: 8,
     marginBottom: 0,
   },
   filterButton: {
