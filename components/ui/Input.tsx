@@ -7,11 +7,14 @@ import {
   TextInputProps,
 } from 'react-native';
 
+type InputVariant = 'light' | 'dark';
+
 interface InputProps extends TextInputProps {
   label?: string;
   error?: string;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
+  variant?: InputVariant;
 }
 
 export function Input({
@@ -19,6 +22,7 @@ export function Input({
   error,
   leftIcon,
   rightIcon,
+  variant = 'dark',
   style,
   ...props
 }: InputProps) {
@@ -28,6 +32,7 @@ export function Input({
       <View
         style={[
           styles.inputContainer,
+          variant === 'light' ? styles.containerLight : styles.containerDark,
           error ? styles.inputError : undefined,
           style as any,
         ]}
@@ -36,12 +41,13 @@ export function Input({
         <TextInput
           style={[
             styles.input,
+            variant === 'light' ? styles.inputTextLight : styles.inputTextDark,
             leftIcon ? styles.inputWithLeftIcon : undefined,
             rightIcon ? styles.inputWithRightIcon : undefined,
             style as any,
             styles.inputBGTransparent,
           ]}
-          placeholderTextColor="#6B7280"
+          placeholderTextColor={variant === 'light' ? '#6B7280' : '#6B7280'}
           {...props}
         />
         {rightIcon && <View style={styles.rightIcon}>{rightIcon}</View>}
@@ -63,13 +69,19 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     position: 'relative',
-    backgroundColor: '#2C2C2E',
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 25,
     flexDirection: 'row',
     alignItems: 'center',
     overflow: 'hidden',
+  },
+  containerDark: {
+    backgroundColor: '#2C2C2E',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  containerLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E5E5',
   },
   inputError: {
     borderColor: '#FF6B6B',
@@ -80,7 +92,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 16,
     fontFamily: 'Inter-Regular',
-    color: '#FFFFFF',
   },
   inputBGTransparent: {
     backgroundColor: 'transparent',

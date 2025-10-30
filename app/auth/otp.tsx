@@ -63,19 +63,19 @@ export default function OtpScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.content}
         >
-          <View style={styles.headerCentered}>
+          <View style={styles.header}>
             <Image
               source={require('@/assets/images/talkee_logoF.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />
-            <Text style={styles.titleLight}>{label}</Text>
-            <Text style={styles.subtitleLight}>{helper}</Text>
+            <Text style={styles.title}>{label}</Text>
+            <Text style={styles.subtitle}>{helper}</Text>
           </View>
 
           <View style={styles.form}>
             <Input
-              style={styles.inputLight}
+              variant="light"
               label="Verification Code"
               value={code}
               onChangeText={setCode}
@@ -115,16 +115,16 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
   content: { flex: 1, paddingHorizontal: 24 },
-  headerCentered: { marginTop: 24, marginBottom: 32, alignItems: 'center' },
+  header: { marginTop: 40, marginBottom: 32, alignItems: 'center' },
   logoImage: { width: 180, height: 60, marginBottom: 24 },
-  titleLight: {
+  title: {
     fontSize: 24,
     fontFamily: 'Inter-Bold',
     color: '#FFFFFF',
     marginBottom: 8,
     textAlign: 'center',
   },
-  subtitleLight: {
+  subtitle: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
     color: '#E5E5E5',
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   form: { flex: 1 },
-  inputLight: { backgroundColor: '#FFFFFF', color: '#000000' },
+  input: { backgroundColor: 'transparent', color: '#FFFFFF' },
   verifyButton: { marginTop: 12 },
   resendRow: {
     marginTop: 16,

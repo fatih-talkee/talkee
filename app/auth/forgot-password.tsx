@@ -97,7 +97,7 @@ export default function ForgotPasswordScreen() {
 
           <View style={styles.form}>
             <Input
-              style={styles.inputLight}
+              variant="light"
               label="Email"
               value={email}
               onChangeText={setEmail}
