@@ -42,14 +42,7 @@ export default function WalletScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Header
-        showLogo={true}
-        rightButton={
-          <TouchableOpacity style={[styles.historyButton, { backgroundColor: theme.colors.surface }]}>
-            <History size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-        }
-      />
+      <Header showLogo={true} />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Current Balance */}
