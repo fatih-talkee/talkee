@@ -83,6 +83,7 @@ export default function CategoryScreen() {
               {
                 backgroundColor: theme.colors.card,
                 borderColor: theme.colors.border,
+                marginBottom: 0,
               },
             ]}
           />
