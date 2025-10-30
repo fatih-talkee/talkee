@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { Link, router } from 'expo-router';
 import { Mail, ArrowLeft } from 'lucide-react-native';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useIsMounted } from '@/hooks/useIsMounted';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
@@ -25,87 +26,88 @@ export default function ForgotPasswordScreen() {
 
   if (sent) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.content}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <ArrowLeft size={24} color="#374151" />
-          </TouchableOpacity>
-
-          <View style={styles.successContainer}>
-            <View style={styles.successIcon}>
-              <Mail size={48} color="#10b981" />
+      <LinearGradient colors={['#2e2461', '#d60f83']} style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.content}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <ArrowLeft size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <View style={styles.headerCentered}>
+              <Image source={require('@/assets/images/talkee_logoF.png')} style={styles.logoImage} resizeMode="contain" />
             </View>
-            <Text style={styles.successTitle}>Check Your Email</Text>
-            <Text style={styles.successText}>
-              We've sent a password reset link to {email}. Please check your inbox and follow the instructions to reset your password.
-            </Text>
-            <Button
-              title="Back to Sign In"
-              onPress={() => router.push('/auth/login')}
-              style={styles.backToLoginButton}
-            />
-          </View>
-        </View>
-      </SafeAreaView>
+            <View style={styles.successContainer}>
+              <View style={styles.successIcon}
+              >
+                <Mail size={48} color="#10b981" />
+              </View>
+              <Text style={styles.successTitleLight}>Check Your Email</Text>
+              <Text style={styles.successTextLight}>
+                We've sent a password reset link to {email}. Please check your inbox and follow the instructions to reset your password.
+              </Text>
+              <Button title="Back to Sign In" onPress={() => router.push('/auth/login')} style={styles.backToLoginButton} />
+            </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <ArrowLeft size={24} color="#374151" />
-        </TouchableOpacity>
+    <LinearGradient colors={['#2e2461', '#d60f83']} style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.content}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <ArrowLeft size={24} color="#FFFFFF" />
+          </TouchableOpacity>
 
-        <View style={styles.header}>
-          <Text style={styles.title}>Reset Password</Text>
-          <Text style={styles.subtitle}>
-            Enter your email address and we'll send you a link to reset your password
-          </Text>
-        </View>
+          <View style={styles.headerCentered}>
+            <Image source={require('@/assets/images/talkee_logoF.png')} style={styles.logoImage} resizeMode="contain" />
+            <Text style={styles.titleLight}>Reset Password</Text>
+            <Text style={styles.subtitleLight}>
+              Enter your email address and we'll send you a link to reset your password
+            </Text>
+          </View>
 
-        <View style={styles.form}>
-          <Input
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="Enter your email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            leftIcon={<Mail size={20} color="#64748b" />}
-          />
+          <View style={styles.form}>
+            <Input
+              style={styles.inputLight}
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="Enter your email"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              leftIcon={<Mail size={20} color="#9E9E9E" />}
+            />
 
-          <Button
-            title={loading ? "Sending..." : "Send Reset Link"}
-            onPress={handleResetPassword}
-            disabled={loading || !email}
-            style={styles.resetButton}
-          />
-        </View>
+            <Button
+              title={loading ? "Sending..." : "Send Reset Link"}
+              onPress={handleResetPassword}
+              disabled={loading || !email}
+              style={styles.resetButton}
+            />
+          </View>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Remember your password?{' '}
-            <Link href="/auth/login" asChild>
-              <Text style={styles.footerLink}>Sign In</Text>
-            </Link>
-          </Text>
-        </View>
-      </View>
-    </SafeAreaView>
+          <View style={styles.footer}>
+            <Text style={styles.footerTextLight}>
+              Remember your password?{' '}
+              <Link href="/auth/login" asChild>
+                <Text style={styles.footerLinkLight}>Sign In</Text>
+              </Link>
+            </Text>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+  },
+  safeArea: {
+    flex: 1,
   },
   content: {
     flex: 1,
@@ -117,29 +119,36 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#f8fafc',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  header: {
+  headerCentered: {
     marginBottom: 40,
     alignItems: 'center',
   },
-  title: {
+  logoImage: {
+    width: 180,
+    height: 60,
+    marginBottom: 24,
+  },
+  titleLight: {
     fontSize: 28,
     fontFamily: 'Inter-Bold',
-    color: '#1f2937',
+    color: '#FFFFFF',
     marginBottom: 12,
   },
-  subtitle: {
+  subtitleLight: {
     fontSize: 16,
     fontFamily: 'Inter-Regular',
-    color: '#64748b',
+    color: '#9E9E9E',
     textAlign: 'center',
     lineHeight: 24,
   },
   form: {
     flex: 1,
+  },
+  inputLight: {
+    backgroundColor: '#FFFFFF',
   },
   resetButton: {
     marginTop: 8,
@@ -148,13 +157,13 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     alignItems: 'center',
   },
-  footerText: {
+  footerTextLight: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-    color: '#64748b',
+    color: '#FFFFFF',
   },
-  footerLink: {
-    color: '#f59e0b',
+  footerLinkLight: {
+    color: '#2e2461',
     fontFamily: 'Inter-Medium',
   },
   successContainer: {
@@ -172,16 +181,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 24,
   },
-  successTitle: {
+  successTitleLight: {
     fontSize: 24,
     fontFamily: 'Inter-Bold',
-    color: '#1f2937',
+    color: '#FFFFFF',
     marginBottom: 12,
   },
-  successText: {
+  successTextLight: {
     fontSize: 16,
     fontFamily: 'Inter-Regular',
-    color: '#64748b',
+    color: '#E5E5E5',
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 32,
