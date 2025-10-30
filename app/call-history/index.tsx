@@ -3,11 +3,13 @@ import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image
 import { router } from 'expo-router';
 import { ArrowLeft, Search, Phone, Video, Clock, DollarSign } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { mockCallHistory, CallHistory } from '@/mockData/professionals';
 
 export default function CallHistoryScreen() {
+  const { theme } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'completed' | 'missed'>('all');
 
@@ -54,22 +56,22 @@ export default function CallHistoryScreen() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return '#10b981';
-      case 'missed': return '#ef4444';
-      case 'cancelled': return '#94a3b8';
-      default: return '#64748b';
+      case 'completed': return theme.colors.success;
+      case 'missed': return theme.colors.error;
+      case 'cancelled': return theme.colors.textMuted;
+      default: return theme.colors.textMuted;
     }
   };
 
   const renderCallItem = ({ item }: { item: CallHistory }) => (
-    <Card style={styles.callCard}>
+    <Card style={[styles.callCard, { backgroundColor: theme.colors.card }]}>
       <TouchableOpacity 
         style={styles.callItem}
         onPress={() => router.push(`/professional/${item.professionalId}`)}
       >
         <View style={styles.callLeft}>
           <Image source={{ uri: item.professional.avatar }} style={styles.avatar} />
-          <View style={styles.callTypeIcon}>
+          <View style={[styles.callTypeIcon, { backgroundColor: theme.colors.primary }]}>
             {item.type === 'video' ? (
               <Video size={14} color="#ffffff" />
             ) : (
@@ -79,23 +81,23 @@ export default function CallHistoryScreen() {
         </View>
 
         <View style={styles.callInfo}>
-          <Text style={styles.professionalName}>{item.professional.name}</Text>
-          <Text style={styles.professionalTitle}>{item.professional.title}</Text>
+          <Text style={[styles.professionalName, { color: theme.colors.text }]}>{item.professional.name}</Text>
+          <Text style={[styles.professionalTitle, { color: theme.colors.textMuted }]}>{item.professional.title}</Text>
           <View style={styles.callDetails}>
-            <Text style={styles.callDate}>{formatDate(item.date)}</Text>
-            <Text style={styles.callTime}>{formatTime(item.date)}</Text>
+            <Text style={[styles.callDate, { color: theme.colors.text }]}>{formatDate(item.date)}</Text>
+            <Text style={[styles.callTime, { color: theme.colors.textMuted }]}>{formatTime(item.date)}</Text>
           </View>
         </View>
 
         <View style={styles.callRight}>
           <View style={styles.callStats}>
             <View style={styles.durationRow}>
-              <Clock size={14} color="#64748b" />
-              <Text style={styles.duration}>{formatDuration(item.duration)}</Text>
+              <Clock size={14} color={theme.colors.textMuted} />
+              <Text style={[styles.duration, { color: theme.colors.textMuted }]}>{formatDuration(item.duration)}</Text>
             </View>
             <View style={styles.costRow}>
-              <DollarSign size={14} color="#64748b" />
-              <Text style={styles.cost}>${item.cost.toFixed(2)}</Text>
+              <DollarSign size={14} color={theme.colors.textMuted} />
+              <Text style={[styles.cost, { color: theme.colors.text } ]}>${item.cost.toFixed(2)}</Text>
             </View>
           </View>
           <View style={[styles.statusIndicator, { backgroundColor: getStatusColor(item.status) }]} />
@@ -105,23 +107,16 @@ export default function CallHistoryScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Header 
-        title="Call History"
-        leftButton={
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color="#374151" />
-          </TouchableOpacity>
-        }
-      />
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <Header showLogo showBack backPosition="right" />
 
-      <View style={styles.searchSection}>
+      <View style={[styles.searchSection, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.tabBarBorder }]}>
         <Input
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholder="Search call history..."
-          leftIcon={<Search size={20} color="#64748b" />}
-          style={styles.searchInput}
+          leftIcon={<Search size={20} color={theme.colors.textMuted} />}
+          style={[styles.searchInput, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
         />
 
         <View style={styles.filters}>
@@ -130,13 +125,15 @@ export default function CallHistoryScreen() {
               key={filter.key}
               style={[
                 styles.filterButton,
-                selectedFilter === filter.key && styles.filterButtonActive
+                { backgroundColor: theme.colors.background, borderColor: theme.colors.border },
+                selectedFilter === filter.key && { backgroundColor: '#000000', borderColor: '#000000' }
               ]}
               onPress={() => setSelectedFilter(filter.key as any)}
             >
               <Text style={[
                 styles.filterText,
-                selectedFilter === filter.key && styles.filterTextActive
+                { color: theme.colors.textSecondary },
+                selectedFilter === filter.key && { color: '#ffffff' }
               ]}>
                 {filter.label} ({filter.count})
               </Text>
@@ -153,9 +150,9 @@ export default function CallHistoryScreen() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Clock size={48} color="#94a3b8" />
-            <Text style={styles.emptyTitle}>No call history</Text>
-            <Text style={styles.emptyText}>
+            <Clock size={48} color={theme.colors.textMuted} />
+            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No call history</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
               Your call history will appear here once you start connecting with professionals
             </Text>
           </View>
