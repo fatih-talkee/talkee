@@ -24,7 +24,6 @@ export default function ThemeSettingsScreen() {
       <DetailHeader
         title="Theme Settings"
         onBack={() => router.back()}
-        backPosition="right"
       />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
