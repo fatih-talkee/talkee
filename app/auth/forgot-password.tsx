@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  Image,
+} from 'react-native';
 import { Link, router } from 'expo-router';
 import { Mail, ArrowLeft } from 'lucide-react-native';
 import { Input } from '@/components/ui/Input';
@@ -28,23 +37,32 @@ export default function ForgotPasswordScreen() {
     return (
       <LinearGradient colors={['#2e2461', '#d60f83']} style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.content}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-              <ArrowLeft size={24} color="#FFFFFF" />
-            </TouchableOpacity>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.content}
+          >
+            
             <View style={styles.headerCentered}>
-              <Image source={require('@/assets/images/talkee_logoF.png')} style={styles.logoImage} resizeMode="contain" />
+              <Image
+                source={require('@/assets/images/talkee_logoF.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
             </View>
             <View style={styles.successContainer}>
-              <View style={styles.successIcon}
-              >
+              <View style={styles.successIcon}>
                 <Mail size={48} color="#10b981" />
               </View>
               <Text style={styles.successTitleLight}>Check Your Email</Text>
               <Text style={styles.successTextLight}>
-                We've sent a password reset link to {email}. Please check your inbox and follow the instructions to reset your password.
+                We've sent a password reset link to {email}. Please check your
+                inbox and follow the instructions to reset your password.
               </Text>
-              <Button title="Back to Sign In" onPress={() => router.push('/auth/login')} style={styles.backToLoginButton} />
+              <Button
+                title="Back to Sign In"
+                onPress={() => router.push('/auth/login')}
+                style={styles.backToLoginButton}
+              />
             </View>
           </KeyboardAvoidingView>
         </SafeAreaView>
@@ -55,16 +73,22 @@ export default function ForgotPasswordScreen() {
   return (
     <LinearGradient colors={['#2e2461', '#d60f83']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.content}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <ArrowLeft size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.content}
+        >
+          
 
           <View style={styles.headerCentered}>
-            <Image source={require('@/assets/images/talkee_logoF.png')} style={styles.logoImage} resizeMode="contain" />
+            <Image
+              source={require('@/assets/images/talkee_logoF.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
             <Text style={styles.titleLight}>Reset Password</Text>
             <Text style={styles.subtitleLight}>
-              Enter your email address and we'll send you a link to reset your password
+              Enter your email address and we'll send you a link to reset your
+              password
             </Text>
           </View>
 
@@ -81,7 +105,7 @@ export default function ForgotPasswordScreen() {
             />
 
             <Button
-              title={loading ? "Sending..." : "Send Reset Link"}
+              title={loading ? 'Sending...' : 'Send Reset Link'}
               onPress={handleResetPassword}
               disabled={loading || !email}
               style={styles.resetButton}
@@ -113,15 +137,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
   },
-  backButton: {
-    marginTop: 20,
-    marginBottom: 20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  
   headerCentered: {
     marginBottom: 40,
     alignItems: 'center',
