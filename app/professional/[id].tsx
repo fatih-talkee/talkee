@@ -75,7 +75,6 @@ export default function ProfessionalProfileScreen() {
       <Header
         showLogo={true}
         showBack
-        backRoute="/(tabs)/profile"
         rightButtons={
           <View style={styles.headerActions}>
             <TouchableOpacity
