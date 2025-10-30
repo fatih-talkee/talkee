@@ -72,14 +72,7 @@ export default function SearchScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Header 
-        showLogo={true}
-        rightButton={
-          <TouchableOpacity style={[styles.iconButton, { backgroundColor: theme.colors.overlay }]}>
-            <Search size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-        }
-      />
+      <Header showLogo={true} />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Search Section */}
