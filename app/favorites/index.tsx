@@ -3,11 +3,13 @@ import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList } from
 import { router } from 'expo-router';
 import { ArrowLeft, Search, Grid2x2 as Grid, List } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
+import { useTheme } from '@/contexts/ThemeContext';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
 import { Input } from '@/components/ui/Input';
 import { mockProfessionals } from '@/mockData/professionals';
 
 export default function FavoritesScreen() {
+  const { theme } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
@@ -20,37 +22,29 @@ export default function FavoritesScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Header 
-        title="Favorites"
-        leftButton={
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color="#374151" />
-          </TouchableOpacity>
-        }
-        rightButton={
-          <TouchableOpacity 
-            style={styles.viewToggle}
-            onPress={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
-          >
-            {viewMode === 'list' ? (
-              <Grid size={20} color="#64748b" />
-            ) : (
-              <List size={20} color="#64748b" />
-            )}
-          </TouchableOpacity>
-        }
-      />
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <Header showLogo showBack backPosition="right" rightButtons={
+        <TouchableOpacity 
+          style={[styles.viewToggle, { backgroundColor: theme.colors.card }]}
+          onPress={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+        >
+          {viewMode === 'list' ? (
+            <Grid size={20} color={theme.colors.textMuted} />
+          ) : (
+            <List size={20} color={theme.colors.textMuted} />
+          )}
+        </TouchableOpacity>
+      }/>
 
-      <View style={styles.searchSection}>
+      <View style={[styles.searchSection, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.tabBarBorder }]}>
         <Input
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholder="Search favorites..."
-          leftIcon={<Search size={20} color="#64748b" />}
-          style={styles.searchInput}
+          leftIcon={<Search size={20} color={theme.colors.textMuted} />}
+          style={[styles.searchInput, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
         />
-        <Text style={styles.resultsCount}>
+        <Text style={[styles.resultsCount, { color: theme.colors.textMuted }]}>
           {filteredFavorites.length} favorite professionals
         </Text>
       </View>
@@ -63,8 +57,8 @@ export default function FavoritesScreen() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No favorites yet</Text>
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No favorites yet</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
               Add professionals to your favorites to quickly find them later
             </Text>
           </View>
