@@ -126,6 +126,7 @@ export default function CallHistoryScreen() {
               style={[
                 styles.filterButton,
                 { backgroundColor: theme.colors.background, borderColor: theme.colors.border },
+                selectedFilter === filter.key && theme.name === 'dark' && { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent }
               ]}
               onPress={() => setSelectedFilter(filter.key as any)}
             >
