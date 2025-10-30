@@ -39,6 +39,7 @@ export function Input({
             leftIcon ? styles.inputWithLeftIcon : undefined,
             rightIcon ? styles.inputWithRightIcon : undefined,
             style as any,
+            styles.inputBGTransparent,
           ]}
           placeholderTextColor="#6B7280"
           {...props}
@@ -68,6 +69,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     flexDirection: 'row',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   inputError: {
     borderColor: '#FF6B6B',
@@ -79,6 +81,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter-Regular',
     color: '#FFFFFF',
+  },
+  inputBGTransparent: {
+    backgroundColor: 'transparent',
   },
   inputWithLeftIcon: {
     paddingLeft: 48,
