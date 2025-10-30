@@ -1,5 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Image, ViewStyle } from 'react-native';
+import { ArrowLeft } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 
 interface PrimaryHeaderProps {
@@ -7,6 +9,9 @@ interface PrimaryHeaderProps {
   showLogo?: boolean;
   containerStyle?: ViewStyle;
   onLogoPress?: () => void;
+  showBack?: boolean;
+  backRoute?: string;
+  backPosition?: 'left' | 'right';
 }
 
 export function PrimaryHeader({
@@ -14,8 +19,12 @@ export function PrimaryHeader({
   showLogo = true,
   containerStyle,
   onLogoPress,
+  showBack = false,
+  backRoute,
+  backPosition = 'right',
 }: PrimaryHeaderProps) {
   const { theme } = useTheme();
+  const router = useRouter();
 
   const logo =
     theme.name === 'dark'
@@ -23,6 +32,18 @@ export function PrimaryHeader({
       : require('../../../assets/images/talkee_logoM.png');
 
   const renderRight = Array.isArray(rightButtons) ? rightButtons : rightButtons ? [rightButtons] : [];
+
+  const handleBack = () => {
+    if (backRoute) {
+      router.replace(backRoute);
+      return;
+    }
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
+  };
 
   return (
     <View
@@ -35,7 +56,11 @@ export function PrimaryHeader({
       ]}
     >
       <View style={styles.leftSection}>
-        {showLogo ? (
+        {backPosition === 'left' && showBack ? (
+          <TouchableOpacity onPress={handleBack} style={[styles.iconButton, { backgroundColor: theme.colors.card }]}>
+            <ArrowLeft size={20} color={theme.colors.text} />
+          </TouchableOpacity>
+        ) : showLogo ? (
           <TouchableOpacity disabled={!onLogoPress} onPress={onLogoPress}>
             <Image source={logo} style={styles.logoImage} resizeMode="contain" />
           </TouchableOpacity>
@@ -45,6 +70,13 @@ export function PrimaryHeader({
       <View style={styles.centerSection} />
 
       <View style={styles.rightSection}>
+        {backPosition === 'right' && showBack && (
+          <View style={styles.rightButtonWrapper}>
+            <TouchableOpacity onPress={handleBack} style={[styles.iconButton, { backgroundColor: theme.colors.card }]}>
+              <ArrowLeft size={20} color={theme.colors.text} />
+            </TouchableOpacity>
+          </View>
+        )}
         {renderRight.map((btn, idx) => (
           <View key={idx} style={styles.rightButtonWrapper}>
             {btn}
@@ -86,6 +118,13 @@ const styles = StyleSheet.create({
   },
   rightButtonWrapper: {
     marginLeft: 8,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logoImage: {
     width: 120,

@@ -11,6 +11,10 @@ interface HeaderProps {
   // legacy props below are intentionally ignored to match PrimaryHeader layout
   title?: string;
   leftButton?: React.ReactNode;
+  // back handling
+  showBack?: boolean;
+  backRoute?: string;
+  backPosition?: 'left' | 'right';
 }
 
 export function Header({
@@ -19,6 +23,9 @@ export function Header({
   rightButtons,
   containerStyle,
   onLogoPress,
+  showBack,
+  backRoute,
+  backPosition,
 }: HeaderProps) {
   const normalizedRight =
     rightButtons !== undefined
@@ -33,6 +40,9 @@ export function Header({
       rightButtons={normalizedRight}
       containerStyle={containerStyle}
       onLogoPress={onLogoPress}
+      showBack={showBack}
+      backRoute={backRoute}
+      backPosition={backPosition}
     />
   );
 }

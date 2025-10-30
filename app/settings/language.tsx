@@ -23,20 +23,7 @@ export default function LanguageSettings() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.surface }]}
     >
-      <Header
-        showLogo
-        rightButtons={
-          <TouchableOpacity
-            style={[styles.navBtn, { backgroundColor: theme.colors.card }]}
-            onPress={() => {
-              if (router.canGoBack()) router.back();
-              else router.replace('/(tabs)/profile');
-            }}
-          >
-            <ChevronLeft size={20} color={theme.colors.text} />
-          </TouchableOpacity>
-        }
-      />
+      <Header showLogo showBack backRoute="/(tabs)/profile" />
 
       <ScrollView
         contentContainerStyle={styles.content}
