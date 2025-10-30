@@ -179,6 +179,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
+    minWidth: 0,
     marginRight: 4,
     marginBottom: 0,
   },
