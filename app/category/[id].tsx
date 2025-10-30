@@ -95,7 +95,7 @@ export default function CategoryScreen() {
             ]}
             onPress={() => setFilterVisible(true)}
           >
-            <Filter size={20} color={theme.colors.text} />
+            <Filter size={20} color={theme.name === 'dark' ? '#1f2937' : theme.colors.text} />
           </TouchableOpacity>
         </View>
 
