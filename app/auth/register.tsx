@@ -1,5 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Image,
+} from 'react-native';
 import { Link, router } from 'expo-router';
 import { Phone, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -37,150 +47,160 @@ export default function RegisterScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#2e2461', '#d60f83']}
-      style={styles.container}
-    >
+    <LinearGradient colors={['#2e2461', '#d60f83']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.content}
-      >
-        <ScrollView showsVerticalScrollIndicator={false}>
-          <View style={styles.header}>
-            <Image
-              source={require('@/assets/images/talkee_logoF.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-            <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Join thousands of users connecting with experts</Text>
-          </View>
-
-          <View style={styles.form}>
-            <Input
-              variant="light"
-              label="Phone Number"
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="Enter your phone number"
-              keyboardType="phone-pad"
-              leftIcon={<Phone size={20} color="#9E9E9E" />}
-            />
-
-            <Input
-              variant="light"
-              label="Password"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Create a password"
-              secureTextEntry={!showPassword}
-              leftIcon={<Lock size={20} color="#9E9E9E" />}
-              rightIcon={
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                  {showPassword ? (
-                    <EyeOff size={20} color="#9E9E9E" />
-                  ) : (
-                    <Eye size={20} color="#9E9E9E" />
-                  )}
-                </TouchableOpacity>
-              }
-            />
-
-            <Input
-              variant="light"
-              label="Confirm Password"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              placeholder="Confirm your password"
-              secureTextEntry={!showConfirmPassword}
-              leftIcon={<Lock size={20} color="#9E9E9E" />}
-              rightIcon={
-                <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-                  {showConfirmPassword ? (
-                    <EyeOff size={20} color="#9E9E9E" />
-                  ) : (
-                    <Eye size={20} color="#9E9E9E" />
-                  )}
-                </TouchableOpacity>
-              }
-            />
-
-            <Button
-              title={loading ? "Creating Account..." : "Sign Up"}
-              onPress={handleRegister}
-              disabled={loading || !phone || !password || password !== confirmPassword}
-              style={styles.registerButton}
-            />
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or continue with</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <View style={styles.socialButtons}>
-              <TouchableOpacity 
-                style={[styles.socialButton, styles.googleButton]}
-                onPress={() => handleSocialRegister('Google')}
-              >
-                <View style={styles.socialButtonContent}>
-                  <View style={styles.googleIcon}>
-                    <Text style={styles.googleIconText}>G</Text>
-                  </View>
-                  <Text style={styles.googleButtonText}>Continue with Google</Text>
-                </View>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.socialButton, styles.facebookButton]}
-                onPress={() => handleSocialRegister('Facebook')}
-              >
-                <View style={styles.socialButtonContent}>
-                  <View style={styles.facebookIcon}>
-                    <Text style={styles.facebookIconText}>f</Text>
-                  </View>
-                  <Text style={styles.facebookButtonText}>Continue with Facebook</Text>
-                </View>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.socialButton, styles.linkedinButton]}
-                onPress={() => handleSocialRegister('LinkedIn')}
-              >
-                <View style={styles.socialButtonContent}>
-                  <View style={styles.linkedinIcon}>
-                    <Text style={styles.linkedinIconText}>in</Text>
-                  </View>
-                  <Text style={styles.linkedinButtonText}>Continue with LinkedIn</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.terms}>
-              <Text style={styles.termsText}>
-                By creating an account, you agree to our{' '}
-                <Text style={styles.termsLink}>Terms of Service</Text>
-                {' '}and{' '}
-                <Text style={styles.termsLink}>Privacy Policy</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.content}
+        >
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={styles.header}>
+              <Image
+                source={require('@/assets/images/talkee_logoF.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+              <Text style={styles.title}>Create Account</Text>
+              <Text style={styles.subtitle}>
+                Join thousands of users connecting with experts
               </Text>
             </View>
 
-            <View style={styles.dividerBottom}>
-              <View style={styles.dividerLine} />
-            </View>
+            <View style={styles.form}>
+              <Input
+                variant="light"
+                label="Phone Number"
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="Enter your phone number"
+                keyboardType="phone-pad"
+                leftIcon={<Phone size={20} color="#9E9E9E" />}
+              />
 
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>
-                Already have an account?{' '}
-                <Link href="/auth/login" asChild>
-                  <Text style={styles.footerLink}>Log In</Text>
-                </Link>
-              </Text>
+              <Input
+                variant="light"
+                label="Password"
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Create a password"
+                secureTextEntry={!showPassword}
+                leftIcon={<Lock size={20} color="#9E9E9E" />}
+                rightIcon={
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff size={20} color="#9E9E9E" />
+                    ) : (
+                      <Eye size={20} color="#9E9E9E" />
+                    )}
+                  </TouchableOpacity>
+                }
+              />
+
+              <Input
+                variant="light"
+                label="Confirm Password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                placeholder="Confirm your password"
+                secureTextEntry={!showConfirmPassword}
+                leftIcon={<Lock size={20} color="#9E9E9E" />}
+                rightIcon={
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff size={20} color="#9E9E9E" />
+                    ) : (
+                      <Eye size={20} color="#9E9E9E" />
+                    )}
+                  </TouchableOpacity>
+                }
+              />
+
+              <Button
+                title={loading ? 'Creating Account...' : 'Sign Up'}
+                onPress={handleRegister}
+                disabled={
+                  loading || !phone || !password || password !== confirmPassword
+                }
+                style={styles.registerButton}
+              />
+
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>or continue with</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <View style={styles.socialButtons}>
+                <TouchableOpacity
+                  style={[styles.socialButton, styles.googleButton]}
+                  onPress={() => handleSocialRegister('Google')}
+                >
+                  <View style={styles.socialButtonContent}>
+                    <View style={styles.googleIcon}>
+                      <Text style={styles.googleIconText}>G</Text>
+                    </View>
+                    <Text style={styles.googleButtonText}>
+                      Continue with Google
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.socialButton, styles.facebookButton]}
+                  onPress={() => handleSocialRegister('Facebook')}
+                >
+                  <View style={styles.socialButtonContent}>
+                    <View style={styles.facebookIcon}>
+                      <Text style={styles.facebookIconText}>f</Text>
+                    </View>
+                    <Text style={styles.facebookButtonText}>
+                      Continue with Facebook
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.socialButton, styles.linkedinButton]}
+                  onPress={() => handleSocialRegister('LinkedIn')}
+                >
+                  <View style={styles.socialButtonContent}>
+                    <View style={styles.linkedinIcon}>
+                      <Text style={styles.linkedinIconText}>in</Text>
+                    </View>
+                    <Text style={styles.linkedinButtonText}>
+                      Continue with LinkedIn
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.terms}>
+                <Text style={styles.termsText}>
+                  By creating an account, you agree to our{' '}
+                  <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
+                  <Text style={styles.termsLink}>Privacy Policy</Text>
+                </Text>
+              </View>
+
+              <View style={styles.dividerBottom}>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <View style={styles.footer}>
+                <Text style={styles.footerText}>
+                  Already have an account?{' '}
+                  <Link href="/auth/login" asChild>
+                    <Text style={styles.footerLink}>Log In</Text>
+                  </Link>
+                </Text>
+              </View>
             </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -224,7 +244,7 @@ const styles = StyleSheet.create({
   },
   registerButton: {
     marginBottom: 24,
-    backgroundColor:'#2e2461',
+    backgroundColor: '#2e2461',
   },
   divider: {
     flexDirection: 'row',
@@ -348,12 +368,15 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   footerText: {
-    fontSize: 14,
+    fontSize: 16,
     fontFamily: 'Inter-Regular',
     color: '#FFFFFF',
   },
   footerLink: {
     color: '#2e2461',
-    fontFamily: 'Inter-Medium',
+    fontFamily: 'Inter-Bold',
+    fontSize: 16,
+    letterSpacing: 0.2,
+    fontWeight: 'bold',
   },
 });

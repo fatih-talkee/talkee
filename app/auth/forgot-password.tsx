@@ -116,10 +116,10 @@ export default function ForgotPasswordScreen() {
           </View>
 
           <View style={styles.footer}>
-            <Text style={styles.footerTextLight}>
+            <Text style={styles.footerText}>
               Remember your password?{' '}
               <Link href="/auth/login" asChild>
-                <Text style={styles.footerLinkLight}>Sign In</Text>
+                <Text style={styles.footerLink}>Sign In</Text>
               </Link>
             </Text>
           </View>
@@ -173,14 +173,17 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     alignItems: 'center',
   },
-  footerTextLight: {
-    fontSize: 14,
+  footerText: {
+    fontSize: 16,
     fontFamily: 'Inter-Regular',
     color: '#FFFFFF',
   },
-  footerLinkLight: {
+  footerLink: {
     color: '#2e2461',
-    fontFamily: 'Inter-Medium',
+    fontFamily: 'Inter-Bold',
+    fontSize: 16,
+    letterSpacing: 0.2,
+    fontWeight: 'bold',
   },
   successContainer: {
     flex: 1,
