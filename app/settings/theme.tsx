@@ -24,7 +24,10 @@ export default function ThemeSettingsScreen() {
       <Header
         showLogo
         rightButtons={
-          <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { backgroundColor: theme.colors.card }]}>
+          <TouchableOpacity
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+            style={[styles.backButton, { backgroundColor: theme.colors.card }]}
+          >
             <ArrowLeft size={24} color={theme.colors.text} />
           </TouchableOpacity>
         }
