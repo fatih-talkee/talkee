@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useIsMounted } from '@/hooks/useIsMounted';
+import Toast from 'react-native-toast-message';
 
 export default function LoginScreen() {
   const [phone, setPhone] = useState('');
@@ -29,6 +30,7 @@ export default function LoginScreen() {
     setTimeout(() => {
       if (isMountedRef.current) {
         setLoading(false);
+        Toast.show({ type: 'success', text1: 'Logged in', text2: 'Welcome back!' });
         router.replace('/(tabs)');
       }
     }, 800);
