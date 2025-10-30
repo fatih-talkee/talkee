@@ -163,14 +163,7 @@ export default function AppointmentsCalendarScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Header 
-        title="Appointments Calendar"
-        leftButton={
-          <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { backgroundColor: theme.colors.overlay }]}>
-            <ArrowLeft size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-        }
-      />
+      <Header showLogo showBack backPosition="right" />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Calendar */}
