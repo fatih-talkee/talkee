@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   searchSection: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 20,
     marginBottom: 8,
   },
@@ -179,12 +179,12 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    marginRight: 8,
+    marginRight: 4,
     marginBottom: 0,
   },
   filterButton: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     flexShrink: 0,
     borderRadius: 12,
     backgroundColor: '#fef3c7',
