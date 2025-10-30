@@ -255,22 +255,7 @@ export default function CategoriesScreen() {
         },
       ]}
     >
-      <Header
-        showLogo={true}
-        rightButton={
-          <TouchableOpacity
-            style={[
-              styles.iconButton,
-              {
-                // theme.colors.overlay → icon button background
-                backgroundColor: theme.colors.overlay,
-              },
-            ]}
-          >
-            <Search size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-        }
-      />
+      <Header showLogo={true} />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Promotional Banner Carousel */}
