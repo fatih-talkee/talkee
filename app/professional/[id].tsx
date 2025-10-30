@@ -674,21 +674,6 @@ export default function ProfessionalProfileScreen() {
             <TouchableOpacity
               style={[
                 styles.callTypeButton,
-                { backgroundColor: theme.colors.primary },
-              ]}
-              onPress={() => handleCallNow('video')}
-            >
-              <Video size={18} color={theme.colors.surface} />
-              <Text
-                style={[styles.callTypeText, { color: theme.colors.surface }]}
-              >
-                Video
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.callTypeButton,
                 styles.scheduleCallButton,
                 {
                   backgroundColor: theme.colors.surface,
