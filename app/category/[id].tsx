@@ -65,7 +65,19 @@ export default function CategoryScreen() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <Header showLogo showBack backPosition="right" />
+      <Header
+        showLogo
+        showBack
+        backPosition="right"
+        rightButtons={
+          <TouchableOpacity
+            style={[styles.headerIconButton, { backgroundColor: theme.colors.overlay }]}
+            onPress={() => setFilterVisible(true)}
+          >
+            <Filter size={20} color={theme.colors.text} />
+          </TouchableOpacity>
+        }
+      />
 
       <View
         style={[
@@ -88,15 +100,7 @@ export default function CategoryScreen() {
               },
             ]}
           />
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              { backgroundColor: theme.colors.accentLight },
-            ]}
-            onPress={() => setFilterVisible(true)}
-          >
-            <Filter size={20} color={theme.name === 'dark' ? '#1f2937' : theme.colors.text} />
-          </TouchableOpacity>
+          
         </View>
 
         <View style={styles.resultsHeader}>
@@ -181,7 +185,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     minWidth: 0,
-    marginRight: 8,
+    marginRight: 0,
     marginBottom: 0,
   },
   filterButton: {
@@ -203,6 +207,13 @@ const styles = StyleSheet.create({
           shadowRadius: 6,
           elevation: 2,
         }),
+  },
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   resultsHeader: {
     flexDirection: 'row',
