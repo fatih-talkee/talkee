@@ -1080,13 +1080,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     // background: theme.colors.tabBarBackground
-    height: 90,
     zIndex: 10,
   },
   callActions: {
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 10,
+    paddingBottom: 8,
     width: '100%',
     // 1px divider to match tabs
     borderTopWidth: 1,
