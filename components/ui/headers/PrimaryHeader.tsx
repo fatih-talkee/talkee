@@ -70,6 +70,11 @@ export function PrimaryHeader({
       <View style={styles.centerSection} />
 
       <View style={styles.rightSection}>
+        {renderRight.map((btn, idx) => (
+          <View key={idx} style={styles.rightButtonWrapper}>
+            {btn}
+          </View>
+        ))}
         {backPosition === 'right' && showBack && (
           <View style={styles.rightButtonWrapper}>
             <TouchableOpacity onPress={handleBack} style={[styles.iconButton, { backgroundColor: theme.colors.card }]}>
@@ -77,11 +82,6 @@ export function PrimaryHeader({
             </TouchableOpacity>
           </View>
         )}
-        {renderRight.map((btn, idx) => (
-          <View key={idx} style={styles.rightButtonWrapper}>
-            {btn}
-          </View>
-        ))}
       </View>
     </View>
   );
