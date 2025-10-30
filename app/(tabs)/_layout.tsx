@@ -10,12 +10,18 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: theme.colors.tabBarBackground,
+          backgroundColor: theme.colors.surface,
           borderTopWidth: 0.5,
           borderTopColor: theme.colors.tabBarBorder,
           paddingTop: 8,
-          paddingBottom: 8,
-          height: 88,
+          paddingBottom: 10,
+          height: 90,
+          // subtle shadow/elevation to match headers
+          shadowColor: '#000',
+          shadowOpacity: 0.06,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: -4 },
+          elevation: 6,
         },
         tabBarActiveTintColor: theme.colors.tabBarActive,
         tabBarInactiveTintColor: theme.colors.tabBarInactive,
