@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, Check, Palette } from 'lucide-react-native';
-import { Header } from '@/components/ui/Header';
+import { DetailHeader } from '@/components/ui/headers/DetailHeader';
 import { Card } from '@/components/ui/Card';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -21,13 +21,10 @@ export default function ThemeSettingsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.surface }]}>
-      <Header 
+      <DetailHeader
         title="Theme Settings"
-        leftButton={
-          <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { backgroundColor: theme.colors.card }]}>
-            <ArrowLeft size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-        }
+        onBack={() => router.back()}
+        backPosition="right"
       />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
