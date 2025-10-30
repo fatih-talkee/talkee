@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   searchSection: {
-    paddingHorizontal: 0,
+    paddingHorizontal: 16,
     paddingVertical: 20,
   },
   searchRow: {
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     minWidth: 0,
-    marginHorizontal: 16,
+    marginHorizontal: 0,
   },
   headerIconButton: {
     width: 40,
@@ -187,6 +187,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 16,
   },
   resultsCount: {
     fontSize: 14,
