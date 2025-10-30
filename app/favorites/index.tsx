@@ -23,18 +23,7 @@ export default function FavoritesScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Header showLogo showBack backPosition="right" rightButtons={
-        <TouchableOpacity 
-          style={[styles.viewToggle, { backgroundColor: theme.colors.card }]}
-          onPress={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
-        >
-          {viewMode === 'list' ? (
-            <Grid size={20} color={theme.colors.textMuted} />
-          ) : (
-            <List size={20} color={theme.colors.textMuted} />
-          )}
-        </TouchableOpacity>
-      }/>
+      <Header showLogo showBack backPosition="right" />
 
       <View style={[styles.searchSection, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.tabBarBorder }]}>
         <Input
