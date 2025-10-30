@@ -417,10 +417,10 @@ export default function ProfessionalProfileScreen() {
                 onPress={() => setCvModalVisible(false)}
                 style={[
                   styles.modalCloseButton,
-                  { backgroundColor: '#ffffff', borderColor: theme.colors.border },
+                  { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
                 ]}
               >
-                <X size={28} color={theme.colors.primary} />
+                <X size={28} color="#ffffff" />
               </TouchableOpacity>
             </View>
 
