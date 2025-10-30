@@ -664,6 +664,8 @@ export default function ProfessionalProfileScreen() {
           style={[
             styles.callActions,
             {
+              // Add a subtle divider like tabs
+              borderTopColor: theme.colors.tabBarBorder || theme.colors.border,
               shadowColor: '#000',
             },
           ]}
@@ -1097,14 +1099,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
-    // Shiny upward shadow to match tabs (no divider)
+    // Add hairline divider for clearer separation
+    borderTopWidth: StyleSheet.hairlineWidth,
+    // Shiny upward shadow to match tabs
     ...(Platform.OS === 'web'
-      ? { boxShadow: '0px -8px 16px rgba(0,0,0,0.08)' }
+      ? { boxShadow: '0px -8px 16px rgba(0,0,0,0.06)' }
       : {
-          shadowOffset: { width: 0, height: -8 },
-          shadowOpacity: 0.08,
-          shadowRadius: 16,
-          elevation: 8,
+          shadowOffset: { width: 0, height: -6 },
+          shadowOpacity: 0.06,
+          shadowRadius: 14,
+          elevation: 6,
         }),
   },
   callButtonsRow: {
