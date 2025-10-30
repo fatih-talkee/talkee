@@ -657,15 +657,14 @@ export default function ProfessionalProfileScreen() {
         edges={['bottom']}
         style={[
           styles.callActionsWrapper,
-          { backgroundColor: theme.colors.card },
+          { backgroundColor: theme.colors.surface },
         ]}
       >
         <View
           style={[
             styles.callActions,
             {
-              borderTopColor: theme.colors.border,
-              shadowColor: theme.colors.text,
+              shadowColor: '#000',
             },
           ]}
         >
@@ -1092,21 +1091,20 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    // background: theme.colors.card
+    // background: theme.colors.surface
   },
   callActions: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
-    borderTopWidth: 1,
-    // border: theme.colors.border
+    // Shiny upward shadow to match tabs (no divider)
     ...(Platform.OS === 'web'
-      ? { boxShadow: '0px -2px 8px rgba(0,0,0,0.05)' }
+      ? { boxShadow: '0px -8px 16px rgba(0,0,0,0.08)' }
       : {
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.05,
-          shadowRadius: 8,
-          elevation: 4,
+          shadowOffset: { width: 0, height: -8 },
+          shadowOpacity: 0.08,
+          shadowRadius: 16,
+          elevation: 8,
         }),
   },
   callButtonsRow: {
