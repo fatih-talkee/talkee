@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, Modal, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
-import { X, DollarSign, Clock, Star } from 'lucide-react-native';
+import { X, DollarSign, Clock, Star, RotateCcw } from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -63,21 +63,36 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
       presentationStyle="pageSheet"
     >
       <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <X size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Filters</Text>
-          <TouchableOpacity onPress={handleReset}>
-            <Text style={[styles.resetText, { color: theme.colors.accent }]}>Reset</Text>
-          </TouchableOpacity>
+        {/* Header */}
+        <View style={[styles.header, { backgroundColor: '#000000' }]}>
+          <Text style={[styles.title, { color: '#FFFFFF' }]}>Filters</Text>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              onPress={handleReset}
+              style={[
+                styles.resetButton,
+                { backgroundColor: theme.colors.surface },
+              ]}
+            >
+              <RotateCcw size={20} color="#FFFFFF" />
+              <Text style={[styles.resetText, { color: '#FFFFFF' }]}>
+                Reset
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={onClose} 
+              style={[styles.closeButton, { backgroundColor: theme.colors.surface }]}
+            >
+              <X size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={styles.contentContainer}>
           {/* Price Range */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <DollarSign size={20} color={theme.colors.accent} />
+              <DollarSign size={20} color={theme.colors.primary} />
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Price Range</Text>
             </View>
             <View style={styles.optionsGrid}>
@@ -88,7 +103,7 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
                   <TouchableOpacity
                     key={index}
                     style={[
-                      styles.option,
+                      styles.optionChip,
                       {
                         backgroundColor: isSelected ? theme.colors.accent : theme.colors.card,
                         borderColor: isSelected ? theme.colors.accent : theme.colors.border,
@@ -99,7 +114,7 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
                     <Text style={[
                       styles.optionText,
                       {
-                        color: isSelected ? '#ffffff' : theme.colors.text,
+                        color: isSelected ? '#000000' : theme.colors.text,
                       }
                     ]}>
                       {range.label}
@@ -113,7 +128,7 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
           {/* Rating */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Star size={20} color={theme.colors.accent} />
+              <Star size={20} color={theme.colors.primary} />
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Minimum Rating</Text>
             </View>
             <View style={styles.ratingOptions}>
@@ -132,11 +147,15 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
                     onPress={() => setFilters({...filters, rating})}
                   >
                     <View style={styles.ratingRow}>
-                      <Star size={16} color={theme.colors.accent} fill={rating > 0 ? theme.colors.accent : "transparent"} />
+                      <Star 
+                        size={16} 
+                        color={isSelected ? '#000000' : theme.colors.accent} 
+                        fill={rating > 0 && isSelected ? '#000000' : rating > 0 ? theme.colors.accent : 'transparent'} 
+                      />
                       <Text style={[
                         styles.ratingText,
                         {
-                          color: isSelected ? '#ffffff' : theme.colors.text,
+                          color: isSelected ? '#000000' : theme.colors.text,
                         }
                       ]}>
                         {rating === 0 ? 'Any' : `${rating}+ stars`}
@@ -151,7 +170,7 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
           {/* Availability */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Clock size={20} color={theme.colors.accent} />
+              <Clock size={20} color={theme.colors.primary} />
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Availability</Text>
             </View>
             <View style={styles.availabilityOptions}>
@@ -172,7 +191,7 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
                     <Text style={[
                       styles.optionText,
                       {
-                        color: isSelected ? '#ffffff' : theme.colors.text,
+                        color: isSelected ? '#000000' : theme.colors.text,
                       }
                     ]}>
                       {option.label}
@@ -209,7 +228,7 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
                     <Text style={[
                       styles.categoryChipText,
                       {
-                        color: isSelected ? '#ffffff' : theme.colors.text,
+                        color: isSelected ? '#000000' : theme.colors.text,
                       }
                     ]}>
                       {category}
@@ -221,7 +240,8 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
           </View>
         </ScrollView>
 
-        <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
+        {/* Footer */}
+        <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
           <Button
             title="Apply Filters"
             onPress={handleApply}
@@ -243,88 +263,110 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
   },
   closeButton: {
-    padding: 4,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
-    fontSize: 18,
+    fontSize: 20,
     fontFamily: 'Inter-Bold',
   },
+  resetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
   resetText: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'Inter-Medium',
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
+  },
+  contentContainer: {
+    padding: 20,
   },
   section: {
     marginBottom: 32,
-    marginTop: 24,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
+    gap: 8,
   },
   sectionTitle: {
     fontSize: 18,
     fontFamily: 'Inter-Bold',
-    marginLeft: 8,
   },
   optionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
   },
-  option: {
+  optionChip: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
   },
+  optionText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+  },
   ratingOptions: {
-    gap: 8,
+    gap: 12,
   },
   ratingOption: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1,
   },
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   ratingText: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: 'Inter-Medium',
-    marginLeft: 8,
   },
   availabilityOptions: {
-    gap: 8,
+    gap: 12,
   },
   availabilityOption: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1,
   },
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
+    marginTop: 12,
   },
   categoryChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 20,
     borderWidth: 1,
   },
   categoryChipText: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: 'Inter-Medium',
   },
   footer: {

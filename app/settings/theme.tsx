@@ -20,7 +20,7 @@ export default function ThemeSettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.surface }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.name === 'dark' ? '#000000' : theme.colors.surface }]}>
       <Header showLogo showBack backRoute="/(tabs)/profile" />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>

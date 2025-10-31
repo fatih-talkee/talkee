@@ -31,6 +31,13 @@ export default function AuthLayout() {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="setup-account"
+        options={{
+          title: 'Setup Account',
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }

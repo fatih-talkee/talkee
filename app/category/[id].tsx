@@ -70,62 +70,44 @@ export default function CategoryScreen() {
         backPosition="right"
         rightButtons={
           <TouchableOpacity
-            style={styles.headerIconButton}
+            style={[
+              styles.headerIconButton,
+              { backgroundColor: theme.colors.surface },
+            ]}
             onPress={() => setFilterVisible(true)}
           >
-            <Filter size={20} color={theme.colors.text} />
+            <Filter size={20} color="#FFFFFF" />
           </TouchableOpacity>
         }
       />
 
       <View
         style={[
-          styles.searchSection,
-          { backgroundColor: theme.colors.surface },
+          styles.searchInputContainer,
+          {
+            backgroundColor:
+              theme.name === 'dark' ? '#000000' : theme.colors.surface,
+          },
         ]}
       >
-        <View style={styles.searchRow}>
-          <Input
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder={`Search ${categoryName.toLowerCase()} professionals...`}
-            leftIcon={<Search size={20} color={theme.colors.textMuted} />}
-            style={[
-              styles.searchInput,
-              {
-                backgroundColor: theme.colors.card,
-                borderColor: theme.colors.border,
-              },
-            ]}
-          />
-        </View>
-
-        <View style={styles.resultsHeader}>
-          <Text
-            style={[styles.resultsCount, { color: theme.colors.textSecondary }]}
-          >
-            {filteredProfessionals.length} {categoryName.toLowerCase()}{' '}
-            professionals
-          </Text>
-          {(filters.rating > 0 || filters.availability !== 'all') && (
-            <TouchableOpacity
-              onPress={() =>
-                setFilters({
-                  priceRange: [0, 100],
-                  rating: 0,
-                  availability: 'all',
-                  categories: [],
-                })
-              }
-            >
-              <Text
-                style={[styles.clearFilters, { color: theme.colors.primary }]}
-              >
-                Clear filters
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <Input
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search professionals..."
+          leftIcon={<Search size={20} color={theme.colors.textMuted} />}
+          style={[
+            {
+              backgroundColor: theme.colors.card,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        />
+        <Text
+          style={[styles.resultsCount, { color: theme.colors.textSecondary }]}
+        >
+          {filteredProfessionals.length} {categoryName.toLowerCase()}{' '}
+          professionals
+        </Text>
       </View>
 
       <FlatList
@@ -161,21 +143,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  searchSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    marginBottom: 16,
-  },
-  searchInput: {
-    flex: 1,
-    minWidth: 0,
-    marginHorizontal: 0,
-    marginBottom: 0,
+
+  searchInputContainer: {
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    backgroundColor: '#000000',
   },
   headerIconButton: {
     width: 40,
@@ -184,19 +156,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  resultsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
   resultsCount: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-  },
-  clearFilters: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
   },
   listContent: {
     padding: 24,

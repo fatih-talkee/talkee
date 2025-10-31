@@ -22,27 +22,39 @@ function ToastConfig() {
 
   const toastConfig = {
     success: ({ text1, text2 }: any) => (
-      <View style={{
-        minHeight: 50,
-        width: '92%',
-        backgroundColor: theme.colors.success,
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-      }}>
+      <View
+        style={{
+          minHeight: 50,
+          width: '92%',
+          backgroundColor: theme.colors.success,
+          borderRadius: 16,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 8,
+          flexDirection: 'row',
+          alignItems: 'center',
+        }}
+      >
         <View style={{ flex: 1 }}>
-          <Text style={{ color: '#fff', fontSize: 15, fontFamily: 'Inter-Bold' }}>
+          <Text
+            style={{ color: '#fff', fontSize: 15, fontFamily: 'Inter-Bold' }}
+          >
             {text1}
           </Text>
           {text2 && (
-            <Text style={{ color: '#fff', fontSize: 13, fontFamily: 'Inter-Regular', marginTop: 4, lineHeight: 18 }}>
+            <Text
+              style={{
+                color: '#fff',
+                fontSize: 13,
+                fontFamily: 'Inter-Regular',
+                marginTop: 4,
+                lineHeight: 18,
+              }}
+            >
               {text2}
             </Text>
           )}
@@ -50,27 +62,39 @@ function ToastConfig() {
       </View>
     ),
     error: ({ text1, text2 }: any) => (
-      <View style={{
-        minHeight: 50,
-        width: '92%',
-        backgroundColor: theme.colors.error,
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-      }}>
+      <View
+        style={{
+          minHeight: 50,
+          width: '92%',
+          backgroundColor: theme.colors.error,
+          borderRadius: 16,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 8,
+          flexDirection: 'row',
+          alignItems: 'center',
+        }}
+      >
         <View style={{ flex: 1 }}>
-          <Text style={{ color: '#fff', fontSize: 15, fontFamily: 'Inter-Bold' }}>
+          <Text
+            style={{ color: '#fff', fontSize: 15, fontFamily: 'Inter-Bold' }}
+          >
             {text1}
           </Text>
           {text2 && (
-            <Text style={{ color: '#fff', fontSize: 13, fontFamily: 'Inter-Regular', marginTop: 4, lineHeight: 18 }}>
+            <Text
+              style={{
+                color: '#fff',
+                fontSize: 13,
+                fontFamily: 'Inter-Regular',
+                marginTop: 4,
+                lineHeight: 18,
+              }}
+            >
               {text2}
             </Text>
           )}
@@ -78,27 +102,39 @@ function ToastConfig() {
       </View>
     ),
     warning: ({ text1, text2 }: any) => (
-      <View style={{
-        minHeight: 50,
-        width: '92%',
-        backgroundColor: theme.colors.warning,
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-      }}>
+      <View
+        style={{
+          minHeight: 50,
+          width: '92%',
+          backgroundColor: theme.colors.warning,
+          borderRadius: 16,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 8,
+          flexDirection: 'row',
+          alignItems: 'center',
+        }}
+      >
         <View style={{ flex: 1 }}>
-          <Text style={{ color: '#1C1C1E', fontSize: 15, fontFamily: 'Inter-Bold' }}>
+          <Text
+            style={{ color: '#1C1C1E', fontSize: 15, fontFamily: 'Inter-Bold' }}
+          >
             {text1}
           </Text>
           {text2 && (
-            <Text style={{ color: '#1C1C1E', fontSize: 13, fontFamily: 'Inter-Regular', marginTop: 4, lineHeight: 18 }}>
+            <Text
+              style={{
+                color: '#1C1C1E',
+                fontSize: 13,
+                fontFamily: 'Inter-Regular',
+                marginTop: 4,
+                lineHeight: 18,
+              }}
+            >
               {text2}
             </Text>
           )}
@@ -106,27 +142,39 @@ function ToastConfig() {
       </View>
     ),
     info: ({ text1, text2 }: any) => (
-      <View style={{
-        minHeight: 50,
-        width: '92%',
-        backgroundColor: theme.colors.info,
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-      }}>
+      <View
+        style={{
+          minHeight: 50,
+          width: '92%',
+          backgroundColor: theme.colors.info,
+          borderRadius: 16,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 8,
+          flexDirection: 'row',
+          alignItems: 'center',
+        }}
+      >
         <View style={{ flex: 1 }}>
-          <Text style={{ color: '#fff', fontSize: 15, fontFamily: 'Inter-Bold' }}>
+          <Text
+            style={{ color: '#fff', fontSize: 15, fontFamily: 'Inter-Bold' }}
+          >
             {text1}
           </Text>
           {text2 && (
-            <Text style={{ color: '#fff', fontSize: 13, fontFamily: 'Inter-Regular', marginTop: 4, lineHeight: 18 }}>
+            <Text
+              style={{
+                color: '#fff',
+                fontSize: 13,
+                fontFamily: 'Inter-Regular',
+                marginTop: 4,
+                lineHeight: 18,
+              }}
+            >
               {text2}
             </Text>
           )}
@@ -181,6 +229,7 @@ export default function RootLayout() {
         <Stack.Screen name="purchase" />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="wallet-history" />
+        <Stack.Screen name="invoices" />
         <Stack.Screen name="blocked-users" />
         <Stack.Screen name="how-it-works" />
         <Stack.Screen name="help" />
@@ -190,6 +239,10 @@ export default function RootLayout() {
         <Stack.Screen name="settings/change-password" />
         <Stack.Screen name="settings/availability" />
         <Stack.Screen name="+not-found" />
+        <Stack.Screen name="profile/professional-settings" />
+        <Stack.Screen name="profile/privacy-security" />
+        <Stack.Screen name="profile/devices" />
+        <Stack.Screen name="schedule-call/[id]" />
       </Stack>
       <StatusBar style="auto" translucent={false} />
       <ToastConfig />

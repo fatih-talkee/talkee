@@ -3,44 +3,116 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   ScrollView,
   Image,
   Modal,
   Pressable,
-  Platform,
-  Share,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   ArrowLeft,
   Star,
-  Badge,
+  BadgeCheck,
   Clock,
   MapPin,
   Phone,
   Video,
   Heart,
   Share2,
-  MessageCircle,
   Calendar,
   FileText,
   X,
   Briefcase,
   GraduationCap,
   Award,
+  MessageCircle,
+  DollarSign,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { mockProfessionals } from '@/mockData/professionals';
 import { useTheme } from '@/contexts/ThemeContext';
+import { ShareProfileModal } from '@/components/profile/ShareProfileModal';
+
+type TabType = 'feed' | 'about' | 'availability' | 'cv';
+
+interface Availability {
+  id: string;
+  availableAt: 'every' | 'specific';
+  days?: string[];
+  date?: Date;
+  startHour: string;
+  endHour: string;
+  currency: 'USD' | 'TRY' | 'EUR';
+  pricePerMinute: string;
+}
+
+const mockAvailabilities: Availability[] = [
+  {
+    id: '1',
+    availableAt: 'every',
+    days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+    startHour: '09:00',
+    endHour: '17:00',
+    currency: 'USD',
+    pricePerMinute: '2.50',
+  },
+  {
+    id: '2',
+    availableAt: 'every',
+    days: ['Saturday', 'Sunday'],
+    startHour: '10:00',
+    endHour: '18:00',
+    currency: 'USD',
+    pricePerMinute: '3.00',
+  },
+  {
+    id: '3',
+    availableAt: 'specific',
+    date: new Date('2025-12-25'),
+    startHour: '10:00',
+    endHour: '14:00',
+    currency: 'USD',
+    pricePerMinute: '3.00',
+  },
+];
+
+interface Post {
+  id: string;
+  content: string;
+  timestamp: string;
+  image?: string;
+}
+
+const mockPosts: Post[] = [
+  {
+    id: '1',
+    content:
+      "Just finished an amazing session on career pivoting! Remember: it's never too late to pursue your passion. The best time to start was yesterday, the second best time is now. 🚀",
+    timestamp: '2 hours ago',
+  },
+  {
+    id: '2',
+    content:
+      'New blog post: "5 Steps to Ace Your Next Job Interview". Check it out and let me know your thoughts!',
+    timestamp: '1 day ago',
+  },
+  {
+    id: '3',
+    content:
+      "Celebrating 1000+ successful coaching sessions this year! Thank you all for trusting me with your career journey. Here's to many more transformations! 🎉",
+    timestamp: '3 days ago',
+  },
+];
 
 export default function ProfessionalProfileScreen() {
   const { id } = useLocalSearchParams();
   const professional = mockProfessionals.find((p) => p.id === id);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>('feed');
   const [cvModalVisible, setCvModalVisible] = useState(false);
   const { theme } = useTheme();
 
@@ -49,7 +121,9 @@ export default function ProfessionalProfileScreen() {
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
-        <Text style={{ color: theme.colors.text }}>Professional not found</Text>
+        <Text style={{ color: theme.colors.primary }}>
+          Professional not found
+        </Text>
       </SafeAreaView>
     );
   }
@@ -58,373 +132,350 @@ export default function ProfessionalProfileScreen() {
     router.push(`/call/${professional.id}?type=${type}`);
   };
 
-  const handleShare = async () => {
-    try {
-      const url = `https://talkee.app/professional/${professional.id}`;
-      const message = `${professional.name} - ${professional.title}\n${url}`;
-      await Share.share({ message, url, title: professional.name });
-    } catch (e) {
-      // no-op
-    }
-  };
-
-  return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
-      <Header
-        showLogo={true}
-        showBack
-        rightButtons={
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: theme.colors.surface }]}
-              onPress={() => setIsFavorite(!isFavorite)}
-            >
-              {isFavorite ? (
-                <Heart size={20} color={theme.colors.error} fill={theme.colors.error} />
-              ) : (
-                <Heart size={20} color="#ffffff" />
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: theme.colors.surface }]}
-              onPress={handleShare}
-            >
-              <Share2 size={20} color="#ffffff" />
-            </TouchableOpacity>
-          </View>
-        }
-      />
-
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={{ paddingBottom: 160 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Profile Header */}
-        <Card style={styles.profileCard}>
-          <View style={styles.profileHeader}>
-            <View style={styles.avatarContainer}>
-              <Image
-                source={{ uri: professional.avatar }}
-                style={[styles.avatar, { borderColor: theme.colors.border }]}
-              />
-              {professional.isOnline && (
-                <View
-                  style={[
-                    styles.onlineIndicator,
-                    { borderColor: theme.colors.card },
-                  ]}
-                />
-              )}
-            </View>
-            <View style={styles.profileInfo}>
-              <View style={styles.nameRow}>
-                <Text style={[styles.name, { color: theme.colors.text }]}>
-                  {professional.name}
-                </Text>
-                {professional.isVerified && (
-                  <Badge
-                    size={20}
-                    color={theme.colors.primary}
-                    strokeWidth={2}
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'feed':
+        return (
+          <View style={styles.feedContainer}>
+            {mockPosts.map((post) => (
+              <Card key={post.id} style={styles.postCard}>
+                <View style={styles.postHeader}>
+                  <Image
+                    source={{ uri: professional.avatar }}
+                    style={styles.postAvatar}
                   />
-                )}
-              </View>
-              <Text
-                style={[styles.title, { color: theme.colors.textSecondary }]}
-              >
-                {professional.title}
-              </Text>
-              <View style={styles.ratingRow}>
-                <Star
-                  size={16}
-                  color={theme.colors.warning}
-                  fill={theme.colors.warning}
-                />
-                <Text style={[styles.rating, { color: theme.colors.text }]}>
-                  {professional.rating}
-                </Text>
+                  <View style={styles.postHeaderText}>
+                    <View style={styles.postNameRow}>
+                      <Text
+                        style={[
+                          styles.postName,
+                          { color: theme.colors.primary },
+                        ]}
+                      >
+                        {professional.name}
+                      </Text>
+                      {professional.isVerified && (
+                        <BadgeCheck
+                          size={14}
+                          color={theme.colors.primary}
+                          strokeWidth={2}
+                        />
+                      )}
+                    </View>
+                    <Text
+                      style={[
+                        styles.postTimestamp,
+                        { color: theme.colors.textMuted },
+                      ]}
+                    >
+                      {post.timestamp}
+                    </Text>
+                  </View>
+                </View>
                 <Text
-                  style={[styles.callCount, { color: theme.colors.textMuted }]}
+                  style={[styles.postContent, { color: theme.colors.text }]}
                 >
-                  ({professional.totalCalls} calls)
+                  {post.content}
                 </Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.badges}>
-            {professional.badges.map((badge, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.badge,
-                  {
-                    backgroundColor: theme.colors.surface,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={[styles.badgeText, { color: theme.colors.primary }]}
-                >
-                  {badge}
-                </Text>
-              </View>
+              </Card>
             ))}
+            {mockPosts.length === 0 && (
+              <View style={styles.emptyState}>
+                <MessageCircle
+                  size={48}
+                  color={theme.colors.textMuted}
+                  strokeWidth={1.5}
+                />
+                <Text
+                  style={[
+                    styles.emptyStateText,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  No posts yet
+                </Text>
+              </View>
+            )}
           </View>
+        );
 
-          <View style={styles.quickStats}>
-            <View style={styles.quickStat}>
-              <Clock size={16} color={theme.colors.textMuted} />
+      case 'about':
+        return (
+          <View style={styles.aboutContainer}>
+            <Card style={styles.sectionCard}>
               <Text
-                style={[
-                  styles.quickStatText,
-                  { color: theme.colors.textMuted },
-                ]}
+                style={[styles.sectionTitle, { color: theme.colors.primary }]}
               >
-                {professional.responseTime}
+                About Me
               </Text>
-            </View>
-            <View style={styles.quickStat}>
-              <MapPin size={16} color={theme.colors.textMuted} />
+              <Text style={[styles.bio, { color: theme.colors.textSecondary }]}>
+                {professional.bio}
+              </Text>
+            </Card>
+
+            <Card style={styles.sectionCard}>
+              <Text
+                style={[styles.sectionTitle, { color: theme.colors.primary }]}
+              >
+                Specialties
+              </Text>
+              <View style={styles.specialties}>
+                {professional.specialties.map((specialty, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.specialtyTag,
+                      {
+                        backgroundColor: theme.colors.surface,
+                        borderColor: theme.colors.primary,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.specialtyText,
+                        { color: theme.colors.primary },
+                      ]}
+                    >
+                      {specialty}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </Card>
+
+            <Card style={styles.sectionCard}>
+              <Text
+                style={[styles.sectionTitle, { color: theme.colors.primary }]}
+              >
+                Languages
+              </Text>
               <Text
                 style={[
-                  styles.quickStatText,
-                  { color: theme.colors.textMuted },
+                  styles.languagesText,
+                  { color: theme.colors.textSecondary },
                 ]}
               >
                 {professional.languages.join(', ')}
               </Text>
-            </View>
+            </Card>
           </View>
-        </Card>
+        );
 
-        {/* About */}
-        <Card style={styles.aboutCard}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
-            About
-          </Text>
-          <Text style={[styles.bio, { color: theme.colors.textSecondary }]}>
-            {professional.bio}
-          </Text>
-        </Card>
-
-        {/* Specialties */}
-        <Card style={styles.specialtiesCard}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
-            Specialties
-          </Text>
-          <View style={styles.specialties}>
-            {professional.specialties.map((specialty, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.specialtyTag,
-                  {
-                    backgroundColor: theme.colors.surface,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-              >
-                <Text
+      case 'availability':
+        return (
+          <View style={styles.availabilityContainer}>
+            {mockAvailabilities.length === 0 ? (
+              <Card style={[styles.emptyCard, { backgroundColor: theme.colors.card }]}>
+                <Calendar size={48} color={theme.colors.textMuted} />
+                <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+                  No Availability Set
+                </Text>
+                <Text style={[styles.emptyDescription, { color: theme.colors.textMuted }]}>
+                  This professional hasn't set their availability schedule yet
+                </Text>
+              </Card>
+            ) : (
+              mockAvailabilities.map((item) => (
+                <Card
+                  key={item.id}
+                  padding="none"
                   style={[
-                    styles.specialtyText,
-                    { color: theme.colors.primary },
+                    styles.availabilityCard,
+                    {
+                      backgroundColor:
+                        theme.name === 'dark' ? '#000000' : theme.colors.card,
+                      borderColor:
+                        theme.name === 'dark'
+                          ? 'rgba(255, 255, 255, 0.3)'
+                          : theme.colors.border,
+                      borderWidth: 1.5,
+                      padding: 16,
+                      marginBottom: 16,
+                    },
                   ]}
                 >
-                  {specialty}
-                </Text>
-              </View>
-            ))}
+                  {/* Header Section */}
+                  <View style={styles.availabilityCardHeader}>
+                    <View style={styles.availabilityCardHeaderLeft}>
+                      <View
+                        style={[
+                          styles.availabilityIconContainer,
+                          {
+                            backgroundColor:
+                              theme.name === 'dark'
+                                ? theme.colors.accent + '20'
+                                : theme.colors.accent + '15',
+                          },
+                        ]}
+                      >
+                        <Calendar
+                          size={20}
+                          color={
+                            theme.name === 'dark'
+                              ? theme.colors.accent
+                              : theme.colors.accent
+                          }
+                        />
+                      </View>
+                      <View style={styles.availabilityHeaderInfo}>
+                        {item.availableAt === 'every' ? (
+                          <Text
+                            style={[
+                              styles.availabilityScheduleBadge,
+                              {
+                                backgroundColor:
+                                  theme.name === 'dark'
+                                    ? theme.colors.accent + '40'
+                                    : theme.colors.accent + '25',
+                                color: theme.colors.accent,
+                              },
+                            ]}
+                          >
+                            Weekly Schedule
+                          </Text>
+                        ) : (
+                          <Text
+                            style={[
+                              styles.availabilityScheduleBadge,
+                              {
+                                backgroundColor:
+                                  theme.name === 'dark'
+                                    ? theme.colors.primary + '40'
+                                    : theme.colors.primary + '25',
+                                color: theme.colors.primary,
+                              },
+                            ]}
+                          >
+                            One-time
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Content Section */}
+                  <View style={styles.availabilityCardContent}>
+                    {item.availableAt === 'every' && (
+                      <View style={styles.availabilityDaysContainer}>
+                        {item.days?.map((day, index) => (
+                          <View
+                            key={index}
+                            style={[
+                              styles.availabilityDayTag,
+                              {
+                                backgroundColor: theme.colors.surface,
+                                borderColor:
+                                  theme.name === 'dark'
+                                    ? theme.colors.accent
+                                    : theme.colors.accent,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.availabilityDayTagText,
+                                {
+                                  color:
+                                    theme.name === 'dark'
+                                      ? theme.colors.accent
+                                      : theme.colors.accent,
+                                },
+                              ]}
+                            >
+                              {day.substring(0, 3)}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
+                    {item.availableAt === 'specific' && (
+                      <View style={styles.availabilityDateContainer}>
+                        <Text
+                          style={[
+                            styles.availabilityDateText,
+                            { color: theme.colors.text },
+                          ]}
+                        >
+                          {item.date?.toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            month: 'long',
+                            day: 'numeric',
+                          })}
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={styles.availabilityTimePriceRow}>
+                      <View style={styles.availabilityTimeContainer}>
+                        <Clock
+                          size={16}
+                          color={
+                            theme.name === 'dark'
+                              ? theme.colors.success
+                              : theme.colors.success
+                          }
+                        />
+                        <Text
+                          style={[
+                            styles.availabilityTimeText,
+                            { color: theme.colors.text },
+                          ]}
+                        >
+                          {item.startHour} - {item.endHour}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.availabilityPriceBadge,
+                          {
+                            backgroundColor:
+                              theme.name === 'dark'
+                                ? theme.colors.success + '20'
+                                : theme.colors.success + '15',
+                          },
+                        ]}
+                      >
+                        <DollarSign
+                          size={16}
+                          color={
+                            theme.name === 'dark'
+                              ? theme.colors.success
+                              : theme.colors.success
+                          }
+                        />
+                        <Text
+                          style={[
+                            styles.availabilityPriceText,
+                            {
+                              color:
+                                theme.name === 'dark'
+                                  ? theme.colors.success
+                                  : theme.colors.success,
+                            },
+                          ]}
+                        >
+                          {item.currency === 'USD'
+                            ? '$'
+                            : item.currency === 'TRY'
+                            ? '₺'
+                            : '€'}
+                          {item.pricePerMinute}/min
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </Card>
+              ))
+            )}
           </View>
-        </Card>
+        );
 
-        {/* Pricing */}
-        <Card style={styles.pricingCard}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
-            Pricing
-          </Text>
-          <View style={styles.pricingInfo}>
-            <View style={styles.priceMain}>
-              <Text style={[styles.price, { color: theme.colors.warning }]}>
-                ${professional.ratePerMinute}
-              </Text>
-              <Text
-                style={[styles.priceUnit, { color: theme.colors.textMuted }]}
-              >
-                per minute
-              </Text>
-            </View>
-            <Text style={[styles.pricingNote, { color: theme.colors.success }]}>
-              First 2 minutes are always free for new connections
-            </Text>
-          </View>
-        </Card>
-
-        {/* Recent Reviews */}
-        <Card style={styles.reviewsCard}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
-            Recent Reviews
-          </Text>
-          <View
-            style={[styles.review, { borderBottomColor: theme.colors.divider }]}
-          >
-            <View style={styles.reviewHeader}>
-              <View style={styles.reviewerInfo}>
-                <Text
-                  style={[styles.reviewerName, { color: theme.colors.text }]}
-                >
-                  Sarah M.
-                </Text>
-                <View style={styles.reviewRating}>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Star
-                      key={star}
-                      size={12}
-                      color={theme.colors.warning}
-                      fill={theme.colors.warning}
-                    />
-                  ))}
-                </View>
-              </View>
-              <Text
-                style={[styles.reviewDate, { color: theme.colors.textMuted }]}
-              >
-                2 days ago
-              </Text>
-            </View>
-            <Text
-              style={[styles.reviewText, { color: theme.colors.textSecondary }]}
-            >
-              "Incredible session! Dr. Chen provided exactly the guidance I
-              needed for my career transition. Highly recommend!"
-            </Text>
-          </View>
-
-          <View
-            style={[styles.review, { borderBottomColor: theme.colors.divider }]}
-          >
-            <View style={styles.reviewHeader}>
-              <View style={styles.reviewerInfo}>
-                <Text
-                  style={[styles.reviewerName, { color: theme.colors.text }]}
-                >
-                  Michael R.
-                </Text>
-                <View style={styles.reviewRating}>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Star
-                      key={star}
-                      size={12}
-                      color={theme.colors.warning}
-                      fill={theme.colors.warning}
-                    />
-                  ))}
-                </View>
-              </View>
-              <Text
-                style={[styles.reviewDate, { color: theme.colors.textMuted }]}
-              >
-                1 week ago
-              </Text>
-            </View>
-            <Text
-              style={[styles.reviewText, { color: theme.colors.textSecondary }]}
-            >
-              "Professional, insightful, and genuinely helpful. Worth every
-              minute!"
-            </Text>
-          </View>
-        </Card>
-
-        {/* CV / Resume Section */}
-        <Card style={styles.cvCard}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
-            CV / Resume
-          </Text>
-          <TouchableOpacity
-            style={[
-              styles.cvPreview,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.border,
-              },
-            ]}
-            onPress={() => setCvModalVisible(true)}
-          >
-            <FileText size={24} color={theme.colors.primary} />
-            <View style={styles.cvPreviewText}>
-              <Text
-                style={[styles.cvPreviewTitle, { color: theme.colors.text }]}
-              >
-                View Professional CV
-              </Text>
-              <Text
-                style={[
-                  styles.cvPreviewSubtitle,
-                  { color: theme.colors.textMuted },
-                ]}
-              >
-                Experience, Education & Skills
-              </Text>
-            </View>
-            <ArrowLeft
-              size={20}
-              color={theme.colors.textMuted}
-              style={{ transform: [{ rotate: '180deg' }] }}
-            />
-          </TouchableOpacity>
-        </Card>
-      </ScrollView>
-
-      {/* CV Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={cvModalVisible}
-        onRequestClose={() => setCvModalVisible(false)}
-      >
-        <View
-          style={[
-            styles.modalOverlay,
-            { backgroundColor: theme.colors.overlay },
-          ]}
-        >
-          <Pressable
-            style={styles.modalOverlayPressable}
-            onPress={() => setCvModalVisible(false)}
-          />
-          <View
-            style={[
-              styles.modalContent,
-              { backgroundColor: theme.colors.card },
-            ]}
-          >
-            <View
-              style={[
-                styles.modalHeader,
-                { borderBottomColor: theme.colors.border },
-              ]}
-            >
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-                Professional CV
-              </Text>
-              <TouchableOpacity
-                onPress={() => setCvModalVisible(false)}
-                style={[styles.modalCloseButton, { backgroundColor: theme.colors.surface }]}
-              >
-                <X size={28} color="#ffffff" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              style={styles.modalBody}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Experience Section */}
+      case 'cv':
+        return (
+          <View style={styles.cvContainer}>
+            <Card style={styles.sectionCard}>
               <View style={styles.cvSection}>
                 <View style={styles.cvSectionHeader}>
                   <Briefcase size={20} color={theme.colors.primary} />
@@ -440,11 +491,14 @@ export default function ProfessionalProfileScreen() {
                 <View
                   style={[
                     styles.cvItem,
-                    { borderLeftColor: theme.colors.border },
+                    { borderLeftColor: theme.colors.primary },
                   ]}
                 >
                   <Text
-                    style={[styles.cvItemTitle, { color: theme.colors.text }]}
+                    style={[
+                      styles.cvItemTitle,
+                      { color: theme.colors.primary },
+                    ]}
                   >
                     Senior Career Coach
                   </Text>
@@ -477,11 +531,14 @@ export default function ProfessionalProfileScreen() {
                 <View
                   style={[
                     styles.cvItem,
-                    { borderLeftColor: theme.colors.border },
+                    { borderLeftColor: theme.colors.primary },
                   ]}
                 >
                   <Text
-                    style={[styles.cvItemTitle, { color: theme.colors.text }]}
+                    style={[
+                      styles.cvItemTitle,
+                      { color: theme.colors.primary },
+                    ]}
                   >
                     Career Development Specialist
                   </Text>
@@ -512,8 +569,9 @@ export default function ProfessionalProfileScreen() {
                   </Text>
                 </View>
               </View>
+            </Card>
 
-              {/* Education Section */}
+            <Card style={styles.sectionCard}>
               <View style={styles.cvSection}>
                 <View style={styles.cvSectionHeader}>
                   <GraduationCap size={20} color={theme.colors.primary} />
@@ -529,11 +587,14 @@ export default function ProfessionalProfileScreen() {
                 <View
                   style={[
                     styles.cvItem,
-                    { borderLeftColor: theme.colors.border },
+                    { borderLeftColor: theme.colors.primary },
                   ]}
                 >
                   <Text
-                    style={[styles.cvItemTitle, { color: theme.colors.text }]}
+                    style={[
+                      styles.cvItemTitle,
+                      { color: theme.colors.primary },
+                    ]}
                   >
                     Ph.D. in Organizational Psychology
                   </Text>
@@ -557,11 +618,14 @@ export default function ProfessionalProfileScreen() {
                 <View
                   style={[
                     styles.cvItem,
-                    { borderLeftColor: theme.colors.border },
+                    { borderLeftColor: theme.colors.primary },
                   ]}
                 >
                   <Text
-                    style={[styles.cvItemTitle, { color: theme.colors.text }]}
+                    style={[
+                      styles.cvItemTitle,
+                      { color: theme.colors.primary },
+                    ]}
                   >
                     M.A. in Counseling Psychology
                   </Text>
@@ -583,8 +647,9 @@ export default function ProfessionalProfileScreen() {
                   </Text>
                 </View>
               </View>
+            </Card>
 
-              {/* Skills Section */}
+            <Card style={styles.sectionCard}>
               <View style={styles.cvSection}>
                 <View style={styles.cvSectionHeader}>
                   <Award size={20} color={theme.colors.primary} />
@@ -612,7 +677,7 @@ export default function ProfessionalProfileScreen() {
                         styles.cvSkillTag,
                         {
                           backgroundColor: theme.colors.surface,
-                          borderColor: theme.colors.border,
+                          borderColor: theme.colors.primary,
                         },
                       ]}
                     >
@@ -628,26 +693,313 @@ export default function ProfessionalProfileScreen() {
                   ))}
                 </View>
               </View>
-            </ScrollView>
+            </Card>
           </View>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <Header
+        showLogo={true}
+        showBack={true}
+        backPosition="right"
+        rightButtons={[
+          <View key="favorite-share" style={styles.headerActions}>
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                { backgroundColor: theme.colors.surface },
+              ]}
+              onPress={() => setIsFavorite(!isFavorite)}
+            >
+              <Heart
+                size={20}
+                color={isFavorite ? theme.colors.error : '#FFFFFF'}
+                fill={isFavorite ? theme.colors.error : 'transparent'}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                { backgroundColor: theme.colors.surface },
+              ]}
+              onPress={() => setShareModalVisible(true)}
+            >
+              <Share2 size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>,
+        ]}
+      />
+
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={{ paddingBottom: 160 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Profile Header */}
+        <Card
+          style={[styles.profileCard, { backgroundColor: theme.colors.card }]}
+        >
+          <View style={styles.profileHeader}>
+            <View style={styles.avatarContainer}>
+              <Image
+                source={{ uri: professional.avatar }}
+                style={styles.avatar}
+              />
+              {professional.isOnline && (
+                <View
+                  style={[
+                    styles.onlineIndicator,
+                    { borderColor: theme.colors.card },
+                  ]}
+                />
+              )}
+            </View>
+            <View style={styles.profileInfo}>
+              <View style={styles.nameRow}>
+                <Text style={[styles.profileName, { color: theme.colors.text }]}>
+                  {professional.name}
+                </Text>
+                {professional.isVerified && (
+                  <BadgeCheck
+                    size={18}
+                    color={theme.colors.primary}
+                    strokeWidth={2}
+                  />
+                )}
+              </View>
+              <Text
+                style={[
+                  styles.profileTitle,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                {professional.title}
+              </Text>
+              <View
+                style={[
+                  styles.profileLocation,
+                  { flexDirection: 'row', alignItems: 'center', gap: 4 },
+                ]}
+              >
+                <MapPin size={12} color={theme.colors.textMuted} />
+                <Text style={{ color: theme.colors.textMuted }}>
+                  {professional.location || 'Available Worldwide'}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.statsRow,
+              { borderTopColor: theme.colors.divider },
+            ]}
+          >
+            <View style={styles.stat}>
+              <Text style={[styles.statNumber, { color: theme.colors.text }]}>
+                {professional.rating}
+              </Text>
+              <Text
+                style={[
+                  styles.statLabel,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Rating
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.statDivider,
+                { backgroundColor: theme.colors.divider },
+              ]}
+            />
+            <View style={styles.stat}>
+              <Text style={[styles.statNumber, { color: theme.colors.text }]}>
+                {professional.totalCalls}
+              </Text>
+              <Text
+                style={[
+                  styles.statLabel,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Total Calls
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.statDivider,
+                { backgroundColor: theme.colors.divider },
+              ]}
+            />
+            <View style={styles.stat}>
+              <Text style={[styles.statNumber, { color: theme.colors.text }]}>
+                {mockPosts.length}
+              </Text>
+              <Text
+                style={[
+                  styles.statLabel,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Posts
+              </Text>
+            </View>
+          </View>
+        </Card>
+
+        {/* Tab Navigation */}
+        <View
+          style={[
+            styles.tabNavigation,
+            {
+              backgroundColor: theme.name === 'dark' ? '#000000' : theme.colors.card,
+              borderBottomColor: theme.colors.border,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            style={[
+              styles.tab,
+              activeTab === 'feed' && {
+                borderBottomColor: theme.colors.primary,
+                borderBottomWidth: 2,
+              },
+            ]}
+            onPress={() => setActiveTab('feed')}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                {
+                  color:
+                    activeTab === 'feed'
+                      ? theme.colors.primary
+                      : theme.colors.textMuted,
+                },
+              ]}
+            >
+              Feed
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.tab,
+              activeTab === 'about' && {
+                borderBottomColor: theme.colors.primary,
+                borderBottomWidth: 2,
+              },
+            ]}
+            onPress={() => setActiveTab('about')}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                {
+                  color:
+                    activeTab === 'about'
+                      ? theme.colors.primary
+                      : theme.colors.textMuted,
+                },
+              ]}
+            >
+              About
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.tab,
+              activeTab === 'availability' && {
+                borderBottomColor: theme.colors.primary,
+                borderBottomWidth: 2,
+              },
+            ]}
+            onPress={() => setActiveTab('availability')}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                {
+                  color:
+                    activeTab === 'availability'
+                      ? theme.colors.primary
+                      : theme.colors.textMuted,
+                },
+              ]}
+            >
+              Availability
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.tab,
+              activeTab === 'cv' && {
+                borderBottomColor: theme.colors.primary,
+                borderBottomWidth: 2,
+              },
+            ]}
+            onPress={() => setActiveTab('cv')}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                {
+                  color:
+                    activeTab === 'cv'
+                      ? theme.colors.primary
+                      : theme.colors.textMuted,
+                },
+              ]}
+            >
+              CV
+            </Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
+
+        {/* Tab Content */}
+        {renderTabContent()}
+      </ScrollView>
+
+      {/* Share Profile Modal */}
+      <ShareProfileModal
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        professionalData={{
+          id: professional.id,
+          name: professional.name,
+          title: professional.title,
+          avatar: professional.avatar,
+          rating: professional.rating,
+          totalCalls: professional.totalCalls,
+          isVerified: professional.isVerified,
+          ratePerMinute: professional.ratePerMinute,
+          specialties: professional.specialties,
+        }}
+      />
 
       {/* Call Actions */}
       <SafeAreaView
         edges={['bottom']}
         style={[
           styles.callActionsWrapper,
-          { backgroundColor: theme.colors.tabBarBackground },
+          { backgroundColor: theme.colors.card },
         ]}
       >
         <View
           style={[
             styles.callActions,
             {
-              // Match tabs: 1px divider using tab bar border color
-              borderTopColor: theme.colors.tabBarBorder || 'rgb(216, 216, 216)',
-              shadowColor: '#000',
+              borderTopColor: theme.colors.border,
+              shadowColor: theme.colors.text,
             },
           ]}
         >
@@ -667,6 +1019,22 @@ export default function ProfessionalProfileScreen() {
               </Text>
             </TouchableOpacity>
 
+            {/* Video Call Button - Hidden for now */}
+            {/* <TouchableOpacity
+              style={[
+                styles.callTypeButton,
+                { backgroundColor: theme.colors.primary },
+              ]}
+              onPress={() => handleCallNow('video')}
+            >
+              <Video size={18} color={theme.colors.surface} />
+              <Text
+                style={[styles.callTypeText, { color: theme.colors.surface }]}
+              >
+                Video
+              </Text>
+            </TouchableOpacity> */}
+
             <TouchableOpacity
               style={[
                 styles.callTypeButton,
@@ -676,7 +1044,7 @@ export default function ProfessionalProfileScreen() {
                   borderColor: theme.colors.primary,
                 },
               ]}
-              onPress={() => console.log('Schedule call')}
+              onPress={() => router.push(`/schedule-call/${professional.id}`)}
             >
               <Calendar size={18} color={theme.colors.primary} />
               <Text
@@ -695,26 +1063,22 @@ export default function ProfessionalProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    // background: theme.colors.background
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    // background: theme.colors.surface
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerActions: {
     flexDirection: 'row',
     gap: 8,
-    alignItems: 'center',
   },
   actionButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    // background: theme.colors.surface
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -724,11 +1088,12 @@ const styles = StyleSheet.create({
     paddingTop: 24,
   },
   profileCard: {
-    marginBottom: 16,
+    marginBottom: 24,
   },
   profileHeader: {
     flexDirection: 'row',
-    marginBottom: 16,
+    alignItems: 'center',
+    marginBottom: 20,
   },
   avatarContainer: {
     position: 'relative',
@@ -738,18 +1103,16 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    // border: theme.colors.border
   },
   onlineIndicator: {
     position: 'absolute',
-    bottom: 4,
-    right: 4,
+    bottom: 0,
+    right: 0,
     width: 20,
     height: 20,
     borderRadius: 10,
     backgroundColor: '#10b981',
-    borderWidth: 3,
-    // border: theme.colors.card
+    borderWidth: 2,
   },
   profileInfo: {
     flex: 1,
@@ -757,86 +1120,122 @@ const styles = StyleSheet.create({
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
+    gap: 6,
   },
-  name: {
-    fontSize: 22,
+  profileName: {
+    fontSize: 20,
     fontFamily: 'Inter-Bold',
-    // color: theme.colors.text
-    marginRight: 8,
+    marginBottom: 4,
   },
-  title: {
-    fontSize: 16,
-    fontFamily: 'Inter-Regular',
-    // color: theme.colors.textSecondary
-    marginBottom: 8,
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  rating: {
-    fontSize: 16,
-    fontFamily: 'Inter-Bold',
-    // color: theme.colors.text
-    marginLeft: 6,
-    marginRight: 8,
-  },
-  callCount: {
+  profileTitle: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-    // color: theme.colors.textMuted
+    marginBottom: 4,
   },
-  badges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 16,
-    gap: 8,
-  },
-  badge: {
-    // background: theme.colors.surface
-    // border: theme.colors.border
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  badgeText: {
+  profileLocation: {
     fontSize: 12,
-    fontFamily: 'Inter-Bold',
-    // color: theme.colors.primary
+    fontFamily: 'Inter-Regular',
   },
-  quickStats: {
+  statsRow: {
     flexDirection: 'row',
-    gap: 16,
+    justifyContent: 'space-around',
+    paddingTop: 20,
+    borderTopWidth: 1,
   },
-  quickStat: {
-    flexDirection: 'row',
+  stat: {
     alignItems: 'center',
   },
-  quickStatText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    // color: theme.colors.textMuted
-    marginLeft: 6,
-  },
-  aboutCard: {
-    marginBottom: 16,
-  },
-  cardTitle: {
+  statNumber: {
     fontSize: 18,
     fontFamily: 'Inter-Bold',
-    // color: theme.colors.text
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+  },
+  tabNavigation: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  tabText: {
+    fontSize: 15,
+    fontFamily: 'Inter-Bold',
+  },
+  feedContainer: {
+    padding: 16,
+  },
+  postCard: {
+    marginBottom: 16,
+    padding: 16,
+  },
+  postHeader: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  postAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  postHeaderText: {
+    flex: 1,
+  },
+  postNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  postName: {
+    fontSize: 15,
+    fontFamily: 'Inter-Bold',
+  },
+  postTimestamp: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+  },
+  postContent: {
+    fontSize: 15,
+    fontFamily: 'Inter-Regular',
+    lineHeight: 22,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    marginTop: 16,
+  },
+  aboutContainer: {
+    padding: 16,
+  },
+  sectionCard: {
+    marginBottom: 16,
+    padding: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter-Bold',
     marginBottom: 12,
   },
   bio: {
     fontSize: 15,
     fontFamily: 'Inter-Regular',
-    // color: theme.colors.textSecondary
     lineHeight: 22,
-  },
-  specialtiesCard: {
-    marginBottom: 16,
   },
   specialties: {
     flexDirection: 'row',
@@ -844,8 +1243,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   specialtyTag: {
-    // background: theme.colors.surface
-    // border: theme.colors.border
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -854,154 +1251,121 @@ const styles = StyleSheet.create({
   specialtyText: {
     fontSize: 14,
     fontFamily: 'Inter-Medium',
-    // color: theme.colors.primary
   },
-  pricingCard: {
-    marginBottom: 16,
-  },
-  pricingInfo: {
-    alignItems: 'center',
-  },
-  priceMain: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 8,
-  },
-  price: {
-    fontSize: 32,
-    fontFamily: 'Inter-Bold',
-    // color: theme.colors.warning
-  },
-  priceUnit: {
-    fontSize: 16,
+  languagesText: {
+    fontSize: 15,
     fontFamily: 'Inter-Regular',
-    // color: theme.colors.textMuted
-    marginLeft: 6,
   },
-  pricingNote: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    // color: theme.colors.success
-    textAlign: 'center',
-  },
-  reviewsCard: {
-    marginBottom: 16,
-  },
-  review: {
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    // border: theme.colors.divider
-  },
-  reviewHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  reviewerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  reviewerName: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    // color: theme.colors.text
-    marginRight: 8,
-  },
-  reviewRating: {
-    flexDirection: 'row',
-    gap: 2,
-  },
-  reviewDate: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    // color: theme.colors.textMuted
-  },
-  reviewText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    // color: theme.colors.textSecondary
-    lineHeight: 20,
-  },
-  cvCard: {
-    marginBottom: 16,
-  },
-  cvPreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    // background: theme.colors.surface
+  availabilityContainer: {
     padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    // border: theme.colors.border
   },
-  cvPreviewText: {
-    flex: 1,
-    marginLeft: 12,
+  availabilityCard: {
+    marginBottom: 16,
+    borderRadius: 16,
   },
-  cvPreviewTitle: {
-    fontSize: 16,
-    fontFamily: 'Inter-Bold',
-    // color: theme.colors.text
-    marginBottom: 4,
-  },
-  cvPreviewSubtitle: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    // color: theme.colors.textMuted
-  },
-  modalOverlay: {
-    flex: 1,
-    // background: theme.colors.overlay
-    justifyContent: 'flex-end',
-  },
-  modalOverlayPressable: {
-    flex: 1,
-  },
-  modalContent: {
-    // background: theme.colors.card
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '85%',
-    paddingBottom: 24,
-  },
-  modalHeader: {
+  availabilityCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    // border: theme.colors.border
+    marginBottom: 16,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontFamily: 'Inter-Bold',
-    // color: theme.colors.text
+  availabilityCardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
   },
-  modalCloseButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    // background: theme.colors.surface
+  availabilityIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0px 2px 8px rgba(0,0,0,0.12)' }
-      : {
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.12,
-          shadowRadius: 8,
-          elevation: 3,
-        }),
   },
-  modalBody: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
+  availabilityHeaderInfo: {
+    flex: 1,
+  },
+  availabilityScheduleBadge: {
+    fontSize: 12,
+    fontFamily: 'Inter-Bold',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  availabilityCardContent: {
+    gap: 12,
+  },
+  availabilityDaysContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  availabilityDayTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  availabilityDayTagText: {
+    fontSize: 13,
+    fontFamily: 'Inter-Bold',
+  },
+  availabilityDateContainer: {
+    marginBottom: 4,
+  },
+  availabilityDateText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+  },
+  availabilityTimePriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  availabilityTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  availabilityTimeText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+  },
+  availabilityPriceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+  },
+  availabilityPriceText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+  },
+  emptyCard: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter-Bold',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyDescription: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
+  },
+  cvContainer: {
+    padding: 16,
   },
   cvSection: {
-    marginBottom: 24,
+    marginBottom: 8,
   },
   cvSectionHeader: {
     flexDirection: 'row',
@@ -1011,38 +1375,32 @@ const styles = StyleSheet.create({
   cvSectionTitle: {
     fontSize: 18,
     fontFamily: 'Inter-Bold',
-    // color: theme.colors.text
     marginLeft: 10,
   },
   cvItem: {
     paddingLeft: 16,
     paddingBottom: 16,
     marginBottom: 16,
-    borderLeftWidth: 2,
-    // border: theme.colors.border
+    borderLeftWidth: 3,
   },
   cvItemTitle: {
     fontSize: 16,
     fontFamily: 'Inter-Bold',
-    // color: theme.colors.text
     marginBottom: 4,
   },
   cvItemSubtitle: {
     fontSize: 15,
     fontFamily: 'Inter-Medium',
-    // color: theme.colors.textSecondary
     marginBottom: 4,
   },
   cvItemDate: {
     fontSize: 13,
     fontFamily: 'Inter-Regular',
-    // color: theme.colors.textMuted
     marginBottom: 8,
   },
   cvItemDescription: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-    // color: theme.colors.textSecondary
     lineHeight: 20,
   },
   cvSkills: {
@@ -1051,8 +1409,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   cvSkillTag: {
-    // background: theme.colors.surface
-    // border: theme.colors.border
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -1061,56 +1417,41 @@ const styles = StyleSheet.create({
   cvSkillText: {
     fontSize: 13,
     fontFamily: 'Inter-Medium',
-    // color: theme.colors.primary
   },
   callActionsWrapper: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    // background: theme.colors.tabBarBackground
-    zIndex: 10,
   },
   callActions: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 12,
     paddingBottom: 8,
-    width: '100%',
-    // 1px divider to match tabs
     borderTopWidth: 1,
-    // Upward shadow to match tabs
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0px -8px 16px rgba(0,0,0,0.08)' }
-      : {
-          shadowOffset: { width: 0, height: -8 },
-          shadowOpacity: 0.08,
-          shadowRadius: 16,
-          elevation: 8,
-        }),
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 4,
   },
   callButtonsRow: {
     flexDirection: 'row',
     gap: 10,
-    alignItems: 'center',
   },
   callTypeButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    // background: theme.colors.warning (voice) / theme.colors.primary (video)
     paddingVertical: 12,
     borderRadius: 12,
   },
   scheduleCallButton: {
     borderWidth: 1.5,
-    // background: theme.colors.surface
-    // border: theme.colors.primary
   },
   callTypeText: {
     fontSize: 15,
     fontFamily: 'Inter-Bold',
-    // color: theme.colors.surface or theme.colors.primary for schedule
     marginLeft: 6,
   },
 });

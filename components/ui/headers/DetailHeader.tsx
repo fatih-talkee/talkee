@@ -36,7 +36,7 @@ export function DetailHeader({ title, onBack, rightButtons, containerStyle, back
             disabled={!onBack}
             style={[styles.backButton, { backgroundColor: theme.colors.surface }]}
           >
-            <ArrowLeft size={22} color={theme.colors.text} />
+            <ArrowLeft size={20} color="#FFFFFF" />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -55,7 +55,7 @@ export function DetailHeader({ title, onBack, rightButtons, containerStyle, back
               disabled={!onBack}
               style={[styles.backButton, { backgroundColor: theme.colors.surface }]}
             >
-              <ArrowLeft size={22} color={theme.colors.text} />
+              <ArrowLeft size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         )}

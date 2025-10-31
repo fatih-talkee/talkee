@@ -165,7 +165,7 @@ export default function ProfileScreen() {
           id: 'privacy',
           label: 'Privacy & Security',
           icon: <Shield size={20} color="#64748b" />,
-          onPress: () => router.push('/settings/privacy'),
+          onPress: () => router.push('/profile/privacy-security'),
         },
       ],
     },

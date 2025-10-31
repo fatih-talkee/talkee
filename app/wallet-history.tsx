@@ -181,7 +181,7 @@ export default function WalletHistoryScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header showLogo showBack backPosition="right" />
 
-      <View style={[styles.filtersSection, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.tabBarBorder }]}>
+      <View style={[styles.filtersSection, { backgroundColor: '#000000' }]}>
         <View style={styles.filters}>
           {filters.map((filter) => (
             <TouchableOpacity
@@ -232,7 +232,6 @@ const styles = StyleSheet.create({
   filtersSection: {
     paddingHorizontal: 24,
     paddingVertical: 16,
-    borderBottomWidth: 1,
   },
   filters: {
     flexDirection: 'row',
