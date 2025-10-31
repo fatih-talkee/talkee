@@ -27,6 +27,7 @@ import {
   UserX,
   Camera,
   BookOpen,
+  Key,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
@@ -146,6 +147,12 @@ export default function ProfileScreen() {
           label: 'Notifications',
           icon: <Bell size={20} color="#64748b" />,
           onPress: () => router.push('/notifications'),
+        },
+        {
+          id: 'password',
+          label: 'Change Password',
+          icon: <Key size={20} color="#64748b" />,
+          onPress: () => router.push('/settings/change-password'),
         },
         {
           id: 'privacy',

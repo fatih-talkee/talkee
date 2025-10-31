@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView } from 'react-native';
-import { User, Mail, Phone, Lock, Trash2 } from 'lucide-react-native';
+import { User, Mail, Phone, Lock, Trash2, ChevronRight } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -113,7 +113,7 @@ export default function AccountSettingsScreen() {
                 </Text>
               </View>
             </View>
-            <ArrowLeft size={16} color="#94a3b8" style={{ transform: [{ rotate: '180deg' }] }} />
+            <ChevronRight size={20} color="#94a3b8" />
           </TouchableOpacity>
         </Card>
 
@@ -134,7 +134,7 @@ export default function AccountSettingsScreen() {
                 </Text>
               </View>
             </View>
-            <ArrowLeft size={16} color="#ef4444" style={{ transform: [{ rotate: '180deg' }] }} />
+            <ChevronRight size={20} color="#ef4444" />
           </TouchableOpacity>
         </Card>
 
