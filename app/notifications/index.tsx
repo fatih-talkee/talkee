@@ -190,10 +190,13 @@ export default function NotificationsScreen() {
           unreadCount > 0 && (
             <TouchableOpacity 
               onPress={handleMarkAllAsRead}
-              style={styles.markAllButton}
+              style={[
+                styles.markAllButton,
+                { backgroundColor: theme.colors.surface },
+              ]}
             >
-              <Check size={20} color={theme.colors.primary} />
-              <Text style={[styles.markAllText, { color: theme.colors.primary }]}>
+              <Check size={20} color="#FFFFFF" />
+              <Text style={[styles.markAllText, { color: '#FFFFFF' }]}>
                 Read All
               </Text>
             </TouchableOpacity>
@@ -201,7 +204,7 @@ export default function NotificationsScreen() {
         }
       />
 
-      <View style={[styles.filterSection, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.tabBarBorder }]}>
+      <View style={[styles.filterSection, { backgroundColor: '#000000' }]}>
         <View style={styles.filters}>
           {filters.map((filter) => (
             <TouchableOpacity
@@ -260,6 +263,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    borderRadius: 8,
   },
   markAllText: {
     fontSize: 14,
@@ -268,7 +272,6 @@ const styles = StyleSheet.create({
   filterSection: {
     paddingHorizontal: 24,
     paddingVertical: 16,
-    borderBottomWidth: 1,
   },
   filters: {
     flexDirection: 'row',

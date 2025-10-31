@@ -1,7 +1,26 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  FlatList,
+  Image,
+} from 'react-native';
 import { router } from 'expo-router';
-import { ArrowLeft, Search, Phone, Video, Clock, DollarSign, UserX, UserCheck, ArrowUp, ArrowDown } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  Search,
+  Phone,
+  Video,
+  Clock,
+  DollarSign,
+  UserX,
+  UserCheck,
+  ArrowUp,
+  ArrowDown,
+} from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Input } from '@/components/ui/Input';
@@ -13,19 +32,32 @@ export default function CallHistoryScreen() {
   const { theme } = useTheme();
   const toast = useToast();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'completed' | 'missed'>('all');
+  const [selectedFilter, setSelectedFilter] = useState<
+    'all' | 'completed' | 'missed'
+  >('all');
   const [callHistory, setCallHistory] = useState(mockCallHistory);
 
-  const filteredHistory = callHistory.filter(call => {
-    const matchesSearch = call.professional.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = selectedFilter === 'all' || call.status === selectedFilter;
+  const filteredHistory = callHistory.filter((call) => {
+    const matchesSearch = call.professional.name
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
+    const matchesFilter =
+      selectedFilter === 'all' || call.status === selectedFilter;
     return matchesSearch && matchesFilter;
   });
 
   const filters = [
     { key: 'all', label: 'All Calls', count: callHistory.length },
-    { key: 'completed', label: 'Completed', count: callHistory.filter(c => c.status === 'completed').length },
-    { key: 'missed', label: 'Missed', count: callHistory.filter(c => c.status === 'missed').length },
+    {
+      key: 'completed',
+      label: 'Completed',
+      count: callHistory.filter((c) => c.status === 'completed').length,
+    },
+    {
+      key: 'missed',
+      label: 'Missed',
+      count: callHistory.filter((c) => c.status === 'missed').length,
+    },
   ];
 
   const formatDate = (dateString: string) => {
@@ -39,16 +71,19 @@ export default function CallHistoryScreen() {
     } else if (date.toDateString() === yesterday.toDateString()) {
       return 'Yesterday';
     } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      });
     }
   };
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: '2-digit', 
-      hour12: true 
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
     });
   };
 
@@ -59,22 +94,26 @@ export default function CallHistoryScreen() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return theme.colors.success;
-      case 'missed': return theme.colors.error;
-      case 'cancelled': return theme.colors.textMuted;
-      default: return theme.colors.textMuted;
+      case 'completed':
+        return theme.colors.success;
+      case 'missed':
+        return theme.colors.error;
+      case 'cancelled':
+        return theme.colors.textMuted;
+      default:
+        return theme.colors.textMuted;
     }
   };
 
   const toggleBlockUser = (callId: string) => {
-    setCallHistory(prev =>
-      prev.map(call => {
+    setCallHistory((prev) =>
+      prev.map((call) => {
         if (call.id === callId) {
           const newBlockedStatus = !call.isBlocked;
           toast.success({
             title: newBlockedStatus ? 'User Blocked' : 'User Unblocked',
-            message: newBlockedStatus 
-              ? 'This user can no longer contact you' 
+            message: newBlockedStatus
+              ? 'This user can no longer contact you'
               : 'This user can now contact you',
           });
           return { ...call, isBlocked: newBlockedStatus };
@@ -87,13 +126,21 @@ export default function CallHistoryScreen() {
   const renderCallItem = ({ item }: { item: CallHistory }) => (
     <Card style={[styles.callCard, { backgroundColor: theme.colors.card }]}>
       <View style={styles.callContainer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.callItem}
           onPress={() => router.push(`/professional/${item.professionalId}`)}
         >
           <View style={styles.callLeft}>
-            <Image source={{ uri: item.professional.avatar }} style={styles.avatar} />
-            <View style={[styles.callTypeIcon, { backgroundColor: theme.colors.primary }]}>
+            <Image
+              source={{ uri: item.professional.avatar }}
+              style={styles.avatar}
+            />
+            <View
+              style={[
+                styles.callTypeIcon,
+                { backgroundColor: theme.colors.primary },
+              ]}
+            >
               {item.type === 'video' ? (
                 <Video size={14} color="#ffffff" />
               ) : (
@@ -104,17 +151,39 @@ export default function CallHistoryScreen() {
 
           <View style={styles.callInfo}>
             <View style={styles.callHeader}>
-              <Text style={[styles.professionalName, { color: theme.colors.text }]}>{item.professional.name}</Text>
+              <Text
+                style={[styles.professionalName, { color: theme.colors.text }]}
+              >
+                {item.professional.name}
+              </Text>
               {item.isBlocked && (
-                <View style={[styles.blockedBadge, { backgroundColor: theme.colors.error }]}>
+                <View
+                  style={[
+                    styles.blockedBadge,
+                    { backgroundColor: theme.colors.error },
+                  ]}
+                >
                   <Text style={[styles.blockedBadgeText]}>Blocked</Text>
                 </View>
               )}
             </View>
-            <Text style={[styles.professionalTitle, { color: theme.colors.textMuted }]}>{item.professional.title}</Text>
+            <Text
+              style={[
+                styles.professionalTitle,
+                { color: theme.colors.textMuted },
+              ]}
+            >
+              {item.professional.title}
+            </Text>
             <View style={styles.callDetails}>
-              <Text style={[styles.callDate, { color: theme.colors.text }]}>{formatDate(item.date)}</Text>
-              <Text style={[styles.callTime, { color: theme.colors.textMuted }]}>{formatTime(item.date)}</Text>
+              <Text style={[styles.callDate, { color: theme.colors.text }]}>
+                {formatDate(item.date)}
+              </Text>
+              <Text
+                style={[styles.callTime, { color: theme.colors.textMuted }]}
+              >
+                {formatTime(item.date)}
+              </Text>
             </View>
             {item.direction && (
               <View style={styles.directionRow}>
@@ -123,9 +192,17 @@ export default function CallHistoryScreen() {
                 ) : (
                   <ArrowUp size={12} color={theme.colors.primary} />
                 )}
-                <Text style={[styles.directionText, { 
-                  color: item.direction === 'incoming' ? theme.colors.success : theme.colors.primary 
-                }]}>
+                <Text
+                  style={[
+                    styles.directionText,
+                    {
+                      color:
+                        item.direction === 'incoming'
+                          ? theme.colors.success
+                          : theme.colors.primary,
+                    },
+                  ]}
+                >
                   {item.direction === 'incoming' ? 'Received' : 'Placed'}
                 </Text>
               </View>
@@ -136,21 +213,39 @@ export default function CallHistoryScreen() {
             <View style={styles.callStats}>
               <View style={styles.durationRow}>
                 <Clock size={14} color={theme.colors.textMuted} />
-                <Text style={[styles.duration, { color: theme.colors.textMuted }]}>{formatDuration(item.duration)}</Text>
+                <Text
+                  style={[styles.duration, { color: theme.colors.textMuted }]}
+                >
+                  {formatDuration(item.duration)}
+                </Text>
               </View>
               {item.status === 'completed' && item.cost > 0 && (
                 <View style={styles.costRow}>
                   <DollarSign size={14} color={theme.colors.textMuted} />
-                  <Text style={[styles.cost, { color: theme.colors.text } ]}>${item.cost.toFixed(2)}</Text>
+                  <Text style={[styles.cost, { color: theme.colors.text }]}>
+                    ${item.cost.toFixed(2)}
+                  </Text>
                 </View>
               )}
             </View>
-            <View style={[styles.statusIndicator, { backgroundColor: getStatusColor(item.status) }]} />
+            <View
+              style={[
+                styles.statusIndicator,
+                { backgroundColor: getStatusColor(item.status) },
+              ]}
+            />
           </View>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.blockButton, { backgroundColor: item.isBlocked ? theme.colors.success : theme.colors.error }]}
+          style={[
+            styles.blockButton,
+            {
+              backgroundColor: item.isBlocked
+                ? theme.colors.success
+                : theme.colors.error,
+            },
+          ]}
           onPress={() => toggleBlockUser(item.id)}
         >
           {item.isBlocked ? (
@@ -170,16 +265,23 @@ export default function CallHistoryScreen() {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <Header showLogo showBack backPosition="right" />
 
-      <View style={[styles.searchSection, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.tabBarBorder }]}>
+      <View style={[styles.searchSection, { backgroundColor: '#000000' }]}>
         <Input
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholder="Search call history..."
           leftIcon={<Search size={20} color={theme.colors.textMuted} />}
-          style={[styles.searchInput, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+          style={[
+            {
+              backgroundColor: theme.colors.card,
+              borderColor: theme.colors.border,
+            },
+          ]}
         />
 
         <View style={styles.filters}>
@@ -188,16 +290,25 @@ export default function CallHistoryScreen() {
               key={filter.key}
               style={[
                 styles.filterButton,
-                { backgroundColor: theme.colors.background, borderColor: theme.colors.border },
-                selectedFilter === filter.key && theme.name === 'dark' && { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent }
+                {
+                  backgroundColor: theme.colors.background,
+                  borderColor: theme.colors.border,
+                },
+                selectedFilter === filter.key &&
+                  theme.name === 'dark' && {
+                    backgroundColor: theme.colors.accent,
+                    borderColor: theme.colors.accent,
+                  },
               ]}
               onPress={() => setSelectedFilter(filter.key as any)}
             >
-              <Text style={[
-                styles.filterText,
-                { color: theme.colors.textSecondary },
-                selectedFilter === filter.key && { color: '#000000' }
-              ]}>
+              <Text
+                style={[
+                  styles.filterText,
+                  { color: theme.colors.textSecondary },
+                  selectedFilter === filter.key && { color: '#000000' },
+                ]}
+              >
                 {filter.label} ({filter.count})
               </Text>
             </TouchableOpacity>
@@ -214,9 +325,12 @@ export default function CallHistoryScreen() {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Clock size={48} color={theme.colors.textMuted} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No call history</Text>
+            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+              No call history
+            </Text>
             <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
-              Your call history will appear here once you start connecting with professionals
+              Your call history will appear here once you start connecting with
+              professionals
             </Text>
           </View>
         }
@@ -239,14 +353,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   searchSection: {
-    backgroundColor: '#ffffff',
     paddingHorizontal: 24,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  searchInput: {
-    marginBottom: 0,
   },
   filters: {
     flexDirection: 'row',

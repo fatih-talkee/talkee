@@ -1,5 +1,12 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Image, ViewStyle } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  ViewStyle,
+  Platform,
+} from 'react-native';
 import { ArrowLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -33,11 +40,15 @@ export function PrimaryHeader({
       ? require('../../../assets/images/talkee_logoF.png')
       : require('../../../assets/images/talkee_logoM.png');
 
-  const renderRight = Array.isArray(rightButtons) ? rightButtons : rightButtons ? [rightButtons] : [];
+  const renderRight = Array.isArray(rightButtons)
+    ? rightButtons
+    : rightButtons
+    ? [rightButtons]
+    : [];
 
   const handleBack = () => {
     if (backRoute) {
-      router.push(backRoute);
+      router.push(backRoute as any);
       return;
     }
     if (router.canGoBack()) {
@@ -47,25 +58,39 @@ export function PrimaryHeader({
     }
   };
 
+  // Ensure proper top padding for Android status bar
+  // Android status bars can be taller on some devices, use a safe minimum
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? 56 : 0);
+
   return (
     <View
       style={[
         styles.header,
         {
-          backgroundColor: theme.colors.surface,
-          paddingTop: insets.top,
+          backgroundColor: '#000000',
+          paddingTop: 24,
         },
         containerStyle,
       ]}
     >
       <View style={styles.leftSection}>
         {backPosition === 'left' && showBack ? (
-          <TouchableOpacity onPress={handleBack} style={[styles.iconButton, { backgroundColor: theme.colors.card }]}>
-            <ArrowLeft size={20} color={theme.colors.text} />
+          <TouchableOpacity
+            onPress={handleBack}
+            style={[
+              styles.iconButton,
+              { backgroundColor: theme.colors.surface },
+            ]}
+          >
+            <ArrowLeft size={20} color="#FFFFFF" />
           </TouchableOpacity>
         ) : showLogo ? (
           <TouchableOpacity disabled={!onLogoPress} onPress={onLogoPress}>
-            <Image source={logo} style={styles.logoImage} resizeMode="contain" />
+            <Image
+              source={logo}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -80,8 +105,14 @@ export function PrimaryHeader({
         ))}
         {backPosition === 'right' && showBack && (
           <View style={styles.rightButtonWrapper}>
-            <TouchableOpacity onPress={handleBack} style={[styles.iconButton, { backgroundColor: theme.colors.card }]}>
-              <ArrowLeft size={20} color={theme.colors.text} />
+            <TouchableOpacity
+              onPress={handleBack}
+              style={[
+                styles.iconButton,
+                { backgroundColor: theme.colors.surface },
+              ]}
+            >
+              <ArrowLeft size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         )}
@@ -134,5 +165,3 @@ const styles = StyleSheet.create({
     height: 40,
   },
 });
-
-

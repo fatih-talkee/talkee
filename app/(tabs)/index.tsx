@@ -23,16 +23,22 @@ export default function HomeScreen() {
         rightButton={
           <View style={styles.headerButtons}>
             <TouchableOpacity 
-              style={styles.iconButton}
+              style={[
+                styles.iconButton,
+                { backgroundColor: theme.colors.surface },
+              ]}
               onPress={() => router.push('/appointments-calendar')}
             >
-              <Calendar size={24} color={theme.colors.text} />
+              <Calendar size={20} color="#FFFFFF" />
             </TouchableOpacity>
             <TouchableOpacity 
-              style={styles.iconButton}
+              style={[
+                styles.iconButton,
+                { backgroundColor: theme.colors.surface },
+              ]}
               onPress={() => router.push('/notifications')}
             >
-              <Bell size={24} color={theme.colors.text} />
+              <Bell size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         }

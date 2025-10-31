@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet, ViewStyle, TextStyle, StyleProp, View } from 'react-native';
 
 interface ButtonProps {
   title: string;
@@ -7,8 +7,10 @@ interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
   size?: 'small' | 'medium' | 'large';
   disabled?: boolean;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
+  icon?: React.ReactNode;
+  iconPosition?: 'left' | 'right';
 }
 
 export function Button({ 
@@ -18,7 +20,9 @@ export function Button({
   size = 'medium', 
   disabled = false,
   style,
-  textStyle 
+  textStyle,
+  icon,
+  iconPosition = 'left'
 }: ButtonProps) {
   const buttonStyles = [
     styles.base,
@@ -43,7 +47,15 @@ export function Button({
       disabled={disabled}
       activeOpacity={0.8}
     >
-      <Text style={textStyles}>{title}</Text>
+      <View style={styles.content}>
+        {icon && iconPosition === 'left' && (
+          <View style={styles.iconLeft}>{icon}</View>
+        )}
+        <Text style={textStyles}>{title}</Text>
+        {icon && iconPosition === 'right' && (
+          <View style={styles.iconRight}>{icon}</View>
+        )}
+      </View>
     </TouchableOpacity>
   );
 }
@@ -53,6 +65,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconLeft: {
+    marginRight: 8,
+  },
+  iconRight: {
+    marginLeft: 8,
   },
   primary: {
     backgroundColor: '#007AFF',

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList } from 'react-native';
-import { router } from 'expo-router';
-import { ArrowLeft, Search, Grid2x2 as Grid, List } from 'lucide-react-native';
+import { View, Text, StyleSheet, SafeAreaView, FlatList } from 'react-native';
+import { Search } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
@@ -16,22 +15,38 @@ export default function FavoritesScreen() {
   // Mock favorites (first 4 professionals)
   const favoritesProfessionals = mockProfessionals.slice(0, 4);
 
-  const filteredFavorites = favoritesProfessionals.filter(professional =>
-    professional.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    professional.title.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredFavorites = favoritesProfessionals.filter(
+    (professional) =>
+      professional.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      professional.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <Header showLogo showBack backPosition="right" />
 
-      <View style={[styles.searchSection, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.tabBarBorder }]}>
+      <View
+        style={[
+          styles.searchInputContainer,
+          {
+            backgroundColor:
+              theme.name === 'dark' ? '#000000' : theme.colors.surface,
+          },
+        ]}
+      >
         <Input
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholder="Search favorites..."
           leftIcon={<Search size={20} color={theme.colors.textMuted} />}
-          style={[styles.searchInput, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+          style={[
+            {
+              backgroundColor: theme.colors.card,
+              borderColor: theme.colors.border,
+            },
+          ]}
         />
         <Text style={[styles.resultsCount, { color: theme.colors.textMuted }]}>
           {filteredFavorites.length} favorite professionals
@@ -46,7 +61,9 @@ export default function FavoritesScreen() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No favorites yet</Text>
+            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+              No favorites yet
+            </Text>
             <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
               Add professionals to your favorites to quickly find them later
             </Text>
@@ -78,15 +95,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  searchSection: {
-    backgroundColor: '#ffffff',
+  searchInputContainer: {
     paddingHorizontal: 24,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  searchInput: {
-    marginBottom: 12,
+    backgroundColor: '#000000',
   },
   resultsCount: {
     fontSize: 14,

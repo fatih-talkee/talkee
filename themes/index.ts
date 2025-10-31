@@ -90,7 +90,7 @@ export const darkTheme: Theme = {
   name: 'dark',
   displayName: 'Dark',
   colors: {
-    background: '#1C1C1E',
+    background: '#000000',
     surface: '#2C2C2E',
     card: '#2C2C2E',
 

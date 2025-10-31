@@ -229,77 +229,88 @@ export default function AvailabilitySettingsScreen() {
   };
 
   const renderAvailabilityCard = (item: Availability) => (
-    <Card key={item.id} style={[styles.availabilityCard, { backgroundColor: theme.colors.card }]}>
-      <View style={styles.cardTop}>
-        <View style={styles.cardTopLeft}>
+    <Card 
+      key={item.id}
+      padding="none"
+      style={[
+        styles.availabilityCard, 
+        { 
+          backgroundColor: theme.name === 'dark' ? '#000000' : theme.colors.card,
+          borderColor: theme.name === 'dark' ? 'rgba(255, 255, 255, 0.3)' : theme.colors.border,
+          borderWidth: 1.5,
+          padding: 16,
+        }
+      ]}
+    >
+      {/* Header Section */}
+      <View style={styles.cardHeader}>
+        <View style={styles.cardHeaderLeft}>
           <View style={[styles.iconContainer, { backgroundColor: theme.colors.primary + '20' }]}>
-            <Calendar size={24} color={theme.colors.primary} />
+            <Calendar size={20} color={theme.colors.primary} />
           </View>
-          <View style={styles.cardInfo}>
+          <View style={styles.headerInfo}>
             {item.availableAt === 'every' ? (
-              <>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.scheduleBadge, { backgroundColor: theme.colors.primary + '20', color: theme.colors.primary }]}>
-                    Weekly Schedule
-                  </Text>
-                </View>
-                <View style={styles.daysContainer}>
-                  {item.days?.map((day, index) => (
-                    <View key={index} style={[styles.dayTag, { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary + '40' }]}>
-                      <Text style={[styles.dayTagText, { color: theme.colors.primary }]}>
-                        {day.substring(0, 3)}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </>
+              <Text style={[styles.scheduleBadge, { backgroundColor: theme.name === 'dark' ? theme.colors.primary + '40' : theme.colors.primary + '25', color: theme.colors.primary }]}>
+                Weekly Schedule
+              </Text>
             ) : (
-              <View style={styles.infoRow}>
-                <Text style={[styles.scheduleBadge, { backgroundColor: theme.colors.accent + '20', color: theme.colors.accent }]}>
-                  One-time
-                </Text>
-              </View>
+              <Text style={[styles.scheduleBadge, { backgroundColor: theme.name === 'dark' ? theme.colors.accent + '40' : theme.colors.accent + '25', color: theme.colors.accent }]}>
+                One-time
+              </Text>
             )}
-            <View style={[styles.infoRow, { marginTop: 8 }]}>
-              <Text style={[styles.infoValue, { color: theme.colors.textMuted, fontFamily: 'Inter-Regular' }]}>
-                {item.availableAt === 'every' 
-                  ? 'Repeats every week'
-                  : item.date?.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-                }
-              </Text>
-            </View>
-            <View style={[styles.timeContainer, { marginTop: 8 }]}>
-              <Clock size={14} color={theme.colors.textMuted} />
-              <Text style={[styles.timeText, { color: theme.colors.text }]}>
-                {item.startHour} - {item.endHour}
-              </Text>
-            </View>
           </View>
         </View>
         <View style={styles.cardActions}>
           <TouchableOpacity 
             onPress={() => openModal(item)}
-            style={[styles.actionButton, { backgroundColor: theme.colors.accent + '20' }]}
+            style={[styles.actionButton, { backgroundColor: theme.colors.surface }]}
           >
-            <Edit2 size={18} color={theme.colors.accent} />
+            <Edit2 size={16} color={theme.colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity 
             onPress={() => handleDelete(item.id)}
-            style={[styles.actionButton, { backgroundColor: '#ef444420' }]}
+            style={[styles.actionButton, { backgroundColor: theme.colors.surface }]}
           >
-            <Trash2 size={18} color="#ef4444" />
+            <Trash2 size={16} color="#ef4444" />
           </TouchableOpacity>
         </View>
       </View>
-      
-      <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
-      
-      <View style={styles.priceSection}>
-        <View style={[styles.priceBadge, { backgroundColor: theme.colors.primary + '20' }]}>
-          <DollarSign size={20} color={theme.colors.primary} />
-          <Text style={[styles.priceText, { color: theme.colors.primary }]}>
-            {currencySymbols[item.currency]}{item.pricePerMinute} / min
-          </Text>
+
+      {/* Content Section */}
+      <View style={styles.cardContent}>
+        {item.availableAt === 'every' && (
+          <View style={styles.daysContainer}>
+            {item.days?.map((day, index) => (
+              <View key={index} style={[styles.dayTag, { backgroundColor: theme.colors.surface, borderColor: theme.colors.primary }]}>
+                <Text style={[styles.dayTagText, { color: theme.colors.primary }]}>
+                  {day.substring(0, 3)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+        
+        {item.availableAt === 'specific' && (
+          <View style={styles.dateContainer}>
+            <Text style={[styles.dateText, { color: theme.colors.text }]}>
+              {item.date?.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.timePriceRow}>
+          <View style={styles.timeContainer}>
+            <Clock size={16} color={theme.colors.textMuted} />
+            <Text style={[styles.timeText, { color: theme.colors.text }]}>
+              {item.startHour} - {item.endHour}
+            </Text>
+          </View>
+          <View style={[styles.priceBadge, { backgroundColor: theme.colors.surface }]}>
+            <DollarSign size={16} color={theme.colors.primary} />
+            <Text style={[styles.priceText, { color: theme.colors.primary }]}>
+              {currencySymbols[item.currency]}{item.pricePerMinute}/min
+            </Text>
+          </View>
         </View>
       </View>
     </Card>
@@ -313,9 +324,12 @@ export default function AvailabilitySettingsScreen() {
         rightButtons={
           <TouchableOpacity 
             onPress={() => openModal()}
-            style={styles.addButton}
+            style={[
+              styles.addButton,
+              { backgroundColor: theme.colors.surface },
+            ]}
           >
-            <Plus size={24} color={theme.colors.text} />
+            <Plus size={20} color="#FFFFFF" />
           </TouchableOpacity>
         }
       />
@@ -355,12 +369,15 @@ export default function AvailabilitySettingsScreen() {
           style={[styles.modalContainer, { backgroundColor: theme.colors.background }]}
         >
           <SafeAreaView style={{ flex: 1 }}>
-            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+            <View style={[styles.modalHeader, { backgroundColor: '#000000' }]}>
+              <Text style={[styles.modalTitle, { color: '#FFFFFF' }]}>
                 {editingAvailability ? 'Edit Availability' : 'Add Availability'}
               </Text>
-              <TouchableOpacity onPress={closeModal}>
-                <X size={24} color={theme.colors.text} />
+              <TouchableOpacity 
+                onPress={closeModal}
+                style={[styles.closeButton, { backgroundColor: theme.colors.surface }]}
+              >
+                <X size={20} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
 
@@ -581,77 +598,38 @@ const styles = StyleSheet.create({
   },
   availabilityCard: {
     marginBottom: 16,
-    padding: 20,
+    borderWidth: 1.5,
+    borderRadius: 16,
   },
-  cardTop: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  cardTopLeft: {
+  cardHeaderLeft: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     flex: 1,
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
   },
-  cardInfo: {
-    flex: 1,
-    gap: 8,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  infoLabel: {
-    fontSize: 13,
-    fontFamily: 'Inter-Medium',
-    minWidth: 60,
-  },
-  infoValue: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
+  headerInfo: {
     flex: 1,
   },
   scheduleBadge: {
     fontSize: 12,
     fontFamily: 'Inter-Bold',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  daysContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 4,
-  },
-  dayTag: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 6,
     borderRadius: 8,
-    borderWidth: 1,
-  },
-  dayTagText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Bold',
-  },
-  timeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  timeText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
+    overflow: 'hidden',
   },
   cardActions: {
     flexDirection: 'row',
@@ -664,23 +642,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  divider: {
-    height: 1,
-    marginVertical: 16,
+  cardContent: {
+    gap: 12,
   },
-  priceSection: {
-    alignItems: 'flex-end',
+  daysContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  dayTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  dayTagText: {
+    fontSize: 13,
+    fontFamily: 'Inter-Bold',
+  },
+  dateContainer: {
+    marginBottom: 4,
+  },
+  dateText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+  },
+  timePriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  timeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  timeText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
   },
   priceBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
   },
   priceText: {
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: 'Inter-Bold',
   },
   emptyCard: {
@@ -712,13 +724,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
   },
   modalTitle: {
     fontSize: 20,
     fontFamily: 'Inter-Bold',
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalContent: {
     flex: 1,
