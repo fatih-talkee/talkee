@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
+  Share,
 } from 'react-native';
 import {
   Settings,
@@ -23,11 +24,15 @@ import {
   Share2,
   Palette,
   Languages,
+  UserX,
+  Camera,
+  BookOpen,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { useTheme } from '@/contexts/ThemeContext';
 import { router } from 'expo-router';
+import { useToast } from '@/lib/toastService';
 
 interface MenuSection {
   title: string;
@@ -42,6 +47,7 @@ interface MenuSection {
 
 export default function ProfileScreen() {
   const { theme } = useTheme();
+  const toast = useToast();
   const [userProfile] = useState({
     name: 'Mila Victoria',
     email: 'mila@example.com',
@@ -51,6 +57,42 @@ export default function ProfileScreen() {
     totalCalls: 23,
     favoriteCount: 8,
   });
+
+  const handleShareProfile = async () => {
+    try {
+      const result = await Share.share({
+        message: `Check out my Talkee profile! ${userProfile.name}`,
+        title: `Share ${userProfile.name}'s Profile`,
+      });
+
+      if (result.action === Share.sharedAction) {
+        if (result.activityType) {
+          toast.success({
+            title: 'Profile Shared',
+            message: 'Thank you for sharing!',
+          });
+        } else {
+          toast.success({
+            title: 'Profile Shared',
+            message: 'Profile link shared successfully',
+          });
+        }
+      }
+    } catch (error: any) {
+      console.error('Error sharing profile:', error.message);
+      toast.error({
+        title: 'Share Error',
+        message: 'Unable to share profile',
+      });
+    }
+  };
+
+  const handleChangePhoto = () => {
+    toast.info({
+      title: 'Change Photo',
+      message: 'Photo upload functionality coming soon',
+    });
+  };
 
   const menuSections: MenuSection[] = [
     {
@@ -82,6 +124,12 @@ export default function ProfileScreen() {
           icon: <Mic size={20} color="#8b5cf6" />,
           onPress: () => router.push('/recordings'),
         },
+        {
+          id: 'blocked',
+          label: 'Blocked Users',
+          icon: <UserX size={20} color="#f59e0b" />,
+          onPress: () => router.push('/blocked-users'),
+        },
       ],
     },
     {
@@ -97,7 +145,7 @@ export default function ProfileScreen() {
           id: 'notifications',
           label: 'Notifications',
           icon: <Bell size={20} color="#64748b" />,
-          onPress: () => router.push('/settings/notifications'),
+          onPress: () => router.push('/notifications'),
         },
         {
           id: 'privacy',
@@ -110,6 +158,12 @@ export default function ProfileScreen() {
     {
       title: 'Support',
       items: [
+        {
+          id: 'howitworks',
+          label: 'How It Works',
+          icon: <BookOpen size={20} color="#64748b" />,
+          onPress: () => router.push('/how-it-works'),
+        },
         {
           id: 'help',
           label: 'Help Center',
@@ -138,7 +192,15 @@ export default function ProfileScreen() {
           style={[styles.profileCard, { backgroundColor: theme.colors.card }]}
         >
           <View style={styles.profileHeader}>
-            <Image source={{ uri: userProfile.avatar }} style={styles.avatar} />
+            <View style={styles.avatarContainer}>
+              <Image source={{ uri: userProfile.avatar }} style={styles.avatar} />
+              <TouchableOpacity 
+                style={[styles.cameraButton, { backgroundColor: theme.colors.primary }]}
+                onPress={handleChangePhoto}
+              >
+                <Camera size={16} color="#ffffff" />
+              </TouchableOpacity>
+            </View>
             <View style={styles.profileInfo}>
               <Text style={[styles.profileName, { color: theme.colors.text }]}>
                 {userProfile.name}
@@ -266,7 +328,7 @@ export default function ProfileScreen() {
                     styles.shareProfileButton,
                     { backgroundColor: theme.colors.primary + '20' },
                   ]}
-                  onPress={() => console.log('Share profile')}
+                  onPress={handleShareProfile}
                 >
                   <Share2 size={14} color={theme.colors.primary} />
                   <Text
@@ -413,11 +475,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
+  avatarContainer: {
+    position: 'relative',
+    marginRight: 16,
+  },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    marginRight: 16,
+  },
+  cameraButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
   profileInfo: {
     flex: 1,

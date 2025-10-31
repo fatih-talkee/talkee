@@ -1,28 +1,31 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image } from 'react-native';
 import { router } from 'expo-router';
-import { ArrowLeft, Search, Phone, Video, Clock, DollarSign } from 'lucide-react-native';
+import { ArrowLeft, Search, Phone, Video, Clock, DollarSign, UserX, UserCheck, ArrowUp, ArrowDown } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { mockCallHistory, CallHistory } from '@/mockData/professionals';
+import { useToast } from '@/lib/toastService';
 
 export default function CallHistoryScreen() {
   const { theme } = useTheme();
+  const toast = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'completed' | 'missed'>('all');
+  const [callHistory, setCallHistory] = useState(mockCallHistory);
 
-  const filteredHistory = mockCallHistory.filter(call => {
+  const filteredHistory = callHistory.filter(call => {
     const matchesSearch = call.professional.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = selectedFilter === 'all' || call.status === selectedFilter;
     return matchesSearch && matchesFilter;
   });
 
   const filters = [
-    { key: 'all', label: 'All Calls', count: mockCallHistory.length },
-    { key: 'completed', label: 'Completed', count: mockCallHistory.filter(c => c.status === 'completed').length },
-    { key: 'missed', label: 'Missed', count: mockCallHistory.filter(c => c.status === 'missed').length },
+    { key: 'all', label: 'All Calls', count: callHistory.length },
+    { key: 'completed', label: 'Completed', count: callHistory.filter(c => c.status === 'completed').length },
+    { key: 'missed', label: 'Missed', count: callHistory.filter(c => c.status === 'missed').length },
   ];
 
   const formatDate = (dateString: string) => {
@@ -63,46 +66,106 @@ export default function CallHistoryScreen() {
     }
   };
 
+  const toggleBlockUser = (callId: string) => {
+    setCallHistory(prev =>
+      prev.map(call => {
+        if (call.id === callId) {
+          const newBlockedStatus = !call.isBlocked;
+          toast.success({
+            title: newBlockedStatus ? 'User Blocked' : 'User Unblocked',
+            message: newBlockedStatus 
+              ? 'This user can no longer contact you' 
+              : 'This user can now contact you',
+          });
+          return { ...call, isBlocked: newBlockedStatus };
+        }
+        return call;
+      })
+    );
+  };
+
   const renderCallItem = ({ item }: { item: CallHistory }) => (
     <Card style={[styles.callCard, { backgroundColor: theme.colors.card }]}>
-      <TouchableOpacity 
-        style={styles.callItem}
-        onPress={() => router.push(`/professional/${item.professionalId}`)}
-      >
-        <View style={styles.callLeft}>
-          <Image source={{ uri: item.professional.avatar }} style={styles.avatar} />
-          <View style={[styles.callTypeIcon, { backgroundColor: theme.colors.primary }]}>
-            {item.type === 'video' ? (
-              <Video size={14} color="#ffffff" />
-            ) : (
-              <Phone size={14} color="#ffffff" />
+      <View style={styles.callContainer}>
+        <TouchableOpacity 
+          style={styles.callItem}
+          onPress={() => router.push(`/professional/${item.professionalId}`)}
+        >
+          <View style={styles.callLeft}>
+            <Image source={{ uri: item.professional.avatar }} style={styles.avatar} />
+            <View style={[styles.callTypeIcon, { backgroundColor: theme.colors.primary }]}>
+              {item.type === 'video' ? (
+                <Video size={14} color="#ffffff" />
+              ) : (
+                <Phone size={14} color="#ffffff" />
+              )}
+            </View>
+          </View>
+
+          <View style={styles.callInfo}>
+            <View style={styles.callHeader}>
+              <Text style={[styles.professionalName, { color: theme.colors.text }]}>{item.professional.name}</Text>
+              {item.isBlocked && (
+                <View style={[styles.blockedBadge, { backgroundColor: theme.colors.error }]}>
+                  <Text style={[styles.blockedBadgeText]}>Blocked</Text>
+                </View>
+              )}
+            </View>
+            <Text style={[styles.professionalTitle, { color: theme.colors.textMuted }]}>{item.professional.title}</Text>
+            <View style={styles.callDetails}>
+              <Text style={[styles.callDate, { color: theme.colors.text }]}>{formatDate(item.date)}</Text>
+              <Text style={[styles.callTime, { color: theme.colors.textMuted }]}>{formatTime(item.date)}</Text>
+            </View>
+            {item.direction && (
+              <View style={styles.directionRow}>
+                {item.direction === 'incoming' ? (
+                  <ArrowDown size={12} color={theme.colors.success} />
+                ) : (
+                  <ArrowUp size={12} color={theme.colors.primary} />
+                )}
+                <Text style={[styles.directionText, { 
+                  color: item.direction === 'incoming' ? theme.colors.success : theme.colors.primary 
+                }]}>
+                  {item.direction === 'incoming' ? 'Received' : 'Placed'}
+                </Text>
+              </View>
             )}
           </View>
-        </View>
 
-        <View style={styles.callInfo}>
-          <Text style={[styles.professionalName, { color: theme.colors.text }]}>{item.professional.name}</Text>
-          <Text style={[styles.professionalTitle, { color: theme.colors.textMuted }]}>{item.professional.title}</Text>
-          <View style={styles.callDetails}>
-            <Text style={[styles.callDate, { color: theme.colors.text }]}>{formatDate(item.date)}</Text>
-            <Text style={[styles.callTime, { color: theme.colors.textMuted }]}>{formatTime(item.date)}</Text>
+          <View style={styles.callRight}>
+            <View style={styles.callStats}>
+              <View style={styles.durationRow}>
+                <Clock size={14} color={theme.colors.textMuted} />
+                <Text style={[styles.duration, { color: theme.colors.textMuted }]}>{formatDuration(item.duration)}</Text>
+              </View>
+              {item.status === 'completed' && item.cost > 0 && (
+                <View style={styles.costRow}>
+                  <DollarSign size={14} color={theme.colors.textMuted} />
+                  <Text style={[styles.cost, { color: theme.colors.text } ]}>${item.cost.toFixed(2)}</Text>
+                </View>
+              )}
+            </View>
+            <View style={[styles.statusIndicator, { backgroundColor: getStatusColor(item.status) }]} />
           </View>
-        </View>
+        </TouchableOpacity>
 
-        <View style={styles.callRight}>
-          <View style={styles.callStats}>
-            <View style={styles.durationRow}>
-              <Clock size={14} color={theme.colors.textMuted} />
-              <Text style={[styles.duration, { color: theme.colors.textMuted }]}>{formatDuration(item.duration)}</Text>
-            </View>
-            <View style={styles.costRow}>
-              <DollarSign size={14} color={theme.colors.textMuted} />
-              <Text style={[styles.cost, { color: theme.colors.text } ]}>${item.cost.toFixed(2)}</Text>
-            </View>
-          </View>
-          <View style={[styles.statusIndicator, { backgroundColor: getStatusColor(item.status) }]} />
-        </View>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.blockButton, { backgroundColor: item.isBlocked ? theme.colors.success : theme.colors.error }]}
+          onPress={() => toggleBlockUser(item.id)}
+        >
+          {item.isBlocked ? (
+            <>
+              <UserCheck size={14} color="#ffffff" />
+              <Text style={styles.blockButtonText}>Unblock</Text>
+            </>
+          ) : (
+            <>
+              <UserX size={14} color="#ffffff" />
+              <Text style={styles.blockButtonText}>Block</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
     </Card>
   );
 
@@ -183,7 +246,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e5e7eb',
   },
   searchInput: {
-    marginBottom: 16,
+    marginBottom: 0,
   },
   filters: {
     flexDirection: 'row',
@@ -215,6 +278,9 @@ const styles = StyleSheet.create({
   callCard: {
     marginBottom: 12,
     padding: 0,
+  },
+  callContainer: {
+    position: 'relative',
   },
   callItem: {
     flexDirection: 'row',
@@ -250,6 +316,21 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     marginBottom: 2,
   },
+  callHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  blockedBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  blockedBadgeText: {
+    fontSize: 10,
+    fontFamily: 'Inter-Bold',
+    color: '#ffffff',
+  },
   professionalTitle: {
     fontSize: 13,
     fontFamily: 'Inter-Regular',
@@ -269,6 +350,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter-Regular',
     color: '#94a3b8',
+  },
+  directionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 4,
+  },
+  directionText: {
+    fontSize: 11,
+    fontFamily: 'Inter-Medium',
   },
   callRight: {
     alignItems: 'flex-end',
@@ -322,5 +413,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: 40,
+  },
+  blockButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  blockButtonText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Medium',
+    color: '#ffffff',
+    marginLeft: 4,
   },
 });

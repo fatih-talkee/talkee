@@ -76,7 +76,7 @@ export default function WalletScreen() {
               </View>
               <Text style={[styles.quickActionText, { color: theme.colors.textSecondary }]}>Add Credits</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickAction} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.quickAction} activeOpacity={0.7} onPress={() => router.push('/wallet-history')}>
               <View style={[styles.quickActionIcon, { backgroundColor: theme.colors.surface }]}>
                 <History size={24} color={theme.colors.primary} />
               </View>

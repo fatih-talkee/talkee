@@ -37,13 +37,13 @@ export function PrimaryHeader({
 
   const handleBack = () => {
     if (backRoute) {
-      router.replace(backRoute);
+      router.push(backRoute);
       return;
     }
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/(tabs)');
+      router.push('/(tabs)');
     }
   };
 

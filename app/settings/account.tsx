@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView } from 'react-native';
-import { router } from 'expo-router';
-import { ArrowLeft, User, Mail, Phone, Lock, Trash2 } from 'lucide-react-native';
+import { User, Mail, Phone, Lock, Trash2 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -39,12 +38,8 @@ export default function AccountSettingsScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.surface }]}>
       <Header 
         title="Account Settings"
-        leftButton={
-          <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { backgroundColor: theme.colors.card }]}>
-            <ArrowLeft size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-        }
-        rightButton={
+        showBack
+        rightButtons={
           <TouchableOpacity 
             onPress={() => setIsEditing(!isEditing)}
             style={styles.editButton}
@@ -173,13 +168,6 @@ export default function AccountSettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   editButton: {
     paddingHorizontal: 12,

@@ -1,6 +1,8 @@
 import React from 'react';
 import { ViewStyle } from 'react-native';
 import { PrimaryHeader } from '@/components/ui/headers/PrimaryHeader';
+import { DetailHeader } from '@/components/ui/headers/DetailHeader';
+import { useRouter } from 'expo-router';
 
 interface HeaderProps {
   showLogo?: boolean;
@@ -8,7 +10,7 @@ interface HeaderProps {
   rightButtons?: React.ReactNode | React.ReactNode[]; // new multi-button prop
   containerStyle?: ViewStyle;
   onLogoPress?: () => void;
-  // legacy props below are intentionally ignored to match PrimaryHeader layout
+  // If title is provided, use DetailHeader instead of PrimaryHeader
   title?: string;
   leftButton?: React.ReactNode;
   // back handling
@@ -23,10 +25,14 @@ export function Header({
   rightButtons,
   containerStyle,
   onLogoPress,
+  title,
+  leftButton,
   showBack,
   backRoute,
   backPosition,
 }: HeaderProps) {
+  const router = useRouter();
+  
   const normalizedRight =
     rightButtons !== undefined
       ? rightButtons
@@ -34,6 +40,30 @@ export function Header({
       ? rightButton
       : undefined;
 
+  const handleBack = () => {
+    if (backRoute) {
+      router.push(backRoute);
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.push('/(tabs)');
+    }
+  };
+
+  // If title is provided, use DetailHeader
+  if (title !== undefined) {
+    return (
+      <DetailHeader
+        title={title}
+        onBack={showBack ? handleBack : undefined}
+        rightButtons={normalizedRight}
+        containerStyle={containerStyle}
+        backPosition={backPosition || 'left'}
+      />
+    );
+  }
+
+  // Otherwise use PrimaryHeader
   return (
     <PrimaryHeader
       showLogo={showLogo}

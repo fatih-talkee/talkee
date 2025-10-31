@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, CreditCard, Check } from 'lucide-react-native';
+import { CreditCard, Check } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useIsMounted } from '@/hooks/useIsMounted';
+import { useToast } from '@/lib/toastService';
 
 interface SavedCard {
   id: string;
@@ -29,6 +30,7 @@ export default function PurchaseScreen() {
   const [useNewCard, setUseNewCard] = useState(false);
   const [loading, setLoading] = useState(false);
   const isMountedRef = useIsMounted();
+  const toast = useToast();
   const [newCardData, setNewCardData] = useState({
     cardNumber: '',
     expiry: '',
@@ -105,16 +107,15 @@ export default function PurchaseScreen() {
       if (isMountedRef.current) {
         setLoading(false);
         
-        Alert.alert(
-          'Purchase Successful!',
-          `You've successfully purchased ${creditsAmount} credits for $${totalPrice.toFixed(2)}.`,
-          [
-            {
-              text: 'OK',
-              onPress: () => router.replace('/(tabs)/wallet')
-            }
-          ]
-        );
+        toast.success({
+          title: 'Purchase Successful!',
+          message: `You've successfully purchased ${creditsAmount} credits for $${totalPrice.toFixed(2)}.`,
+        });
+        
+        // Navigate after showing toast
+        setTimeout(() => {
+          router.replace('/(tabs)/wallet');
+        }, 2000);
       }
     }, 2000);
   };
@@ -127,12 +128,8 @@ export default function PurchaseScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header 
-        title="Purchase Credits"
-        leftButton={
-          <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { backgroundColor: theme.colors.card }]}>
-            <ArrowLeft size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-        }
+        showBack
+        backRoute="/(tabs)/wallet"
       />
 
       <KeyboardAvoidingView 
@@ -281,13 +278,6 @@ export default function PurchaseScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   content: {
     flex: 1,

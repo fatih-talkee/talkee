@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, Modal, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
 import { X, DollarSign, Clock, Star } from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface FilterState {
   priceRange: [number, number];
@@ -18,6 +19,7 @@ interface FilterModalProps {
 }
 
 export function FilterModal({ visible, onClose, onApply, initialFilters }: FilterModalProps) {
+  const { theme } = useTheme();
   const [filters, setFilters] = useState<FilterState>(initialFilters || {
     priceRange: [0, 100],
     rating: 0,
@@ -60,14 +62,14 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
       animationType="slide"
       presentationStyle="pageSheet"
     >
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <X size={24} color="#374151" />
+            <X size={24} color={theme.colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Filters</Text>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Filters</Text>
           <TouchableOpacity onPress={handleReset}>
-            <Text style={styles.resetText}>Reset</Text>
+            <Text style={[styles.resetText, { color: theme.colors.accent }]}>Reset</Text>
           </TouchableOpacity>
         </View>
 
@@ -75,114 +77,151 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
           {/* Price Range */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <DollarSign size={20} color="#f59e0b" />
-              <Text style={styles.sectionTitle}>Price Range</Text>
+              <DollarSign size={20} color={theme.colors.accent} />
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Price Range</Text>
             </View>
             <View style={styles.optionsGrid}>
-              {priceRanges.map((range, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.option,
-                    filters.priceRange[0] === range.value[0] && 
-                    filters.priceRange[1] === range.value[1] && styles.optionSelected
-                  ]}
-                  onPress={() => setFilters({...filters, priceRange: range.value as [number, number]})}
-                >
-                  <Text style={[
-                    styles.optionText,
-                    filters.priceRange[0] === range.value[0] && 
-                    filters.priceRange[1] === range.value[1] && styles.optionTextSelected
-                  ]}>
-                    {range.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {priceRanges.map((range, index) => {
+                const isSelected = filters.priceRange[0] === range.value[0] && 
+                                  filters.priceRange[1] === range.value[1];
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.option,
+                      {
+                        backgroundColor: isSelected ? theme.colors.accent : theme.colors.card,
+                        borderColor: isSelected ? theme.colors.accent : theme.colors.border,
+                      }
+                    ]}
+                    onPress={() => setFilters({...filters, priceRange: range.value as [number, number]})}
+                  >
+                    <Text style={[
+                      styles.optionText,
+                      {
+                        color: isSelected ? '#ffffff' : theme.colors.text,
+                      }
+                    ]}>
+                      {range.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
           {/* Rating */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Star size={20} color="#f59e0b" />
-              <Text style={styles.sectionTitle}>Minimum Rating</Text>
+              <Star size={20} color={theme.colors.accent} />
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Minimum Rating</Text>
             </View>
             <View style={styles.ratingOptions}>
-              {[0, 3, 4, 4.5].map((rating) => (
-                <TouchableOpacity
-                  key={rating}
-                  style={[styles.ratingOption, filters.rating === rating && styles.optionSelected]}
-                  onPress={() => setFilters({...filters, rating})}
-                >
-                  <View style={styles.ratingRow}>
-                    <Star size={16} color="#f59e0b" fill={rating > 0 ? "#f59e0b" : "transparent"} />
-                    <Text style={[
-                      styles.ratingText,
-                      filters.rating === rating && styles.optionTextSelected
-                    ]}>
-                      {rating === 0 ? 'Any' : `${rating}+ stars`}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+              {[0, 3, 4, 4.5].map((rating) => {
+                const isSelected = filters.rating === rating;
+                return (
+                  <TouchableOpacity
+                    key={rating}
+                    style={[
+                      styles.ratingOption,
+                      {
+                        backgroundColor: isSelected ? theme.colors.accent : theme.colors.card,
+                        borderColor: isSelected ? theme.colors.accent : theme.colors.border,
+                      }
+                    ]}
+                    onPress={() => setFilters({...filters, rating})}
+                  >
+                    <View style={styles.ratingRow}>
+                      <Star size={16} color={theme.colors.accent} fill={rating > 0 ? theme.colors.accent : "transparent"} />
+                      <Text style={[
+                        styles.ratingText,
+                        {
+                          color: isSelected ? '#ffffff' : theme.colors.text,
+                        }
+                      ]}>
+                        {rating === 0 ? 'Any' : `${rating}+ stars`}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
           {/* Availability */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Clock size={20} color="#f59e0b" />
-              <Text style={styles.sectionTitle}>Availability</Text>
+              <Clock size={20} color={theme.colors.accent} />
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Availability</Text>
             </View>
             <View style={styles.availabilityOptions}>
-              {availabilityOptions.map((option) => (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[styles.availabilityOption, filters.availability === option.value && styles.optionSelected]}
-                  onPress={() => setFilters({...filters, availability: option.value as any})}
-                >
-                  <Text style={[
-                    styles.optionText,
-                    filters.availability === option.value && styles.optionTextSelected
-                  ]}>
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {availabilityOptions.map((option) => {
+                const isSelected = filters.availability === option.value;
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.availabilityOption,
+                      {
+                        backgroundColor: isSelected ? theme.colors.accent : theme.colors.card,
+                        borderColor: isSelected ? theme.colors.accent : theme.colors.border,
+                      }
+                    ]}
+                    onPress={() => setFilters({...filters, availability: option.value as any})}
+                  >
+                    <Text style={[
+                      styles.optionText,
+                      {
+                        color: isSelected ? '#ffffff' : theme.colors.text,
+                      }
+                    ]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
           {/* Categories */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Categories</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Categories</Text>
             <View style={styles.categoryGrid}>
-              {categories.map((category) => (
-                <TouchableOpacity
-                  key={category}
-                  style={[
-                    styles.categoryChip,
-                    filters.categories.includes(category) && styles.categoryChipSelected
-                  ]}
-                  onPress={() => {
-                    const newCategories = filters.categories.includes(category)
-                      ? filters.categories.filter(c => c !== category)
-                      : [...filters.categories, category];
-                    setFilters({...filters, categories: newCategories});
-                  }}
-                >
-                  <Text style={[
-                    styles.categoryChipText,
-                    filters.categories.includes(category) && styles.categoryChipTextSelected
-                  ]}>
-                    {category}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {categories.map((category) => {
+                const isSelected = filters.categories.includes(category);
+                return (
+                  <TouchableOpacity
+                    key={category}
+                    style={[
+                      styles.categoryChip,
+                      {
+                        backgroundColor: isSelected ? theme.colors.accent : theme.colors.card,
+                        borderColor: isSelected ? theme.colors.accent : theme.colors.border,
+                      }
+                    ]}
+                    onPress={() => {
+                      const newCategories = filters.categories.includes(category)
+                        ? filters.categories.filter(c => c !== category)
+                        : [...filters.categories, category];
+                      setFilters({...filters, categories: newCategories});
+                    }}
+                  >
+                    <Text style={[
+                      styles.categoryChipText,
+                      {
+                        color: isSelected ? '#ffffff' : theme.colors.text,
+                      }
+                    ]}>
+                      {category}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
         </ScrollView>
 
-        <View style={styles.footer}>
+        <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
           <Button
             title="Apply Filters"
             onPress={handleApply}
@@ -197,7 +236,6 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
   },
   header: {
     flexDirection: 'row',
@@ -206,7 +244,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
   },
   closeButton: {
     padding: 4,
@@ -214,12 +251,10 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontFamily: 'Inter-Bold',
-    color: '#1f2937',
   },
   resetText: {
     fontSize: 16,
     fontFamily: 'Inter-Medium',
-    color: '#f59e0b',
   },
   content: {
     flex: 1,
@@ -237,7 +272,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontFamily: 'Inter-Bold',
-    color: '#1f2937',
     marginLeft: 8,
   },
   optionsGrid: {
@@ -248,22 +282,8 @@ const styles = StyleSheet.create({
   option: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#f8fafc',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  optionSelected: {
-    backgroundColor: '#f59e0b',
-    borderColor: '#f59e0b',
-  },
-  optionText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#374151',
-  },
-  optionTextSelected: {
-    color: '#ffffff',
   },
   ratingOptions: {
     gap: 8,
@@ -271,10 +291,8 @@ const styles = StyleSheet.create({
   ratingOption: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#f8fafc',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
   },
   ratingRow: {
     flexDirection: 'row',
@@ -283,7 +301,6 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 14,
     fontFamily: 'Inter-Medium',
-    color: '#374151',
     marginLeft: 8,
   },
   availabilityOptions: {
@@ -292,10 +309,8 @@ const styles = StyleSheet.create({
   availabilityOption: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#f8fafc',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
   },
   categoryGrid: {
     flexDirection: 'row',
@@ -305,27 +320,16 @@ const styles = StyleSheet.create({
   categoryChip: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#f8fafc',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  categoryChipSelected: {
-    backgroundColor: '#f59e0b',
-    borderColor: '#f59e0b',
   },
   categoryChipText: {
     fontSize: 12,
     fontFamily: 'Inter-Medium',
-    color: '#374151',
-  },
-  categoryChipTextSelected: {
-    color: '#ffffff',
   },
   footer: {
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
   },
   applyButton: {
     width: '100%',
