@@ -138,7 +138,7 @@ export function ProfessionalCard({ professional }: ProfessionalCardProps) {
                 styles.price,
                 {
                   // theme.colors.pinkTwo → price highlight
-                  color: theme.colors.pinkTwo,
+                  color: theme.colors.primary,
                 },
               ]}
             >
@@ -167,7 +167,7 @@ export function ProfessionalCard({ professional }: ProfessionalCardProps) {
                     : theme.colors.primaryLight,
                 // theme.colors.primary → border (Light only)
                 borderColor:
-                  theme.name === 'light' ? theme.colors.pinkTwo : 'transparent',
+                  theme.name === 'light' ? theme.colors.primary : 'transparent',
                 borderWidth: theme.name === 'light' ? 1 : 0,
               },
             ]}
@@ -180,7 +180,7 @@ export function ProfessionalCard({ professional }: ProfessionalCardProps) {
                   // theme.colors.primary → text (Light) / theme.colors.surface → text (Dark)
                   color:
                     theme.name === 'light'
-                      ? theme.colors.pinkTwo
+                      ? theme.colors.primary
                       : theme.colors.surface,
                 },
               ]}

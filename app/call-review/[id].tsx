@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { X, Star } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { mockProfessionals } from '@/mockData/professionals';
 import { Button } from '@/components/ui/Button';
 import { useIsMounted } from '@/hooks/useIsMounted';
+import { useToast } from '@/lib/toastService';
 
 export default function CallReviewScreen() {
   const { id } = useLocalSearchParams();
@@ -14,6 +15,7 @@ export default function CallReviewScreen() {
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isMountedRef = useIsMounted();
+  const toast = useToast();
 
   const professional = mockProfessionals.find(p => p.id === id);
 
@@ -34,12 +36,15 @@ export default function CallReviewScreen() {
         setIsSubmitting(false);
         
         // Show success toast
-        Alert.alert('Success', 'Thanks for your feedback!', [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/(tabs)')
-          }
-        ]);
+        toast.success({
+          title: 'Success',
+          message: 'Thanks for your feedback!',
+        });
+        
+        // Navigate after showing toast
+        setTimeout(() => {
+          router.replace('/(tabs)');
+        }, 1500);
       }
     }, 1000);
   };

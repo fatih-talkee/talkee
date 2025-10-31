@@ -10,13 +10,13 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
 import { ArrowLeft, Plus, X, Briefcase, GraduationCap } from 'lucide-react-native';
+import { useToast } from '@/lib/toastService';
 
 interface Experience {
   id: string;
@@ -39,6 +39,7 @@ interface Education {
 export default function ProfessionalSettings() {
   const router = useRouter();
   const { theme } = useTheme();
+  const toast = useToast();
 
   const [title, setTitle] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -74,7 +75,10 @@ export default function ProfessionalSettings() {
 
   const handleSaveExperience = () => {
     if (!currentExperience.company || !currentExperience.position) {
-      Alert.alert('Error', 'Please fill in company and position');
+      toast.error({
+        title: 'Error',
+        message: 'Please fill in company and position',
+      });
       return;
     }
 
@@ -98,7 +102,10 @@ export default function ProfessionalSettings() {
 
   const handleSaveEducation = () => {
     if (!currentEducation.institution || !currentEducation.degree) {
-      Alert.alert('Error', 'Please fill in institution and degree');
+      toast.error({
+        title: 'Error',
+        message: 'Please fill in institution and degree',
+      });
       return;
     }
 
@@ -116,7 +123,10 @@ export default function ProfessionalSettings() {
   };
 
   const handleSaveSettings = () => {
-    Alert.alert('Success', 'Professional settings saved successfully!');
+    toast.success({
+      title: 'Success',
+      message: 'Professional settings saved successfully!',
+    });
   };
 
   const handleDeleteExperience = (id: string) => {

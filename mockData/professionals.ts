@@ -14,6 +14,7 @@ export interface Professional {
   languages: string[];
   responseTime: string;
   badges: string[];
+  isBlocked?: boolean;
 }
 
 export interface Category {
@@ -33,6 +34,8 @@ export interface CallHistory {
   date: string;
   type: 'voice' | 'video';
   status: 'completed' | 'missed' | 'cancelled';
+  direction?: 'incoming' | 'outgoing'; // Whether the current user called (outgoing) or was called (incoming)
+  isBlocked?: boolean; // Whether this user is currently blocked
 }
 
 export interface Promotion {
@@ -351,7 +354,9 @@ export const mockCallHistory: CallHistory[] = [
     cost: 212.50,
     date: '2025-01-20T10:30:00Z',
     type: 'video',
-    status: 'completed'
+    status: 'completed',
+    direction: 'outgoing',
+    isBlocked: false
   },
   {
     id: '2',
@@ -361,7 +366,9 @@ export const mockCallHistory: CallHistory[] = [
     cost: 180.00,
     date: '2025-01-19T14:15:00Z',
     type: 'voice',
-    status: 'completed'
+    status: 'completed',
+    direction: 'incoming',
+    isBlocked: true
   },
   {
     id: '3',
@@ -371,7 +378,33 @@ export const mockCallHistory: CallHistory[] = [
     cost: 0,
     date: '2025-01-18T09:00:00Z',
     type: 'video',
-    status: 'missed'
+    status: 'missed',
+    direction: 'outgoing',
+    isBlocked: true
+  },
+  {
+    id: '4',
+    professionalId: '4',
+    professional: mockProfessionals[3],
+    duration: 20,
+    cost: 185.00,
+    date: '2025-01-17T11:00:00Z',
+    type: 'video',
+    status: 'completed',
+    direction: 'outgoing',
+    isBlocked: false
+  },
+  {
+    id: '5',
+    professionalId: '5',
+    professional: mockProfessionals[4],
+    duration: 30,
+    cost: 315.00,
+    date: '2025-01-16T15:30:00Z',
+    type: 'voice',
+    status: 'completed',
+    direction: 'incoming',
+    isBlocked: false
   }
 ];
 
@@ -407,5 +440,327 @@ export const mockPromotions: Promotion[] = [
     image: 'https://images.pexels.com/photos/3182812/pexels-photo-3182812.jpeg?auto=compress&cs=tinysrgb&w=800',
     ctaText: 'Connect',
     gradient: ['rgba(88, 86, 214, 0.8)', 'rgba(88, 86, 214, 0.4)']
+  }
+];
+
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'call' | 'message' | 'appointment' | 'promotion' | 'payment' | 'system';
+  timestamp: string;
+  isRead: boolean;
+  professionalId?: string;
+  professional?: Professional;
+  actionUrl?: string;
+}
+
+export const mockNotifications: Notification[] = [
+  {
+    id: '1',
+    title: 'Incoming Call',
+    message: 'Dr. Sarah Chen is calling you',
+    type: 'call',
+    timestamp: '2025-01-20T10:45:00Z',
+    isRead: false,
+    professionalId: '1',
+    professional: mockProfessionals[0],
+    actionUrl: '/call/1'
+  },
+  {
+    id: '2',
+    title: 'New Message',
+    message: 'Marcus Thompson sent you a message: "Let\'s discuss the project strategy"',
+    type: 'message',
+    timestamp: '2025-01-20T09:30:00Z',
+    isRead: false,
+    professionalId: '2',
+    professional: mockProfessionals[1],
+    actionUrl: '/professional/2'
+  },
+  {
+    id: '3',
+    title: 'Appointment Reminder',
+    message: 'Your appointment with Emma Rodriguez is in 30 minutes',
+    type: 'appointment',
+    timestamp: '2025-01-20T08:00:00Z',
+    isRead: true,
+    professionalId: '3',
+    professional: mockProfessionals[2],
+    actionUrl: '/professional/3'
+  },
+  {
+    id: '4',
+    title: 'Payment Processed',
+    message: 'Your payment of $212.50 for the session with Dr. Sarah Chen has been processed',
+    type: 'payment',
+    timestamp: '2025-01-20T10:35:00Z',
+    isRead: true,
+    actionUrl: '/call-history'
+  },
+  {
+    id: '5',
+    title: 'Special Promotion',
+    message: '50% off your first session with any Finance expert. Limited time offer!',
+    type: 'promotion',
+    timestamp: '2025-01-19T15:00:00Z',
+    isRead: false,
+    actionUrl: '/categories'
+  },
+  {
+    id: '6',
+    title: 'Appointment Confirmed',
+    message: 'Your appointment with David Park has been confirmed for tomorrow at 2:00 PM',
+    type: 'appointment',
+    timestamp: '2025-01-19T14:20:00Z',
+    isRead: true,
+    professionalId: '4',
+    professional: mockProfessionals[3],
+    actionUrl: '/professional/4'
+  },
+  {
+    id: '7',
+    title: 'System Update',
+    message: 'New features added! Check out the latest improvements to your app including enhanced call quality, new notification preferences, improved search functionality with filters, and a redesigned professional profiles with detailed ratings and reviews.',
+    type: 'system',
+    timestamp: '2025-01-19T10:00:00Z',
+    isRead: true,
+    actionUrl: '/profile'
+  },
+  {
+    id: '8',
+    title: 'Call Ended',
+    message: 'Your call with Maria Santos has ended. Session duration: 25 minutes',
+    type: 'call',
+    timestamp: '2025-01-18T16:30:00Z',
+    isRead: true,
+    professionalId: '5',
+    professional: mockProfessionals[4],
+    actionUrl: '/call-history'
+  }
+];
+
+export interface WalletTransaction {
+  id: string;
+  type: 'income' | 'expenses';
+  amount: number;
+  description: string;
+  timestamp: string;
+  professionalId?: string;
+  professional?: Professional;
+  callerId?: string;
+  caller?: Professional;
+  status?: 'completed' | 'pending' | 'failed';
+  duration?: number; // Duration in seconds
+}
+
+export interface BlockedUser {
+  id: string;
+  userId: string;
+  user: Professional;
+  blockedAt: string;
+  lastCallDate?: string;
+  lastCallDuration?: number;
+}
+
+export const mockWalletTransactions: WalletTransaction[] = [
+  {
+    id: '1',
+    type: 'expenses',
+    amount: 21.25,
+    description: 'Call with Dr. Sarah Chen',
+    timestamp: '2025-01-20T14:30:00Z',
+    professionalId: '1',
+    professional: mockProfessionals[0],
+    duration: 510, // 8min 30sec
+    status: 'completed'
+  },
+  {
+    id: '2',
+    type: 'income',
+    amount: 100.00,
+    description: 'Credits Added',
+    timestamp: '2025-01-19T16:15:00Z',
+    status: 'completed'
+  },
+  {
+    id: '3',
+    type: 'expenses',
+    amount: 180.00,
+    description: 'Call with Marcus Thompson',
+    timestamp: '2025-01-19T14:15:00Z',
+    professionalId: '2',
+    professional: mockProfessionals[1],
+    duration: 900, // 15min
+    status: 'completed'
+  },
+  {
+    id: '4',
+    type: 'income',
+    amount: 50.00,
+    description: 'Refund for cancelled call',
+    timestamp: '2025-01-18T10:20:00Z',
+    status: 'completed'
+  },
+  {
+    id: '5',
+    type: 'expenses',
+    amount: 94.50,
+    description: 'Call with Emma Rodriguez',
+    timestamp: '2025-01-18T09:45:00Z',
+    professionalId: '3',
+    professional: mockProfessionals[2],
+    duration: 360, // 6min
+    status: 'completed'
+  },
+  {
+    id: '6',
+    type: 'income',
+    amount: 200.00,
+    description: 'Credits Added',
+    timestamp: '2025-01-17T12:00:00Z',
+    status: 'completed'
+  },
+  {
+    id: '7',
+    type: 'expenses',
+    amount: 87.75,
+    description: 'Call with David Park',
+    timestamp: '2025-01-17T11:30:00Z',
+    professionalId: '4',
+    professional: mockProfessionals[3],
+    duration: 567, // 9min 27sec
+    status: 'completed'
+  },
+  {
+    id: '8',
+    type: 'income',
+    amount: 150.00,
+    description: 'Credits Added',
+    timestamp: '2025-01-16T14:00:00Z',
+    status: 'completed'
+  },
+  {
+    id: '9',
+    type: 'expenses',
+    amount: 126.00,
+    description: 'Call with Maria Santos',
+    timestamp: '2025-01-16T10:15:00Z',
+    professionalId: '5',
+    professional: mockProfessionals[4],
+    duration: 816, // 13min 36sec
+    status: 'completed'
+  },
+  {
+    id: '10',
+    type: 'expenses',
+    amount: 168.75,
+    description: 'Call with James Wilson',
+    timestamp: '2025-01-15T15:45:00Z',
+    professionalId: '6',
+    professional: mockProfessionals[5],
+    duration: 1017, // 16min 57sec
+    status: 'completed'
+  },
+  {
+    id: '11',
+    type: 'income',
+    amount: 75.00,
+    description: 'Credits Added',
+    timestamp: '2025-01-14T18:00:00Z',
+    status: 'completed'
+  },
+  {
+    id: '12',
+    type: 'expenses',
+    amount: 56.25,
+    description: 'Call with Lisa Anderson',
+    timestamp: '2025-01-14T16:30:00Z',
+    professionalId: '7',
+    professional: mockProfessionals[6],
+    duration: 377, // 6min 17sec
+    status: 'completed'
+  },
+  {
+    id: '13',
+    type: 'income',
+    amount: 100.00,
+    description: 'Credits Added',
+    timestamp: '2025-01-13T09:00:00Z',
+    status: 'completed'
+  },
+  {
+    id: '14',
+    type: 'expenses',
+    amount: 225.00,
+    description: 'Call with Robert Martinez',
+    timestamp: '2025-01-13T08:00:00Z',
+    professionalId: '8',
+    professional: mockProfessionals[7],
+    duration: 1457, // 24min 17sec
+    status: 'completed'
+  },
+  {
+    id: '15',
+    type: 'income',
+    amount: 180.00,
+    description: 'Call earning',
+    timestamp: '2025-01-20T16:00:00Z',
+    callerId: '2',
+    caller: mockProfessionals[1],
+    duration: 900, // 15min
+    status: 'completed'
+  },
+  {
+    id: '16',
+    type: 'income',
+    amount: 94.50,
+    description: 'Call earning',
+    timestamp: '2025-01-18T11:30:00Z',
+    callerId: '3',
+    caller: mockProfessionals[2],
+    duration: 360, // 6min
+    status: 'completed'
+  },
+  {
+    id: '17',
+    type: 'income',
+    amount: 87.75,
+    description: 'Call earning',
+    timestamp: '2025-01-17T12:45:00Z',
+    callerId: '4',
+    caller: mockProfessionals[3],
+    duration: 567, // 9min 27sec
+    status: 'completed'
+  },
+  {
+    id: '18',
+    type: 'income',
+    amount: 126.00,
+    description: 'Call earning',
+    timestamp: '2025-01-16T11:00:00Z',
+    callerId: '5',
+    caller: mockProfessionals[4],
+    duration: 816, // 13min 36sec
+    status: 'completed'
+  }
+];
+
+export const mockBlockedUsers: BlockedUser[] = [
+  {
+    id: '1',
+    userId: '2',
+    user: mockProfessionals[1],
+    blockedAt: '2025-01-20T10:00:00Z',
+    lastCallDate: '2025-01-20T09:00:00Z',
+    lastCallDuration: 900, // 15min
+  },
+  {
+    id: '2',
+    userId: '3',
+    user: mockProfessionals[2],
+    blockedAt: '2025-01-18T08:00:00Z',
+    lastCallDate: '2025-01-18T07:30:00Z',
+    lastCallDuration: 300, // 5min
   }
 ];

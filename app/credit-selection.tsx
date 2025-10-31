@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { router } from 'expo-router';
-import { ArrowLeft, Minus, Plus } from 'lucide-react-native';
+import { Minus, Plus } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -68,12 +68,8 @@ export default function CreditSelectionScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header 
-        title="Select Credits"
-        leftButton={
-          <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { backgroundColor: theme.colors.card }]}>
-            <ArrowLeft size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-        }
+        showBack
+        backRoute="/(tabs)/wallet"
       />
 
       <KeyboardAvoidingView 
@@ -195,13 +191,6 @@ export default function CreditSelectionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   content: {
     flex: 1,
