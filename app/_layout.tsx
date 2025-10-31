@@ -188,6 +188,7 @@ export default function RootLayout() {
         <Stack.Screen name="settings/language" />
         <Stack.Screen name="settings/notifications" />
         <Stack.Screen name="settings/change-password" />
+        <Stack.Screen name="settings/availability" />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" translucent={false} />

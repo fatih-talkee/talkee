@@ -28,6 +28,7 @@ import {
   Camera,
   BookOpen,
   Key,
+  Calendar,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
@@ -153,6 +154,12 @@ export default function ProfileScreen() {
           label: 'Change Password',
           icon: <Key size={20} color="#64748b" />,
           onPress: () => router.push('/settings/change-password'),
+        },
+        {
+          id: 'availability',
+          label: 'Availability Settings',
+          icon: <Calendar size={20} color="#64748b" />,
+          onPress: () => router.push('/settings/availability'),
         },
         {
           id: 'privacy',

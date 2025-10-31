@@ -185,7 +185,6 @@ export default function NotificationsScreen() {
       <Header 
         showLogo 
         showBack 
-        backRoute="/(tabs)"
         backPosition="right"
         rightButton={
           unreadCount > 0 && (
