@@ -1,15 +1,29 @@
 {
   "cli": {
-    "requireCommit": false
+    "requireCommit": false,
+    "version": "latest"
   },
   "build": {
     "preview": {
-      "android": { "buildType": "apk" },
-      "distribution": "internal"
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
+      },
+      "distribution": "internal",
+      "env": {
+        "NODE_OPTIONS": "--max-old-space-size=4096",
+        "NODE_ENV": "production"
+      }
     },
     "production": {
-      "android": { "buildType": "app-bundle" },
-      "distribution": "store"
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "distribution": "store",
+      "env": {
+        "NODE_OPTIONS": "--max-old-space-size=4096",
+        "NODE_ENV": "production"
+      }
     }
   },
   "submit": {
