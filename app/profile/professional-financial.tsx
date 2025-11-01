@@ -108,7 +108,7 @@ export default function ProfessionalFinancial() {
         ]}
       >
         <TouchableOpacity
-          style={[styles.saveButton, { backgroundColor: theme.colors.primary }]}
+          style={[styles.saveButton, { backgroundColor: (theme.colors as any).pinkTwo || theme.colors.primary }]}
           onPress={handleSave}
           disabled={loading}
         >

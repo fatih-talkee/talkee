@@ -285,7 +285,7 @@ export default function ProfessionalCV() {
         ]}
       >
         <TouchableOpacity
-          style={[styles.saveButton, { backgroundColor: theme.colors.primary }]}
+          style={[styles.saveButton, { backgroundColor: (theme.colors as any).pinkTwo || theme.colors.primary }]}
           onPress={handleSave}
           disabled={loading}
         >
@@ -572,7 +572,7 @@ export default function ProfessionalCV() {
             <TouchableOpacity
               style={[
                 styles.modalButton,
-                { backgroundColor: theme.colors.primary },
+                { backgroundColor: (theme.colors as any).pinkTwo || theme.colors.primary },
               ]}
               onPress={handleSaveExperience}
             >
@@ -709,7 +709,7 @@ export default function ProfessionalCV() {
             <TouchableOpacity
               style={[
                 styles.modalButton,
-                { backgroundColor: theme.colors.primary },
+                { backgroundColor: (theme.colors as any).pinkTwo || theme.colors.primary },
               ]}
               onPress={handleSaveEducation}
             >

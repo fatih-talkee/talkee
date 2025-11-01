@@ -212,7 +212,7 @@ export default function CallCriteriaSettings() {
           title={loading ? 'Saving...' : 'Save Settings'}
           onPress={handleSave}
           disabled={loading}
-          style={{ backgroundColor: theme.colors.primary }}
+          style={{ backgroundColor: (theme.colors as any).pinkTwo || theme.colors.primary }}
         />
       </View>
     </View>

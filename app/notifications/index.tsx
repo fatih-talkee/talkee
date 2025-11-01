@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { ArrowLeft, Bell, Phone, MessageSquare, Calendar, CreditCard, Gift, Settings, Check } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
+import { TabButtons } from '@/components/ui/TabButtons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { mockNotifications, Notification } from '@/mockData/professionals';
 import { useToast } from '@/lib/toastService';
@@ -192,7 +193,7 @@ export default function NotificationsScreen() {
               onPress={handleMarkAllAsRead}
               style={[
                 styles.markAllButton,
-                { backgroundColor: theme.colors.surface },
+                { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
               ]}
             >
               <Check size={20} color="#FFFFFF" />
@@ -204,29 +205,11 @@ export default function NotificationsScreen() {
         }
       />
 
-      <View style={[styles.filterSection, { backgroundColor: '#000000' }]}>
-        <View style={styles.filters}>
-          {filters.map((filter) => (
-            <TouchableOpacity
-              key={filter.key}
-              style={[
-                styles.filterButton,
-                { backgroundColor: theme.colors.background, borderColor: theme.colors.border },
-                selectedFilter === filter.key && { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent }
-              ]}
-              onPress={() => setSelectedFilter(filter.key as any)}
-            >
-              <Text style={[
-                styles.filterText,
-                { color: theme.colors.textSecondary },
-                selectedFilter === filter.key && { color: '#000000' }
-              ]}>
-                {filter.label} ({filter.count})
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+      <TabButtons
+        options={filters}
+        selectedKey={selectedFilter}
+        onSelect={(key) => setSelectedFilter(key as any)}
+      />
 
       <FlatList
         data={filteredNotifications}
@@ -267,24 +250,6 @@ const styles = StyleSheet.create({
   },
   markAllText: {
     fontSize: 14,
-    fontFamily: 'Inter-Medium',
-  },
-  filterSection: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-  },
-  filters: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  filterText: {
-    fontSize: 12,
     fontFamily: 'Inter-Medium',
   },
   listContent: {

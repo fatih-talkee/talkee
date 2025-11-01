@@ -74,10 +74,10 @@ export default function CallReviewScreen() {
       <View style={styles.topBar}>
         <View style={styles.spacer} />
         <TouchableOpacity 
-          style={[styles.closeButton, { backgroundColor: theme.colors.surface }]}
+          style={[styles.closeButton, { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' }]}
           onPress={handleClose}
         >
-          <X size={24} color={theme.colors.text} />
+          <X size={24} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 

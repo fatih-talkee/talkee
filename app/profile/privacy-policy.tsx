@@ -31,7 +31,7 @@ export default function PrivacyPolicyScreen() {
             onPress={() => router.back()}
             style={[
               styles.backButton,
-              { backgroundColor: theme.colors.surface },
+              { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
             ]}
           >
             <ArrowLeft size={20} color="#FFFFFF" />

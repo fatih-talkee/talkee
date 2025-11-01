@@ -61,11 +61,11 @@ export default function ProfessionalSettings() {
     >
       <Header showLogo showBack backPosition="right" />
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
         {menuItems.map((item) => {
           const IconComponent = item.icon;
           return (
@@ -91,7 +91,7 @@ export default function ProfessionalSettings() {
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+            </ScrollView>
     </View>
   );
 }

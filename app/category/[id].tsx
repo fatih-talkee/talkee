@@ -10,9 +10,9 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { Search, Filter } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
+import { SearchBar } from '@/components/ui/SearchBar';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
 import { FilterModal } from '@/components/filters/FilterModal';
-import { Input } from '@/components/ui/Input';
 import { mockProfessionals, mockCategories } from '@/mockData/professionals';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -72,7 +72,7 @@ export default function CategoryScreen() {
           <TouchableOpacity
             style={[
               styles.headerIconButton,
-              { backgroundColor: theme.colors.surface },
+              { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
             ]}
             onPress={() => setFilterVisible(true)}
           >
@@ -81,34 +81,14 @@ export default function CategoryScreen() {
         }
       />
 
-      <View
-        style={[
-          styles.searchInputContainer,
-          {
-            backgroundColor:
-              theme.name === 'dark' ? '#000000' : theme.colors.surface,
-          },
-        ]}
-      >
-        <Input
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search professionals..."
-          leftIcon={<Search size={20} color={theme.colors.textMuted} />}
-          style={[
-            {
-              backgroundColor: theme.colors.card,
-              borderColor: theme.colors.border,
-            },
-          ]}
-        />
-        <Text
-          style={[styles.resultsCount, { color: theme.colors.textSecondary }]}
-        >
-          {filteredProfessionals.length} {categoryName.toLowerCase()}{' '}
-          professionals
-        </Text>
-      </View>
+      <SearchBar
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+        placeholder="Search professionals..."
+        showResultsCount={true}
+        resultsCount={filteredProfessionals.length}
+        resultsCountLabel={`${filteredProfessionals.length} ${categoryName.toLowerCase()} professionals`}
+      />
 
       <FlatList
         data={filteredProfessionals}
@@ -144,11 +124,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  searchInputContainer: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: '#000000',
-  },
   headerIconButton: {
     width: 40,
     height: 40,

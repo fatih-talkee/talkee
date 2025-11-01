@@ -71,7 +71,7 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
               onPress={handleReset}
               style={[
                 styles.resetButton,
-                { backgroundColor: theme.colors.surface },
+                { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
               ]}
             >
               <RotateCcw size={20} color="#FFFFFF" />
@@ -81,7 +81,7 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
             </TouchableOpacity>
             <TouchableOpacity 
               onPress={onClose} 
-              style={[styles.closeButton, { backgroundColor: theme.colors.surface }]}
+              style={[styles.closeButton, { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? '#d60f83' : '#000000' }]}
             >
               <X size={20} color="#FFFFFF" />
             </TouchableOpacity>

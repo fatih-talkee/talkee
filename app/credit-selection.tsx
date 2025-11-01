@@ -162,7 +162,7 @@ export default function CreditSelectionScreen() {
               Price per credit:
             </Text>
             <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
-              ${PRICE_PER_CREDIT.toFixed(2)}
+              {'$' + PRICE_PER_CREDIT.toFixed(2)}
             </Text>
           </View>
 
@@ -171,7 +171,7 @@ export default function CreditSelectionScreen() {
               Total Price:
             </Text>
             <Text style={[styles.totalValue, { color: theme.colors.pinkTwo }]}>
-              ${totalPrice.toFixed(2)}
+              {'$' + totalPrice.toFixed(2)}
             </Text>
           </View>
         </Card>

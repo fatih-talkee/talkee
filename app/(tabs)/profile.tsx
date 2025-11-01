@@ -35,6 +35,7 @@ import { Card } from '@/components/ui/Card';
 import { useTheme } from '@/contexts/ThemeContext';
 import { router } from 'expo-router';
 import { useToast } from '@/lib/toastService';
+import { ShareProfileModal } from '@/components/profile/ShareProfileModal';
 
 interface MenuSection {
   title: string;
@@ -49,6 +50,7 @@ interface MenuSection {
 
 export default function ProfileScreen() {
   const { theme } = useTheme();
+  const [shareModalVisible, setShareModalVisible] = useState(false);
   const toast = useToast();
   const [userProfile] = useState({
     name: 'Mila Victoria',
@@ -118,13 +120,13 @@ export default function ProfileScreen() {
           id: 'invoices',
           label: 'Invoices',
           icon: <FileText size={20} color="#10b981" />,
-          onPress: () => router.push('/invoices'),
+          onPress: () => router.push('/invoices' as any),
         },
         {
           id: 'recordings',
           label: 'Recordings',
           icon: <Mic size={20} color="#8b5cf6" />,
-          onPress: () => router.push('/recordings'),
+          onPress: () => router.push('/profile/recordings'),
         },
         {
           id: 'blocked',
@@ -147,13 +149,7 @@ export default function ProfileScreen() {
           id: 'notifications',
           label: 'Notifications',
           icon: <Bell size={20} color="#64748b" />,
-          onPress: () => router.push('/notifications'),
-        },
-        {
-          id: 'password',
-          label: 'Change Password',
-          icon: <Key size={20} color="#64748b" />,
-          onPress: () => router.push('/settings/change-password'),
+          onPress: () => router.push('/notifications' as any),
         },
         {
           id: 'availability',
@@ -207,9 +203,15 @@ export default function ProfileScreen() {
         >
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
-              <Image source={{ uri: userProfile.avatar }} style={styles.avatar} />
-              <TouchableOpacity 
-                style={[styles.cameraButton, { backgroundColor: theme.colors.primary }]}
+              <Image
+                source={{ uri: userProfile.avatar }}
+                style={styles.avatar}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.cameraButton,
+                  { backgroundColor: theme.colors.primary },
+                ]}
                 onPress={handleChangePhoto}
               >
                 <Camera size={16} color="#ffffff" />
@@ -342,7 +344,7 @@ export default function ProfileScreen() {
                     styles.shareProfileButton,
                     { backgroundColor: theme.colors.primary + '20' },
                   ]}
-                  onPress={handleShareProfile}
+                  onPress={() => setShareModalVisible(true)}
                 >
                   <Share2 size={14} color={theme.colors.primary} />
                   <Text
@@ -385,7 +387,12 @@ export default function ProfileScreen() {
                 </Text>
               </View>
               <View style={styles.menuItemRight}>
-                <ChevronRight size={16} color={theme.colors.textMuted} />
+                <ChevronRight
+                  size={20}
+                  color={
+                    theme.name === 'dark' ? '#FFFFFF' : theme.colors.textMuted
+                  }
+                />
               </View>
             </TouchableOpacity>
 
@@ -404,7 +411,12 @@ export default function ProfileScreen() {
                 </Text>
               </View>
               <View style={styles.menuItemRight}>
-                <ChevronRight size={16} color={theme.colors.textMuted} />
+                <ChevronRight
+                  size={20}
+                  color={
+                    theme.name === 'dark' ? '#FFFFFF' : theme.colors.textMuted
+                  }
+                />
               </View>
             </TouchableOpacity>
           </Card>
@@ -453,7 +465,14 @@ export default function ProfileScreen() {
                         </Text>
                       </View>
                     )}
-                    <ChevronRight size={16} color={theme.colors.textMuted} />
+                    <ChevronRight
+                      size={20}
+                      color={
+                        theme.name === 'dark'
+                          ? '#FFFFFF'
+                          : theme.colors.textMuted
+                      }
+                    />
                   </View>
                 </TouchableOpacity>
               ))}
@@ -461,6 +480,12 @@ export default function ProfileScreen() {
           </View>
         ))}
       </ScrollView>
+      <ShareProfileModal
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        username="milavictoria"
+        userId="123"
+      />
     </SafeAreaView>
   );
 }

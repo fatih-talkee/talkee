@@ -18,6 +18,15 @@ export function DetailHeader({ title, onBack, rightButtons, containerStyle, back
 
   const renderRight = Array.isArray(rightButtons) ? rightButtons : rightButtons ? [rightButtons] : [];
 
+  // Button background adapts to theme
+  // For dark theme: use surface (dark gray), for light theme: use brandPink from theme
+  // For other themes (green, blue): use black for contrast
+  const buttonBackground = theme.name === 'dark' 
+    ? theme.colors.surface 
+    : theme.name === 'light' 
+    ? theme.colors.brandPink 
+    : '#000000';
+
   return (
     <View
       style={[
@@ -34,7 +43,7 @@ export function DetailHeader({ title, onBack, rightButtons, containerStyle, back
           <TouchableOpacity
             onPress={onBack}
             disabled={!onBack}
-            style={[styles.backButton, { backgroundColor: theme.colors.surface }]}
+            style={[styles.backButton, { backgroundColor: buttonBackground }]}
           >
             <ArrowLeft size={20} color="#FFFFFF" />
           </TouchableOpacity>
@@ -53,7 +62,7 @@ export function DetailHeader({ title, onBack, rightButtons, containerStyle, back
             <TouchableOpacity
               onPress={onBack}
               disabled={!onBack}
-              style={[styles.backButton, { backgroundColor: theme.colors.surface }]}
+              style={[styles.backButton, { backgroundColor: buttonBackground }]}
             >
               <ArrowLeft size={20} color="#FFFFFF" />
             </TouchableOpacity>

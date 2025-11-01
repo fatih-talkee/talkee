@@ -34,6 +34,15 @@ export function PromotionCarousel({ promotions }: PromotionCarouselProps) {
     if (promotion.id === '1') {
       // Navigate to Become a Professional screen for the first promotion
       router.push('/become-professional');
+    } else if (promotion.id === '2') {
+      // Navigate to How It Works screen for the "Explore Now" button
+      router.push('/how-it-works');
+    } else if (promotion.id === '3') {
+      // Navigate to Search page for the "Book Session" button
+      router.push('/(tabs)/search');
+    } else if (promotion.id === '4') {
+      // Navigate to Search page for the "Connect" button
+      router.push('/(tabs)/search');
     } else {
       // Handle other promotions
       console.log('Promotion pressed:', promotion.title);
@@ -46,22 +55,24 @@ export function PromotionCarousel({ promotions }: PromotionCarouselProps) {
       activeOpacity={0.9}
       onPress={() => handlePromotionPress(item)}
     >
-      <Image source={{ uri: item.image }} style={styles.backgroundImage} />
-      <LinearGradient colors={item.gradient} style={styles.overlay}>
-        <View style={styles.content}>
-          <View style={styles.textContent}>
-            <Text style={styles.title}>{item.title}</Text>
-            <Text style={styles.subtitle}>{item.subtitle}</Text>
+      <View style={styles.cardInner}>
+        <Image source={{ uri: item.image }} style={styles.backgroundImage} />
+        <LinearGradient colors={item.gradient} style={styles.overlay}>
+          <View style={styles.content}>
+            <View style={styles.textContent}>
+              <Text style={styles.title}>{item.title}</Text>
+              <Text style={styles.subtitle}>{item.subtitle}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.ctaContainer}
+              onPress={() => handlePromotionPress(item)}
+            >
+              <Text style={styles.ctaText}>{item.ctaText}</Text>
+              <ArrowRight size={16} color="#007AFF" />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={styles.ctaContainer}
-            onPress={() => handlePromotionPress(item)}
-          >
-            <Text style={styles.ctaText}>{item.ctaText}</Text>
-            <ArrowRight size={16} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
+        </LinearGradient>
+      </View>
     </TouchableOpacity>
   );
 
@@ -83,18 +94,19 @@ export function PromotionCarousel({ promotions }: PromotionCarouselProps) {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 20,
+    marginTop: 8,
   },
   carouselContent: {
     paddingLeft: 20,
-    paddingRight: 4,
+    paddingRight: 24,
+    paddingVertical: 16,
   },
   promotionCard: {
     width: CARD_WIDTH,
     height: 180,
     borderRadius: 20,
-    overflow: 'hidden',
     marginRight: 16,
+    marginVertical: 8,
     ...(Platform.OS === 'web'
       ? { boxShadow: '0px 8px 16px rgba(0,0,0,0.3)' }
       : {
@@ -104,6 +116,12 @@ const styles = StyleSheet.create({
           shadowRadius: 16,
           elevation: 12,
         }),
+  },
+  cardInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
+    overflow: 'hidden',
   },
   backgroundImage: {
     width: '100%',
@@ -139,7 +157,7 @@ const styles = StyleSheet.create({
   ctaContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.50)',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
@@ -148,7 +166,7 @@ const styles = StyleSheet.create({
   ctaText: {
     fontSize: 14,
     fontFamily: 'Inter-Bold',
-    color: '#FFFFFF',
+    color: '#007AFF',
     marginRight: 8,
   },
 });

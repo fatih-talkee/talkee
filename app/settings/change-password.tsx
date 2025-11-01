@@ -1,235 +1,230 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
-import { Key, Lock, Eye, EyeOff } from 'lucide-react-native';
-import { Header } from '@/components/ui/Header';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+} from 'react-native';
+import { router } from 'expo-router';
+import { Lock, Eye, EyeOff } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useToast } from '@/lib/toastService';
+import { Header } from '@/components/ui/Header';
+import { Button } from '@/components/ui/Button';
 
 export default function ChangePasswordScreen() {
   const { theme } = useTheme();
-  const toast = useToast();
-  const [formData, setFormData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
-  const [visibility, setVisibility] = useState({
-    currentPassword: false,
-    newPassword: false,
-    confirmPassword: false,
-  });
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const toggleVisibility = (field: keyof typeof visibility) => {
-    setVisibility({ ...visibility, [field]: !visibility[field] });
-  };
-
-  const handleChangePassword = async () => {
-    // Validation
-    if (!formData.currentPassword) {
-      toast.error({
-        title: 'Error',
-        message: 'Please enter your current password',
-      });
+  const handleSave = () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
-    if (!formData.newPassword) {
-      toast.error({
-        title: 'Error',
-        message: 'Please enter a new password',
-      });
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Error', 'New passwords do not match!');
       return;
     }
 
-    if (formData.newPassword.length < 8) {
-      toast.error({
-        title: 'Error',
-        message: 'Password must be at least 8 characters long',
-      });
-      return;
-    }
-
-    if (formData.newPassword !== formData.confirmPassword) {
-      toast.error({
-        title: 'Error',
-        message: 'New passwords do not match',
-      });
-      return;
-    }
-
-    if (formData.currentPassword === formData.newPassword) {
-      toast.error({
-        title: 'Error',
-        message: 'New password must be different from current password',
-      });
+    if (newPassword.length < 8) {
+      Alert.alert('Error', 'Password must be at least 8 characters long');
       return;
     }
 
     setLoading(true);
-    
-    // Mock API call
     setTimeout(() => {
       setLoading(false);
-      toast.success({
-        title: 'Success',
-        message: 'Your password has been changed successfully',
-      });
-      
-      // Reset form
-      setFormData({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: '',
-      });
-    }, 1500);
+      Alert.alert('Success', 'Password updated successfully!', [
+        {
+          text: 'OK',
+          onPress: () => router.back(),
+        },
+      ]);
+    }, 1000);
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.surface }]}>
-      <Header 
-        showBack
-        backRoute="/(tabs)/profile"
-      />
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <Header showLogo showBack backPosition="right" />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Information Card */}
-        <Card style={[styles.infoCard, { backgroundColor: theme.colors.card }]}>
-          <View style={styles.infoHeader}>
-            <View style={[styles.infoIcon, { backgroundColor: theme.colors.primary + '20' }]}>
-              <Key size={24} color={theme.colors.primary} />
-            </View>
-            <Text style={[styles.infoTitle, { color: theme.colors.text }]}>
-              Update Your Password
-            </Text>
-          </View>
-          <Text style={[styles.infoDescription, { color: theme.colors.textMuted }]}>
-            Choose a strong password that contains at least 8 characters, including letters, numbers, and special characters.
-          </Text>
-        </Card>
-
-        {/* Password Form */}
-        <Card style={[styles.formCard, { backgroundColor: theme.colors.card }]}>
+        <View
+          style={[
+            styles.section,
+            {
+              backgroundColor: theme.colors.card,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            Password Details
+            Update Your Password
+          </Text>
+          <Text
+            style={[
+              styles.sectionDescription,
+              { color: theme.colors.textSecondary },
+            ]}
+          >
+            Enter your current password and choose a new one
           </Text>
 
-          {/* Current Password */}
-          <View style={styles.inputContainer}>
-            <Input
-              label="Current Password"
-              value={formData.currentPassword}
-              onChangeText={(text) => setFormData({...formData, currentPassword: text})}
-              leftIcon={<Lock size={20} color="#64748b" />}
-              rightIcon={
-                <TouchableOpacity onPress={() => toggleVisibility('currentPassword')}>
-                  {visibility.currentPassword ? (
-                    <EyeOff size={20} color="#64748b" />
-                  ) : (
-                    <Eye size={20} color="#64748b" />
-                  )}
-                </TouchableOpacity>
-              }
-              secureTextEntry={!visibility.currentPassword}
-              autoCapitalize="none"
+          <View style={styles.form}>
+            <View
+              style={[
+                styles.inputContainer,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <Lock
+                size={18}
+                color={theme.colors.textMuted}
+                style={{ marginRight: 10 }}
+              />
+              <TextInput
+                placeholder="Current Password"
+                placeholderTextColor={theme.colors.textMuted}
+                style={[styles.input, { color: theme.colors.text }]}
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                secureTextEntry={!showCurrentPassword}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+              >
+                {showCurrentPassword ? (
+                  <EyeOff size={18} color={theme.colors.textMuted} />
+                ) : (
+                  <Eye size={18} color={theme.colors.textMuted} />
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <View
+              style={[
+                styles.inputContainer,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <Lock
+                size={18}
+                color={theme.colors.textMuted}
+                style={{ marginRight: 10 }}
+              />
+              <TextInput
+                placeholder="New Password"
+                placeholderTextColor={theme.colors.textMuted}
+                style={[styles.input, { color: theme.colors.text }]}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry={!showNewPassword}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                onPress={() => setShowNewPassword(!showNewPassword)}
+              >
+                {showNewPassword ? (
+                  <EyeOff size={18} color={theme.colors.textMuted} />
+                ) : (
+                  <Eye size={18} color={theme.colors.textMuted} />
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <View
+              style={[
+                styles.inputContainer,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <Lock
+                size={18}
+                color={theme.colors.textMuted}
+                style={{ marginRight: 10 }}
+              />
+              <TextInput
+                placeholder="Confirm New Password"
+                placeholderTextColor={theme.colors.textMuted}
+                style={[styles.input, { color: theme.colors.text }]}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                {showConfirmPassword ? (
+                  <EyeOff size={18} color={theme.colors.textMuted} />
+                ) : (
+                  <Eye size={18} color={theme.colors.textMuted} />
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.requirements}>
+              <Text
+                style={[styles.requirementsTitle, { color: theme.colors.text }]}
+              >
+                Password Requirements:
+              </Text>
+              <Text
+                style={[
+                  styles.requirementItem,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                • At least 8 characters long
+              </Text>
+              <Text
+                style={[
+                  styles.requirementItem,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                • Include uppercase and lowercase letters
+              </Text>
+              <Text
+                style={[
+                  styles.requirementItem,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                • Include at least one number
+              </Text>
+            </View>
+
+            <Button
+              title={loading ? 'Updating...' : 'Update Password'}
+              onPress={handleSave}
+              disabled={loading}
+              style={styles.saveButton}
             />
           </View>
-
-          {/* New Password */}
-          <View style={styles.inputContainer}>
-            <Input
-              label="New Password"
-              value={formData.newPassword}
-              onChangeText={(text) => setFormData({...formData, newPassword: text})}
-              leftIcon={<Lock size={20} color="#64748b" />}
-              rightIcon={
-                <TouchableOpacity onPress={() => toggleVisibility('newPassword')}>
-                  {visibility.newPassword ? (
-                    <EyeOff size={20} color="#64748b" />
-                  ) : (
-                    <Eye size={20} color="#64748b" />
-                  )}
-                </TouchableOpacity>
-              }
-              secureTextEntry={!visibility.newPassword}
-              autoCapitalize="none"
-            />
-          </View>
-
-          {/* Confirm Password */}
-          <View style={styles.inputContainer}>
-            <Input
-              label="Confirm New Password"
-              value={formData.confirmPassword}
-              onChangeText={(text) => setFormData({...formData, confirmPassword: text})}
-              leftIcon={<Lock size={20} color="#64748b" />}
-              rightIcon={
-                <TouchableOpacity onPress={() => toggleVisibility('confirmPassword')}>
-                  {visibility.confirmPassword ? (
-                    <EyeOff size={20} color="#64748b" />
-                  ) : (
-                    <Eye size={20} color="#64748b" />
-                  )}
-                </TouchableOpacity>
-              }
-              secureTextEntry={!visibility.confirmPassword}
-              autoCapitalize="none"
-            />
-          </View>
-
-          {/* Save Button */}
-          <Button
-            title={loading ? "Changing Password..." : "Change Password"}
-            onPress={handleChangePassword}
-            disabled={loading}
-            style={styles.saveButton}
-          />
-        </Card>
-
-        {/* Password Tips */}
-        <Card style={[styles.tipsCard, { backgroundColor: theme.colors.card }]}>
-          <Text style={[styles.tipsTitle, { color: theme.colors.text }]}>
-            Password Tips
-          </Text>
-          <View style={styles.tipsList}>
-            <View style={styles.tipItem}>
-              <View style={[styles.tipBullet, { backgroundColor: theme.colors.primary }]} />
-              <Text style={[styles.tipText, { color: theme.colors.textMuted }]}>
-                Use at least 8 characters
-              </Text>
-            </View>
-            <View style={styles.tipItem}>
-              <View style={[styles.tipBullet, { backgroundColor: theme.colors.primary }]} />
-              <Text style={[styles.tipText, { color: theme.colors.textMuted }]}>
-                Mix uppercase and lowercase letters
-              </Text>
-            </View>
-            <View style={styles.tipItem}>
-              <View style={[styles.tipBullet, { backgroundColor: theme.colors.primary }]} />
-              <Text style={[styles.tipText, { color: theme.colors.textMuted }]}>
-                Include numbers and special characters
-              </Text>
-            </View>
-            <View style={styles.tipItem}>
-              <View style={[styles.tipBullet, { backgroundColor: theme.colors.primary }]} />
-              <Text style={[styles.tipText, { color: theme.colors.textMuted }]}>
-                Don't use personal information
-              </Text>
-            </View>
-            <View style={styles.tipItem}>
-              <View style={[styles.tipBullet, { backgroundColor: theme.colors.primary }]} />
-              <Text style={[styles.tipText, { color: theme.colors.textMuted }]}>
-                Avoid common words or phrases
-              </Text>
-            </View>
-          </View>
-        </Card>
-
-        {/* Bottom Spacing */}
-        <View style={styles.bottomSpacing} />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -244,77 +239,53 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 24,
   },
-  infoCard: {
-    marginBottom: 24,
-    padding: 20,
-  },
-  infoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  infoIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  infoTitle: {
-    fontSize: 20,
-    fontFamily: 'Inter-Bold',
-    flex: 1,
-  },
-  infoDescription: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    lineHeight: 20,
-  },
-  formCard: {
-    marginBottom: 24,
-    padding: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
+  section: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 20,
   },
-  inputContainer: {
-    marginBottom: 16,
-  },
-  saveButton: {
-    marginTop: 8,
-  },
-  tipsCard: {
-    marginBottom: 24,
-    padding: 20,
-  },
-  tipsTitle: {
-    fontSize: 18,
+  sectionTitle: {
+    fontSize: 16,
     fontFamily: 'Inter-Bold',
-    marginBottom: 16,
+    marginBottom: 6,
   },
-  tipsList: {
-    gap: 12,
-  },
-  tipItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  tipBullet: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 12,
-  },
-  tipText: {
+  sectionDescription: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-    flex: 1,
+    marginBottom: 20,
   },
-  bottomSpacing: {
-    height: 40,
+  form: {
+    gap: 16,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  input: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: 'Inter-Regular',
+  },
+  requirements: {
+    marginTop: 8,
+    gap: 6,
+  },
+  requirementsTitle: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    marginBottom: 4,
+  },
+  requirementItem: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    lineHeight: 18,
+  },
+  saveButton: {
+    marginTop: 12,
   },
 });
-

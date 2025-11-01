@@ -8,7 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Star, Badge, Clock } from 'lucide-react-native';
+import { Star, ShieldCheck, Clock } from 'lucide-react-native';
 import { Professional } from '@/mockData/professionals';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -83,7 +83,7 @@ export function ProfessionalCard({ professional }: ProfessionalCardProps) {
                 {professional.name}
               </Text>
               {professional.isVerified && (
-                <Badge size={14} color={theme.colors.primary} strokeWidth={2} />
+                <ShieldCheck size={20} color={theme.colors.primary} strokeWidth={2.5} />
               )}
             </View>
             <Text
@@ -142,7 +142,7 @@ export function ProfessionalCard({ professional }: ProfessionalCardProps) {
                 },
               ]}
             >
-              ${professional.ratePerMinute}
+              {'$' + professional.ratePerMinute.toFixed(2)}
             </Text>
             <Text
               style={[

@@ -20,6 +20,7 @@ import {
   Download,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
+import { TabButtons } from '@/components/ui/TabButtons';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -367,51 +368,15 @@ export default function InvoicesScreen() {
     >
       <Header showLogo showBack backPosition="right" />
 
-      <View style={[styles.searchSection, { backgroundColor: '#000000' }]}>
-        <Input
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search invoices..."
-          leftIcon={<Search size={20} color={theme.colors.textMuted} />}
-          style={[
-            {
-              backgroundColor: theme.colors.card,
-              borderColor: theme.colors.border,
-            },
-          ]}
-        />
-
-        <View style={styles.filters}>
-          {filters.map((filter) => (
-            <TouchableOpacity
-              key={filter.key}
-              style={[
-                styles.filterButton,
-                {
-                  backgroundColor: theme.colors.background,
-                  borderColor: theme.colors.border,
-                },
-                selectedFilter === filter.key &&
-                  theme.name === 'dark' && {
-                    backgroundColor: theme.colors.accent,
-                    borderColor: theme.colors.accent,
-                  },
-              ]}
-              onPress={() => setSelectedFilter(filter.key as any)}
-            >
-              <Text
-                style={[
-                  styles.filterText,
-                  { color: theme.colors.textSecondary },
-                  selectedFilter === filter.key && { color: '#000000' },
-                ]}
-              >
-                {filter.label} ({filter.count})
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+      <SearchBar
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        placeholder="Search invoices..."
+        showTabButtons={true}
+        tabOptions={filters}
+        selectedTabKey={selectedFilter}
+        onTabSelect={(key) => setSelectedFilter(key as any)}
+      />
 
       <FlatList
         data={filteredInvoices}
@@ -439,25 +404,6 @@ export default function InvoicesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  searchSection: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-  },
-  filters: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  filterText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
   },
   listContent: {
     padding: 24,

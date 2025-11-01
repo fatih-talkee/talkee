@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image } from 'react-native';
 import { router } from 'expo-router';
-import { UserX, UserCheck } from 'lucide-react-native';
+import { UserX, UserCheck, ShieldCheck, Clock } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -58,43 +58,131 @@ export default function BlockedUsersScreen() {
   };
 
   const renderBlockedUserItem = ({ item }: { item: BlockedUser }) => (
-    <Card style={[styles.userCard, { backgroundColor: theme.colors.card }]}>
-      <View style={styles.userContainer}>
-        <TouchableOpacity 
-          style={styles.userItem}
-          onPress={() => router.push(`/professional/${item.userId}`)}
-        >
-          <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
-          
-          <View style={styles.userInfo}>
-            <Text style={[styles.userName, { color: theme.colors.text }]}>{item.user.name}</Text>
-            <Text style={[styles.userTitle, { color: theme.colors.textMuted }]}>{item.user.title}</Text>
-            
-            {item.lastCallDate && (
-              <View style={styles.callInfo}>
-                <Text style={[styles.callLabel, { color: theme.colors.textMuted }]}>Last call:</Text>
-                <Text style={[styles.callValue, { color: theme.colors.text }]}>
-                  {formatDate(item.lastCallDate)} at {formatTime(item.lastCallDate)}
-                </Text>
-              </View>
-            )}
-            
-            {item.lastCallDuration && (
-              <Text style={[styles.durationText, { color: theme.colors.textMuted }]}>
-                Call length: {formatDuration(item.lastCallDuration)}
-              </Text>
-            )}
+    <Card
+      style={[
+        styles.userCard,
+        {
+          backgroundColor:
+            theme.name === 'dark' ? '#000000' : theme.colors.card,
+          borderColor:
+            theme.name === 'dark'
+              ? 'rgba(255, 255, 255, 0.3)'
+              : theme.colors.border,
+          borderWidth: 1.5,
+        },
+      ]}
+    >
+      <TouchableOpacity
+        style={styles.userItem}
+        onPress={() => router.push(`/professional/${item.userId}`)}
+        activeOpacity={0.7}
+      >
+        {/* Top Row: Avatar, Name with Verification, and Unblock Button */}
+        <View style={styles.topRow}>
+          <View style={styles.headerLeft}>
+            <Image
+              source={{ uri: item.user.avatar }}
+              style={styles.avatar}
+            />
           </View>
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.unblockButton, { backgroundColor: theme.colors.success }]}
-          onPress={() => handleUnblock(item.userId)}
-        >
-          <UserCheck size={16} color="#ffffff" />
-          <Text style={styles.unblockButtonText}>Unblock</Text>
-        </TouchableOpacity>
-      </View>
+          <View style={styles.headerInfo}>
+            <View style={styles.nameRow}>
+              <Text
+                style={[styles.userName, { color: theme.colors.text }]}
+                numberOfLines={1}
+              >
+                {item.user.name}
+              </Text>
+              {item.user.isVerified && (
+                <ShieldCheck
+                  size={18}
+                  color={theme.colors.primary}
+                  strokeWidth={2.5}
+                />
+              )}
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.unblockButton,
+              {
+                backgroundColor:
+                  theme.name === 'dark' ? '#000000' : theme.colors.surface,
+                borderWidth: 1,
+                borderColor: theme.colors.success,
+              },
+            ]}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleUnblock(item.userId);
+            }}
+          >
+            <UserCheck
+              size={14}
+              color={theme.colors.success}
+            />
+            <Text
+              style={[
+                styles.unblockButtonText,
+                {
+                  color: theme.colors.success,
+                },
+              ]}
+            >
+              Unblock
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Second Row: Title */}
+        <View style={styles.titleRow}>
+          <Text
+            style={[
+              styles.userTitle,
+              { color: theme.colors.textMuted },
+            ]}
+            numberOfLines={1}
+          >
+            {item.user.title}
+          </Text>
+        </View>
+
+        {/* Third Row: Last Call Date and Time */}
+        {item.lastCallDate && (
+          <View style={styles.metaRow}>
+            <View style={styles.metaItem}>
+              <Clock size={14} color={theme.colors.textMuted} />
+              <Text style={[styles.metaText, { color: theme.colors.text }]}>
+                Last call: {formatDate(item.lastCallDate)}
+              </Text>
+              <Text
+                style={[
+                  styles.metaText,
+                  { color: theme.colors.textMuted, marginLeft: 4 },
+                ]}
+              >
+                {formatTime(item.lastCallDate)}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Bottom Row: Call Duration */}
+        {item.lastCallDuration && (
+          <View style={styles.statsRow}>
+            <View style={styles.statBadge}>
+              <Clock size={12} color={theme.colors.textMuted} />
+              <Text
+                style={[styles.statText, { color: theme.colors.textMuted }]}
+              >
+                Duration: {formatDuration(item.lastCallDuration)}
+              </Text>
+            </View>
+          </View>
+        )}
+      </TouchableOpacity>
     </Card>
   );
 
@@ -133,65 +221,91 @@ const styles = StyleSheet.create({
   userCard: {
     marginBottom: 12,
     padding: 0,
-  },
-  userContainer: {
-    padding: 16,
+    overflow: 'hidden',
   },
   userItem: {
+    padding: 16,
+  },
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 8,
+  },
+  headerLeft: {
+    position: 'relative',
+    marginRight: 12,
   },
   avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginRight: 16,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
-  userInfo: {
+  headerInfo: {
     flex: 1,
+    marginRight: 12,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   userName: {
     fontSize: 16,
     fontFamily: 'Inter-Bold',
-    marginBottom: 2,
-  },
-  userTitle: {
-    fontSize: 13,
-    fontFamily: 'Inter-Regular',
-    marginBottom: 6,
-  },
-  callInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  callLabel: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    marginRight: 4,
-  },
-  callValue: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-  },
-  durationText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
   },
   unblockButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 12,
-    marginTop: 12,
+    borderRadius: 16,
+    minWidth: 80,
   },
   unblockButtonText: {
     fontSize: 12,
     fontFamily: 'Inter-Medium',
-    color: '#ffffff',
-    marginLeft: 4,
+  },
+  titleRow: {
+    marginBottom: 8,
+  },
+  userTitle: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 12,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  metaText: {
+    fontSize: 13,
+    fontFamily: 'Inter-Medium',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  statBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Medium',
   },
   emptyState: {
     alignItems: 'center',
