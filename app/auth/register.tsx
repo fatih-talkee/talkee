@@ -16,8 +16,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useIsMounted } from '@/hooks/useIsMounted';
+import { useTheme } from '@/contexts/ThemeContext';
 
 export default function RegisterScreen() {
+  const { theme } = useTheme();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -39,7 +41,6 @@ export default function RegisterScreen() {
   };
 
   const handleSocialRegister = (provider: string) => {
-    console.log(`Register with ${provider}`);
     // Mock social register - navigate directly to home
     setTimeout(() => {
       router.replace('/(tabs)');
@@ -47,7 +48,10 @@ export default function RegisterScreen() {
   };
 
   return (
-    <LinearGradient colors={['#2e2461', theme.colors.brandPink]} style={styles.container}>
+    <LinearGradient
+      colors={['#2e2461', theme.colors.brandPink]}
+      style={styles.container}
+    >
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

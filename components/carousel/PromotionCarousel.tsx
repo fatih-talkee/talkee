@@ -8,6 +8,7 @@ import {
   FlatList,
   Dimensions,
   Platform,
+  ColorValue,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowRight } from 'lucide-react-native';
@@ -45,7 +46,6 @@ export function PromotionCarousel({ promotions }: PromotionCarouselProps) {
       router.push('/(tabs)/search');
     } else {
       // Handle other promotions
-      console.log('Promotion pressed:', promotion.title);
     }
   };
 
@@ -57,7 +57,10 @@ export function PromotionCarousel({ promotions }: PromotionCarouselProps) {
     >
       <View style={styles.cardInner}>
         <Image source={{ uri: item.image }} style={styles.backgroundImage} />
-        <LinearGradient colors={item.gradient} style={styles.overlay}>
+        <LinearGradient
+          colors={item.gradient as [ColorValue, ColorValue, ...ColorValue[]]}
+          style={styles.overlay}
+        >
           <View style={styles.content}>
             <View style={styles.textContent}>
               <Text style={styles.title}>{item.title}</Text>

@@ -118,7 +118,6 @@ export default function VerifyPhoneScreen() {
     setCanResend(false);
     setResendTimer(60);
     setError('');
-    console.log('Resending verification code to:', phone);
   };
 
   const formatPhoneNumber = (phoneNumber: string | string[]) => {

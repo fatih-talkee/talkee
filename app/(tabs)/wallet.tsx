@@ -1,7 +1,20 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  ScrollView,
+} from 'react-native';
 import { router } from 'expo-router';
-import { CreditCard, Plus, History, Download, TrendingUp } from 'lucide-react-native';
+import {
+  CreditCard,
+  Plus,
+  History,
+  Download,
+  TrendingUp,
+} from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -25,7 +38,7 @@ const creditPackages: CreditPackage[] = [
 
 export default function WalletScreen() {
   const { theme } = useTheme();
-  const [currentBalance] = useState(127.50);
+  const [currentBalance] = useState(127.5);
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
   const [filterVisible, setFilterVisible] = useState(false);
   const [filters, setFilters] = useState({
@@ -37,103 +50,186 @@ export default function WalletScreen() {
 
   const handlePurchase = (packageId: string) => {
     setSelectedPackage(packageId);
-    console.log('Purchase package:', packageId);
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <Header showLogo={true} />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Current Balance */}
-        <Card style={[styles.balanceCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+        <Card
+          style={[
+            styles.balanceCard,
+            {
+              backgroundColor: theme.colors.card,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
           <View style={styles.balanceHeader}>
-            <Text style={[styles.balanceLabel, { color: theme.colors.textSecondary }]}>Current Balance</Text>
+            <Text
+              style={[
+                styles.balanceLabel,
+                { color: theme.colors.textSecondary },
+              ]}
+            >
+              Current Balance
+            </Text>
             <TouchableOpacity>
               <Download size={20} color={theme.colors.textMuted} />
             </TouchableOpacity>
           </View>
-          <Text style={[styles.balanceAmount, { color: theme.colors.primaryLight }]}>{'$' + currentBalance.toFixed(2)}</Text>
+          <Text
+            style={[styles.balanceAmount, { color: theme.colors.primaryLight }]}
+          >
+            {'$' + currentBalance.toFixed(2)}
+          </Text>
           <View style={styles.balanceFooter}>
             <View style={styles.balanceInfo}>
               <TrendingUp size={16} color={theme.colors.success} />
-              <Text style={[styles.balanceChange, { color: theme.colors.success }]}>+$25.00 this month</Text>
+              <Text
+                style={[styles.balanceChange, { color: theme.colors.success }]}
+              >
+                +$25.00 this month
+              </Text>
             </View>
           </View>
         </Card>
 
         {/* Quick Actions */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Quick Actions</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+            Quick Actions
+          </Text>
           <View style={styles.quickActions}>
             <TouchableOpacity
               style={styles.quickAction}
               onPress={() => router.push('/credit-selection')}
               activeOpacity={0.7}
             >
-              <View style={[
-                styles.quickActionIcon,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderWidth: theme.name === 'light' ? 1 : 0,
-                  borderColor: theme.name === 'light' ? theme.colors.border : 'transparent',
-                  shadowColor: theme.name === 'light' ? '#000' : 'transparent',
-                  shadowOffset: theme.name === 'light' ? { width: 0, height: 2 } : { width: 0, height: 0 },
-                  shadowOpacity: theme.name === 'light' ? 0.1 : 0,
-                  shadowRadius: theme.name === 'light' ? 4 : 0,
-                  elevation: theme.name === 'light' ? 2 : 0,
-                },
-              ]}>
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderWidth: theme.name === 'light' ? 1 : 0,
+                    borderColor:
+                      theme.name === 'light'
+                        ? theme.colors.border
+                        : 'transparent',
+                    shadowColor:
+                      theme.name === 'light' ? '#000' : 'transparent',
+                    shadowOffset:
+                      theme.name === 'light'
+                        ? { width: 0, height: 2 }
+                        : { width: 0, height: 0 },
+                    shadowOpacity: theme.name === 'light' ? 0.1 : 0,
+                    shadowRadius: theme.name === 'light' ? 4 : 0,
+                    elevation: theme.name === 'light' ? 2 : 0,
+                  },
+                ]}
+              >
                 <Plus size={24} color={theme.colors.warning} />
               </View>
-              <Text style={[styles.quickActionText, { color: theme.colors.textSecondary }]}>Add Credits</Text>
+              <Text
+                style={[
+                  styles.quickActionText,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Add Credits
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickAction} activeOpacity={0.7} onPress={() => router.push('/wallet-history')}>
-              <View style={[
-                styles.quickActionIcon,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderWidth: theme.name === 'light' ? 1 : 0,
-                  borderColor: theme.name === 'light' ? theme.colors.border : 'transparent',
-                  shadowColor: theme.name === 'light' ? '#000' : 'transparent',
-                  shadowOffset: theme.name === 'light' ? { width: 0, height: 2 } : { width: 0, height: 0 },
-                  shadowOpacity: theme.name === 'light' ? 0.1 : 0,
-                  shadowRadius: theme.name === 'light' ? 4 : 0,
-                  elevation: theme.name === 'light' ? 2 : 0,
-                },
-              ]}>
+            <TouchableOpacity
+              style={styles.quickAction}
+              activeOpacity={0.7}
+              onPress={() => router.push('/wallet-history')}
+            >
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderWidth: theme.name === 'light' ? 1 : 0,
+                    borderColor:
+                      theme.name === 'light'
+                        ? theme.colors.border
+                        : 'transparent',
+                    shadowColor:
+                      theme.name === 'light' ? '#000' : 'transparent',
+                    shadowOffset:
+                      theme.name === 'light'
+                        ? { width: 0, height: 2 }
+                        : { width: 0, height: 0 },
+                    shadowOpacity: theme.name === 'light' ? 0.1 : 0,
+                    shadowRadius: theme.name === 'light' ? 4 : 0,
+                    elevation: theme.name === 'light' ? 2 : 0,
+                  },
+                ]}
+              >
                 <History size={24} color={theme.colors.primary} />
               </View>
-              <Text style={[styles.quickActionText, { color: theme.colors.textSecondary }]}>History</Text>
+              <Text
+                style={[
+                  styles.quickActionText,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                History
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.quickAction} activeOpacity={0.7}>
-              <View style={[
-                styles.quickActionIcon,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderWidth: theme.name === 'light' ? 1 : 0,
-                  borderColor: theme.name === 'light' ? theme.colors.border : 'transparent',
-                  shadowColor: theme.name === 'light' ? '#000' : 'transparent',
-                  shadowOffset: theme.name === 'light' ? { width: 0, height: 2 } : { width: 0, height: 0 },
-                  shadowOpacity: theme.name === 'light' ? 0.1 : 0,
-                  shadowRadius: theme.name === 'light' ? 4 : 0,
-                  elevation: theme.name === 'light' ? 2 : 0,
-                },
-              ]}>
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderWidth: theme.name === 'light' ? 1 : 0,
+                    borderColor:
+                      theme.name === 'light'
+                        ? theme.colors.border
+                        : 'transparent',
+                    shadowColor:
+                      theme.name === 'light' ? '#000' : 'transparent',
+                    shadowOffset:
+                      theme.name === 'light'
+                        ? { width: 0, height: 2 }
+                        : { width: 0, height: 0 },
+                    shadowOpacity: theme.name === 'light' ? 0.1 : 0,
+                    shadowRadius: theme.name === 'light' ? 4 : 0,
+                    elevation: theme.name === 'light' ? 2 : 0,
+                  },
+                ]}
+              >
                 <Download size={24} color={theme.colors.success} />
               </View>
-              <Text style={[styles.quickActionText, { color: theme.colors.textSecondary }]}>Export</Text>
+              <Text
+                style={[
+                  styles.quickActionText,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Export
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Credit Packages */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Buy Credits</Text>
-          <Text style={[styles.sectionSubtitle, { color: theme.colors.textMuted }]}>
-            Purchase credits to connect with professionals. Unused credits never expire.
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+            Buy Credits
           </Text>
-          
+          <Text
+            style={[styles.sectionSubtitle, { color: theme.colors.textMuted }]}
+          >
+            Purchase credits to connect with professionals. Unused credits never
+            expire.
+          </Text>
+
           <View style={styles.packagesGrid}>
             {creditPackages.map((pkg) => (
               <TouchableOpacity
@@ -151,32 +247,76 @@ export default function WalletScreen() {
                   selectedPackage === pkg.id && {
                     borderColor: theme.colors.accent,
                     backgroundColor: theme.colors.accentLight,
-                  }
+                  },
                 ]}
                 onPress={() => handlePurchase(pkg.id)}
                 activeOpacity={0.8}
               >
                 {pkg.popular && (
-                  <View style={[styles.popularBadge, { backgroundColor: theme.colors.accent }]}>
-                    <Text style={[styles.popularText, { color: theme.colors.surface }]}>Popular</Text>
+                  <View
+                    style={[
+                      styles.popularBadge,
+                      { backgroundColor: theme.colors.accent },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.popularText,
+                        { color: theme.colors.surface },
+                      ]}
+                    >
+                      Popular
+                    </Text>
                   </View>
                 )}
 
                 <View style={styles.packageHeader}>
-                  <Text style={[styles.packageAmount, { color: theme.colors.ƒtext }]}>{'$' + pkg.amount}</Text>
-                  <Text style={[styles.packageCredits, { color: theme.colors.textMuted }]}>credits</Text>
+                  <Text
+                    style={[styles.packageAmount, { color: theme.colors.text }]}
+                  >
+                    {'$' + pkg.amount}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.packageCredits,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    credits
+                  </Text>
                 </View>
 
                 {pkg.bonus && (
                   <View style={styles.bonusSection}>
-                    <Text style={[styles.bonusText, { color: theme.colors.success }]}>{'+ $' + pkg.bonus + ' bonus'}</Text>
+                    <Text
+                      style={[
+                        styles.bonusText,
+                        { color: theme.colors.success },
+                      ]}
+                    >
+                      {'+ $' + pkg.bonus + ' bonus'}
+                    </Text>
                   </View>
                 )}
 
                 <View style={styles.packageFooter}>
-                  <Text style={[styles.packagePrice, { color: theme.colors.warning }]}>{'$' + pkg.price}</Text>
-                  <Text style={[styles.packageValue, { color: theme.colors.textMuted }]}>
-                    {'$' + (pkg.price / (pkg.amount + (pkg.bonus || 0))).toFixed(2)}/credit
+                  <Text
+                    style={[
+                      styles.packagePrice,
+                      { color: theme.colors.warning },
+                    ]}
+                  >
+                    {'$' + pkg.price}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.packageValue,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    {'$' +
+                      (pkg.price / (pkg.amount + (pkg.bonus || 0))).toFixed(2)}
+                    /credit
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -186,39 +326,134 @@ export default function WalletScreen() {
 
         {/* Recent Transactions */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Recent Activity</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+            Recent Activity
+          </Text>
           <Card style={styles.transactionCard}>
             <View style={styles.transaction}>
-              <View style={[styles.transactionIcon, { backgroundColor: theme.name === 'light' ? '#fee2e2' : 'rgba(255, 69, 58, 0.2)' }]}>
+              <View
+                style={[
+                  styles.transactionIcon,
+                  {
+                    backgroundColor:
+                      theme.name === 'light'
+                        ? '#fee2e2'
+                        : 'rgba(255, 69, 58, 0.2)',
+                  },
+                ]}
+              >
                 <CreditCard size={20} color={theme.colors.error} />
               </View>
               <View style={styles.transactionInfo}>
-                <Text style={[styles.transactionTitle, { color: theme.colors.text }]}>Call with Dr. Sarah Chen</Text>
-                <Text style={[styles.transactionDate, { color: theme.colors.textMuted }]}>Today, 2:30 PM</Text>
+                <Text
+                  style={[
+                    styles.transactionTitle,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  Call with Dr. Sarah Chen
+                </Text>
+                <Text
+                  style={[
+                    styles.transactionDate,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  Today, 2:30 PM
+                </Text>
               </View>
-              <Text style={[styles.transactionAmount, { color: theme.colors.error }]}>-$21.25</Text>
+              <Text
+                style={[
+                  styles.transactionAmount,
+                  { color: theme.colors.error },
+                ]}
+              >
+                -$21.25
+              </Text>
             </View>
 
             <View style={styles.transaction}>
-              <View style={[styles.transactionIcon, { backgroundColor: theme.name === 'light' ? '#dcfce7' : 'rgba(48, 209, 88, 0.2)' }]}>
+              <View
+                style={[
+                  styles.transactionIcon,
+                  {
+                    backgroundColor:
+                      theme.name === 'light'
+                        ? '#dcfce7'
+                        : 'rgba(48, 209, 88, 0.2)',
+                  },
+                ]}
+              >
                 <Plus size={20} color={theme.colors.success} />
               </View>
               <View style={styles.transactionInfo}>
-                <Text style={[styles.transactionTitle, { color: theme.colors.text }]}>Credits Added</Text>
-                <Text style={[styles.transactionDate, { color: theme.colors.textMuted }]}>Yesterday, 4:15 PM</Text>
+                <Text
+                  style={[
+                    styles.transactionTitle,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  Credits Added
+                </Text>
+                <Text
+                  style={[
+                    styles.transactionDate,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  Yesterday, 4:15 PM
+                </Text>
               </View>
-              <Text style={[styles.transactionAmount, { color: theme.colors.success }]}>+$100.00</Text>
+              <Text
+                style={[
+                  styles.transactionAmount,
+                  { color: theme.colors.success },
+                ]}
+              >
+                +$100.00
+              </Text>
             </View>
 
             <View style={styles.transaction}>
-              <View style={[styles.transactionIcon, { backgroundColor: theme.name === 'light' ? '#fee2e2' : 'rgba(255, 69, 58, 0.2)' }]}>
+              <View
+                style={[
+                  styles.transactionIcon,
+                  {
+                    backgroundColor:
+                      theme.name === 'light'
+                        ? '#fee2e2'
+                        : 'rgba(255, 69, 58, 0.2)',
+                  },
+                ]}
+              >
                 <CreditCard size={20} color={theme.colors.error} />
               </View>
               <View style={styles.transactionInfo}>
-                <Text style={[styles.transactionTitle, { color: theme.colors.text }]}>Call with Marcus Thompson</Text>
-                <Text style={[styles.transactionDate, { color: theme.colors.textMuted }]}>Jan 19, 2:15 PM</Text>
+                <Text
+                  style={[
+                    styles.transactionTitle,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  Call with Marcus Thompson
+                </Text>
+                <Text
+                  style={[
+                    styles.transactionDate,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  Jan 19, 2:15 PM
+                </Text>
               </View>
-              <Text style={[styles.transactionAmount, { color: theme.colors.error }]}>-$180.00</Text>
+              <Text
+                style={[
+                  styles.transactionAmount,
+                  { color: theme.colors.error },
+                ]}
+              >
+                -$180.00
+              </Text>
             </View>
           </Card>
         </View>

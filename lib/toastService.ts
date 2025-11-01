@@ -2,7 +2,8 @@
  * ToastService - Centralized toast notification service
  *
  * This service provides a consistent way to display toast notifications
- * throughout the app with themed styling.
+ * throughout the app with themed styling. Supports multiple simultaneous toasts
+ * with proper vertical stacking.
  *
  * @example
  * ```tsx
@@ -25,105 +26,51 @@
  * ```
  */
 
-import Toast from 'react-native-toast-message';
+import { toastStackManager, ToastType, ToastOptions } from '@/components/ui/ToastStack';
 
-export enum ToastType {
-  SUCCESS = 'success',
-  ERROR = 'error',
-  WARNING = 'warning',
-  INFO = 'info',
-}
-
-export interface ToastOptions {
-  title: string;
-  message?: string;
-  duration?: number;
-  position?: 'top' | 'bottom';
-  onPress?: () => void;
-}
+export { ToastType, type ToastOptions };
 
 class ToastService {
   /**
    * Show a success toast notification
    */
   success(options: ToastOptions): void {
-    Toast.show({
-      type: ToastType.SUCCESS,
-      text1: options.title,
-      text2: options.message,
-      visibilityTime: options.duration || 3000,
-      position: options.position || 'top',
-      onPress: options.onPress,
-    });
+    toastStackManager.show(ToastType.SUCCESS, options);
   }
 
   /**
    * Show an error toast notification
    */
   error(options: ToastOptions): void {
-    Toast.show({
-      type: ToastType.ERROR,
-      text1: options.title,
-      text2: options.message,
-      visibilityTime: options.duration || 4000,
-      position: options.position || 'top',
-      onPress: options.onPress,
-    });
+    toastStackManager.show(ToastType.ERROR, options);
   }
 
   /**
    * Show a warning toast notification
    */
   warning(options: ToastOptions): void {
-    Toast.show({
-      type: ToastType.WARNING,
-      text1: options.title,
-      text2: options.message,
-      visibilityTime: options.duration || 3000,
-      position: options.position || 'top',
-      onPress: options.onPress,
-    });
+    toastStackManager.show(ToastType.WARNING, options);
   }
 
   /**
    * Show an info toast notification
    */
   info(options: ToastOptions): void {
-    Toast.show({
-      type: ToastType.INFO,
-      text1: options.title,
-      text2: options.message,
-      visibilityTime: options.duration || 3000,
-      position: options.position || 'top',
-      onPress: options.onPress,
-    });
+    toastStackManager.show(ToastType.INFO, options);
   }
 
   /**
    * Generic method to show any type of toast
    */
   show(type: ToastType, options: ToastOptions): void {
-    switch (type) {
-      case ToastType.SUCCESS:
-        this.success(options);
-        break;
-      case ToastType.ERROR:
-        this.error(options);
-        break;
-      case ToastType.WARNING:
-        this.warning(options);
-        break;
-      case ToastType.INFO:
-        this.info(options);
-        break;
-    }
+    toastStackManager.show(type, options);
   }
 
   /**
-   * Hide the currently visible toast
+   * Hide a specific toast by id (returned from show methods)
    */
-  hide(): void {
-    Toast.hide();
+  hide(id: string): void {
+    toastStackManager.hide(id);
   }
 }
 
