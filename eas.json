@@ -1,7 +1,6 @@
 {
   "cli": {
-    "requireCommit": false,
-    "version": "latest"
+    "requireCommit": false
   },
   "build": {
     "preview": {
