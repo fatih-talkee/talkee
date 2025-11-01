@@ -10,8 +10,7 @@
       },
       "distribution": "internal",
       "env": {
-        "NODE_OPTIONS": "--max-old-space-size=4096",
-        "NODE_ENV": "production"
+        "NODE_OPTIONS": "--max-old-space-size=4096"
       }
     },
     "production": {
@@ -20,8 +19,7 @@
       },
       "distribution": "store",
       "env": {
-        "NODE_OPTIONS": "--max-old-space-size=4096",
-        "NODE_ENV": "production"
+        "NODE_OPTIONS": "--max-old-space-size=4096"
       }
     }
   },
