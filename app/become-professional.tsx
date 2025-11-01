@@ -312,7 +312,7 @@ export default function BecomeProfessionalScreen() {
     setTimeout(() => {
       if (isMountedRef.current) {
         setLoading(false);
-        router.replace('/(tabs)/index' as any);
+        router.replace('/(tabs)');
       }
     }, 1000);
   };

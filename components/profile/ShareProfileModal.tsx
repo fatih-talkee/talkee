@@ -94,13 +94,13 @@ export function ShareProfileModal({
         activeOpacity={1}
         onPress={onClose}
       >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={(e) => e.stopPropagation()}
+        <View
           style={[
             styles.modalContainer,
             { backgroundColor: theme.colors.card },
           ]}
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
         >
           <View style={styles.header}>
             <Text style={[styles.title, { color: theme.colors.text }]}>
@@ -113,7 +113,10 @@ export function ShareProfileModal({
 
           <ScrollView
             style={styles.scrollContainer}
+            contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            nestedScrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
           >
             <View style={styles.content}>
               {professionalData && (
@@ -334,7 +337,7 @@ export function ShareProfileModal({
             </View>
             </View>
           </ScrollView>
-        </TouchableOpacity>
+        </View>
       </TouchableOpacity>
     </Modal>
   );
@@ -350,7 +353,8 @@ const styles = StyleSheet.create({
   modalContainer: {
     width: Dimensions.get('window').width * 0.9,
     maxWidth: 400,
-    maxHeight: Dimensions.get('window').height * 0.92,
+    height: Dimensions.get('window').height * 0.85,
+    maxHeight: Dimensions.get('window').height * 0.95,
     borderRadius: 20,
     padding: 20,
     shadowColor: '#000',
@@ -376,7 +380,13 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   scrollContainer: {
-    maxHeight: Dimensions.get('window').height * 0.78,
+    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 8,
   },
   content: {
     alignItems: 'center',

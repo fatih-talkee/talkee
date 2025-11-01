@@ -8,6 +8,7 @@ import {
   ScrollView,
   TextInput,
   Modal,
+  Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import {
@@ -22,9 +23,11 @@ import {
 import { Header } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function AccountSettingsScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const [formData, setFormData] = useState({
     fullName: 'John Doe',
     email: 'john.doe@example.com',
@@ -101,7 +104,14 @@ export default function AccountSettingsScreen() {
         ]}
       />
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingBottom: Math.max(insets.bottom, 24) },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Personal Information */}
         <View
           style={[
@@ -490,6 +500,8 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  contentContainer: {
     paddingHorizontal: 24,
     paddingTop: 24,
   },

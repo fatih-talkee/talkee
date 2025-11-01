@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
   <uses-permission android:name="android.permission.BLUETOOTH"/>
   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
   <uses-permission android:name="android.permission.CAMERA"/>
@@ -34,5 +35,23 @@
         <data android:scheme="myapp"/>
       </intent-filter>
     </activity>
+    <service
+      android:name="com.twiliovoicereactnative.VoiceFirebaseMessagingService"
+      android:exported="false"
+      tools:replace="android:exported">
+      <intent-filter>
+        <action android:name="com.google.firebase.MESSAGING_EVENT" />
+      </intent-filter>
+    </service>
+    <receiver
+      android:name="com.twiliovoicereactnative.IncomingCallNotificationBroadcastReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="com.twiliovoicereactnative.ACTION_ACCEPT" />
+        <action android:name="com.twiliovoicereactnative.ACTION_REJECT" />
+        <action android:name="com.twiliovoicereactnative.ACTION_HANGUP" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
+    </receiver>
   </application>
 </manifest>

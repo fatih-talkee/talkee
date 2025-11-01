@@ -272,14 +272,27 @@ export default function WalletScreen() {
 
                 <View style={styles.packageHeader}>
                   <Text
-                    style={[styles.packageAmount, { color: theme.colors.text }]}
+                    style={[
+                      styles.packageAmount,
+                      {
+                        color:
+                          theme.name === 'dark'
+                            ? '#000000'
+                            : theme.colors.text,
+                      },
+                    ]}
                   >
                     {'$' + pkg.amount}
                   </Text>
                   <Text
                     style={[
                       styles.packageCredits,
-                      { color: theme.colors.textMuted },
+                      {
+                        color:
+                          theme.name === 'dark'
+                            ? '#666666'
+                            : theme.colors.textMuted,
+                      },
                     ]}
                   >
                     credits
@@ -311,7 +324,12 @@ export default function WalletScreen() {
                   <Text
                     style={[
                       styles.packageValue,
-                      { color: theme.colors.textMuted },
+                      {
+                        color:
+                          theme.name === 'dark'
+                            ? '#666666'
+                            : theme.colors.textMuted,
+                      },
                     ]}
                   >
                     {'$' +

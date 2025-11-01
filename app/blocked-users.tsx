@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  FlatList,
+  Image,
+} from 'react-native';
 import { router } from 'expo-router';
 import { UserX, UserCheck, ShieldCheck, Clock } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
@@ -24,16 +32,20 @@ export default function BlockedUsersScreen() {
     } else if (date.toDateString() === yesterday.toDateString()) {
       return 'Yesterday';
     } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
     }
   };
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: '2-digit', 
-      hour12: true 
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
     });
   };
 
@@ -50,7 +62,7 @@ export default function BlockedUsersScreen() {
   };
 
   const handleUnblock = (userId: string) => {
-    setBlockedUsers(prev => prev.filter(u => u.userId !== userId));
+    setBlockedUsers((prev) => prev.filter((u) => u.userId !== userId));
     toast.success({
       title: 'User Unblocked',
       message: 'This user can now contact you',
@@ -80,10 +92,7 @@ export default function BlockedUsersScreen() {
         {/* Top Row: Avatar, Name with Verification, and Unblock Button */}
         <View style={styles.topRow}>
           <View style={styles.headerLeft}>
-            <Image
-              source={{ uri: item.user.avatar }}
-              style={styles.avatar}
-            />
+            <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
           </View>
 
           <View style={styles.headerInfo}>
@@ -119,10 +128,7 @@ export default function BlockedUsersScreen() {
               handleUnblock(item.userId);
             }}
           >
-            <UserCheck
-              size={14}
-              color={theme.colors.success}
-            />
+            <UserCheck size={14} color={theme.colors.success} />
             <Text
               style={[
                 styles.unblockButtonText,
@@ -139,10 +145,7 @@ export default function BlockedUsersScreen() {
         {/* Second Row: Title */}
         <View style={styles.titleRow}>
           <Text
-            style={[
-              styles.userTitle,
-              { color: theme.colors.textMuted },
-            ]}
+            style={[styles.userTitle, { color: theme.colors.textMuted }]}
             numberOfLines={1}
           >
             {item.user.title}
@@ -187,13 +190,17 @@ export default function BlockedUsersScreen() {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <Header showLogo showBack backPosition="right" />
 
       {blockedUsers.length === 0 ? (
         <View style={styles.emptyState}>
           <UserX size={64} color={theme.colors.textMuted} />
-          <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No Blocked Users</Text>
+          <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+            No Blocked Users
+          </Text>
           <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
             Users you block will appear here
           </Text>
@@ -326,4 +333,3 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 });
-

@@ -88,7 +88,12 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
           </View>
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={styles.contentContainer}>
+        <ScrollView 
+          style={styles.content} 
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled={true}
+        >
           {/* Price Range */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -294,9 +299,12 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
   },
   contentContainer: {
     padding: 20,
+    paddingBottom: 40,
   },
   section: {
     marginBottom: 32,

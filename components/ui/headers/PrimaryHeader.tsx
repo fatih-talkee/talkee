@@ -101,11 +101,17 @@ export function PrimaryHeader({
             <ArrowLeft size={20} color={iconColor} />
           </TouchableOpacity>
         ) : showLogo ? (
-          <TouchableOpacity disabled={!onLogoPress} onPress={onLogoPress}>
+          <TouchableOpacity 
+            disabled={!onLogoPress} 
+            onPress={onLogoPress}
+            style={styles.logoContainer}
+            activeOpacity={onLogoPress ? 0.7 : 1}
+          >
             <Image
               source={logo}
               style={styles.logoImage}
               resizeMode="contain"
+              accessibilityLabel="Talkee Logo"
             />
           </TouchableOpacity>
         ) : null}
@@ -150,9 +156,20 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   leftSection: {
-    flex: 2,
+    flex: 0,
     alignItems: 'flex-start',
     justifyContent: 'center',
+    minWidth: 120,
+    width: 120,
+    marginRight: 8,
+  },
+  logoContainer: {
+    flexShrink: 0,
+    flexGrow: 0,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    width: 120,
+    height: 40,
   },
   centerSection: {
     flex: 1,
@@ -176,5 +193,7 @@ const styles = StyleSheet.create({
   logoImage: {
     width: 120,
     height: 40,
+    flexShrink: 0,
+    flexGrow: 0,
   },
 });
