@@ -20,34 +20,61 @@ const resources = {
 const fallback = 'en';
 
 async function detect(): Promise<string> {
-  const saved = await getItem<string>('lang');
-  if (saved) return saved;
-  const deviceTag = Localization.getLocales?.()[0]?.languageTag || '';
-  const base = deviceTag.split('-')[0];
-  const aliases: Record<string, string> = { az: 'tr' };
-  const normalized = aliases[base] || base;
-  const supported = Object.keys(resources);
-  return supported.includes(normalized) ? normalized : fallback;
+  try {
+    const saved = await getItem<string>('lang');
+    if (saved) {
+      console.log('[i18n] Using saved language:', saved);
+      return saved;
+    }
+    
+    try {
+      const deviceTag = Localization.getLocales?.()[0]?.languageTag || '';
+      const base = deviceTag.split('-')[0];
+      const aliases: Record<string, string> = { az: 'tr' };
+      const normalized = aliases[base] || base;
+      const supported = Object.keys(resources);
+      const detected = supported.includes(normalized) ? normalized : fallback;
+      console.log('[i18n] Detected device language:', detected, 'from tag:', deviceTag);
+      return detected;
+    } catch (error) {
+      console.warn('[i18n] Error detecting device language, using fallback:', error);
+      return fallback;
+    }
+  } catch (error) {
+    console.error('[i18n] Error in language detection:', error);
+    return fallback;
+  }
 }
 
 let initialized = false;
 
 export async function initI18n(): Promise<void> {
-  if (initialized) return;
-  const lng = await detect();
-  await i18n.use(initReactI18next).init({
-    resources,
-    lng,
-    fallbackLng: fallback,
-    defaultNS: 'translation',
-    interpolation: { escapeValue: false },
-    returnNull: false,
-  });
+  if (initialized) {
+    console.log('[i18n] Already initialized, skipping');
+    return;
+  }
+  
+  try {
+    console.log('[i18n] Starting initialization...');
+    const lng = await detect();
+    console.log('[i18n] Detected language:', lng);
+    
+    await i18n.use(initReactI18next).init({
+      resources,
+      lng,
+      fallbackLng: fallback,
+      defaultNS: 'translation',
+      interpolation: { escapeValue: false },
+      returnNull: false,
+    });
 
-  // Note: expo-localization does not provide a change event in Expo Go.
-  // If you need live updates on device locale change, handle it on app resume.
-
-  initialized = true;
+    console.log('[i18n] Initialization complete');
+    initialized = true;
+  } catch (error) {
+    console.error('[i18n] Initialization error:', error);
+    // Re-throw to be handled by caller
+    throw error;
+  }
 }
 
 export async function setLanguage(lang: string): Promise<void> {
