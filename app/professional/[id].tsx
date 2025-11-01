@@ -1062,7 +1062,10 @@ export default function ProfessionalProfileScreen() {
         edges={['bottom']}
         style={[
           styles.callActionsWrapper,
-          { backgroundColor: theme.colors.card },
+          {
+            backgroundColor:
+              theme.name === 'dark' ? '#000000' : theme.colors.card,
+          },
         ]}
       >
         <View

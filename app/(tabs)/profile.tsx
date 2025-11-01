@@ -9,6 +9,7 @@ import {
   Image,
   Share,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Settings,
   Heart,
@@ -50,6 +51,7 @@ interface MenuSection {
 
 export default function ProfileScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const toast = useToast();
   const [userProfile] = useState({
@@ -196,7 +198,14 @@ export default function ProfileScreen() {
     >
       <Header showLogo={true} />
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingBottom: Math.max(insets.bottom, 90) + 24 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Profile Header */}
         <Card
           style={[styles.profileCard, { backgroundColor: theme.colors.card }]}
@@ -503,6 +512,8 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  contentContainer: {
     paddingHorizontal: 24,
     paddingTop: 24,
   },

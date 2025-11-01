@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { Minus, Plus } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function CreditSelectionScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const [credits, setCredits] = useState(50);
   const [inputValue, setInputValue] = useState('50');
 
@@ -73,116 +75,127 @@ export default function CreditSelectionScreen() {
       />
 
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.content}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardAvoid}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        <View style={styles.instructionSection}>
-          <Text style={[styles.instructionText, { color: theme.colors.text }]}>
-            Choose how many credits you want to buy.
-          </Text>
-        </View>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={[
+            styles.contentContainer,
+            { paddingBottom: Math.max(insets.bottom, 24) },
+          ]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.instructionSection}>
+            <Text style={[styles.instructionText, { color: theme.colors.text }]}>
+              Choose how many credits you want to buy.
+            </Text>
+          </View>
 
-        <Card style={[styles.selectorCard, { backgroundColor: theme.colors.card }]}>
-          <Text style={[styles.selectorLabel, { color: theme.colors.text }]}>Credit Amount</Text>
-          
-          <View style={styles.stepperContainer}>
-            <TouchableOpacity 
-              style={[
-                styles.stepperButton, 
-                { 
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                  opacity: credits <= MIN_CREDITS ? 0.5 : 1
-                }
-              ]}
-              onPress={handleDecrease}
-              disabled={credits <= MIN_CREDITS}
-            >
-              <Minus size={24} color={theme.colors.text} />
-            </TouchableOpacity>
+          <Card style={[styles.selectorCard, { backgroundColor: theme.colors.card }]}>
+            <Text style={[styles.selectorLabel, { color: theme.colors.text }]}>Credit Amount</Text>
+            
+            <View style={styles.stepperContainer}>
+              <TouchableOpacity 
+                style={[
+                  styles.stepperButton, 
+                  { 
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                    opacity: credits <= MIN_CREDITS ? 0.5 : 1
+                  }
+                ]}
+                onPress={handleDecrease}
+                disabled={credits <= MIN_CREDITS}
+              >
+                <Minus size={24} color={theme.colors.text} />
+              </TouchableOpacity>
 
-            <TextInput
-              style={[
-                styles.creditInput,
-                {
-                  borderColor: theme.colors.border,
-                  color: theme.colors.text,
-                  textAlign: 'center', 
-                  textAlignVertical: 'center',
-                  borderWidth: 0,
-                  backgroundColor: 'transparent',
-                  fontSize: 50,
-                }
-              ]}
-              value={inputValue}
-              onChangeText={handleInputChange}
-              onBlur={handleInputBlur}
-              keyboardType="numeric"
-              textAlign="center"
-              selectTextOnFocus
+              <TextInput
+                style={[
+                  styles.creditInput,
+                  {
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                    textAlign: 'center', 
+                    textAlignVertical: 'center',
+                    borderWidth: 0,
+                    backgroundColor: 'transparent',
+                    fontSize: 50,
+                  }
+                ]}
+                value={inputValue}
+                onChangeText={handleInputChange}
+                onBlur={handleInputBlur}
+                keyboardType="numeric"
+                textAlign="center"
+                selectTextOnFocus
+              />
+
+              <TouchableOpacity 
+                style={[
+                  styles.stepperButton, 
+                  { 
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                    opacity: credits >= MAX_CREDITS ? 0.5 : 1
+                  }
+                ]}
+                onPress={handleIncrease}
+                disabled={credits >= MAX_CREDITS}
+              >
+                <Plus size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.rangeInfo}>
+              <Text style={[styles.rangeText, { color: theme.colors.textMuted }]}>
+                Min: {MIN_CREDITS} • Max: {MAX_CREDITS.toLocaleString()}
+              </Text>
+            </View>
+          </Card>
+
+          <Card style={[styles.summaryCard, { backgroundColor: theme.colors.card }]}>
+            <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>Purchase Summary</Text>
+            
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>
+                You selected:
+              </Text>
+              <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
+                {credits.toLocaleString()} credits
+              </Text>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>
+                Price per credit:
+              </Text>
+              <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
+                {'$' + PRICE_PER_CREDIT.toFixed(2)}
+              </Text>
+            </View>
+
+            <View style={[styles.summaryRow, styles.totalRow, { borderTopColor: theme.colors.divider }]}>
+              <Text style={[styles.totalLabel, { color: theme.colors.text }]}>
+                Total Price:
+              </Text>
+              <Text style={[styles.totalValue, { color: theme.colors.pinkTwo }]}>
+                {'$' + totalPrice.toFixed(2)}
+              </Text>
+            </View>
+          </Card>
+
+          <View style={styles.buttonContainer}>
+            <Button
+              title="Continue to Payment"
+              onPress={handleContinue}
+              style={[styles.continueButton, { backgroundColor: theme.colors.pinkTwo }]}
             />
-
-            <TouchableOpacity 
-              style={[
-                styles.stepperButton, 
-                { 
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                  opacity: credits >= MAX_CREDITS ? 0.5 : 1
-                }
-              ]}
-              onPress={handleIncrease}
-              disabled={credits >= MAX_CREDITS}
-            >
-              <Plus size={24} color={theme.colors.text} />
-            </TouchableOpacity>
           </View>
-
-          <View style={styles.rangeInfo}>
-            <Text style={[styles.rangeText, { color: theme.colors.textMuted }]}>
-              Min: {MIN_CREDITS} • Max: {MAX_CREDITS.toLocaleString()}
-            </Text>
-          </View>
-        </Card>
-
-        <Card style={[styles.summaryCard, { backgroundColor: theme.colors.card }]}>
-          <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>Purchase Summary</Text>
-          
-          <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>
-              You selected:
-            </Text>
-            <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
-              {credits.toLocaleString()} credits
-            </Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>
-              Price per credit:
-            </Text>
-            <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
-              {'$' + PRICE_PER_CREDIT.toFixed(2)}
-            </Text>
-          </View>
-
-          <View style={[styles.summaryRow, styles.totalRow, { borderTopColor: theme.colors.divider }]}>
-            <Text style={[styles.totalLabel, { color: theme.colors.text }]}>
-              Total Price:
-            </Text>
-            <Text style={[styles.totalValue, { color: theme.colors.pinkTwo }]}>
-              {'$' + totalPrice.toFixed(2)}
-            </Text>
-          </View>
-        </Card>
-
-        <View style={styles.buttonContainer}>
-          <Button
-            title="Continue to Payment"
-            onPress={handleContinue}
-            style={[styles.continueButton, { backgroundColor: theme.colors.pinkTwo }]}
-          />
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -192,8 +205,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  keyboardAvoid: {
+    flex: 1,
+  },
   content: {
     flex: 1,
+  },
+  contentContainer: {
     paddingHorizontal: 24,
     paddingTop: 24,
   },
