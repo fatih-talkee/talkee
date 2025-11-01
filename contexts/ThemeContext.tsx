@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { themes, Theme, ThemeName } from '@/themes';
 
@@ -36,17 +42,13 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
       if (savedTheme && savedTheme in themes) {
         setCurrentTheme(savedTheme as ThemeName);
       }
-    } catch (error) {
-      console.log('Error loading theme:', error);
-    }
+    } catch (error) {}
   };
 
   const saveTheme = async (themeName: ThemeName) => {
     try {
       await AsyncStorage.setItem(THEME_STORAGE_KEY, themeName);
-    } catch (error) {
-      console.log('Error saving theme:', error);
-    }
+    } catch (error) {}
   };
 
   const setTheme = (themeName: ThemeName) => {
@@ -70,9 +72,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   };
 
   return (
-    <ThemeContext.Provider value={value}>
-      {children}
-    </ThemeContext.Provider>
+    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
   );
 }
 

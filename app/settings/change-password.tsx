@@ -111,10 +111,10 @@ export default function ChangePasswordScreen() {
               >
                 {showCurrentPassword ? (
                   <EyeOff size={18} color={theme.colors.textMuted} />
-                ) : (
+                  ) : (
                   <Eye size={18} color={theme.colors.textMuted} />
-                )}
-              </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
             </View>
 
             <View
@@ -138,17 +138,17 @@ export default function ChangePasswordScreen() {
                 value={newPassword}
                 onChangeText={setNewPassword}
                 secureTextEntry={!showNewPassword}
-                autoCapitalize="none"
-              />
+              autoCapitalize="none"
+            />
               <TouchableOpacity
                 onPress={() => setShowNewPassword(!showNewPassword)}
               >
                 {showNewPassword ? (
                   <EyeOff size={18} color={theme.colors.textMuted} />
-                ) : (
+                  ) : (
                   <Eye size={18} color={theme.colors.textMuted} />
-                )}
-              </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
             </View>
 
             <View
@@ -172,17 +172,17 @@ export default function ChangePasswordScreen() {
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry={!showConfirmPassword}
-                autoCapitalize="none"
-              />
+              autoCapitalize="none"
+            />
               <TouchableOpacity
                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
               >
                 {showConfirmPassword ? (
                   <EyeOff size={18} color={theme.colors.textMuted} />
-                ) : (
+                  ) : (
                   <Eye size={18} color={theme.colors.textMuted} />
-                )}
-              </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
             </View>
 
             <View style={styles.requirements}>

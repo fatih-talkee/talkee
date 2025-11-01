@@ -12,13 +12,14 @@ import {
   FlatList,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Plus, X, Edit2, Trash2, Calendar, DollarSign, Clock, Globe } from 'lucide-react-native';
+import { Plus, X, Edit2, Trash2, Calendar, DollarSign, Clock, Globe, Zap } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useToast } from '@/lib/toastService';
+import { mockUserProfile } from '@/mockData/user';
 
 interface Availability {
   id: string;
@@ -86,6 +87,11 @@ export default function AvailabilitySettingsScreen() {
   const [showModal, setShowModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [editingAvailability, setEditingAvailability] = useState<Availability | null>(null);
+  
+  // Urgent call settings - initialized from mock user data
+  const [urgentCallEnabled, setUrgentCallEnabled] = useState(mockUserProfile.urgentCallEnabled);
+  const [urgentCallPrice, setUrgentCallPrice] = useState(mockUserProfile.urgentCallPrice.toString());
+  const [urgentCallCurrency, setUrgentCallCurrency] = useState<'USD' | 'TRY' | 'EUR'>(mockUserProfile.urgentCallCurrency);
 
   const [formData, setFormData] = useState<Partial<Availability>>({
     availableAt: 'every',
@@ -399,6 +405,120 @@ export default function AvailabilitySettingsScreen() {
       />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Urgent Call Settings */}
+        <Card 
+          style={[
+            styles.urgentCallCard, 
+            { 
+              backgroundColor: theme.name === 'dark' ? '#000000' : theme.colors.card,
+              borderColor: theme.name === 'dark' ? 'rgba(255, 255, 255, 0.3)' : theme.colors.border,
+              borderWidth: 1.5,
+              padding: 16,
+              marginBottom: 24,
+            }
+          ]}
+        >
+          <View style={styles.urgentCallHeader}>
+            <View style={styles.urgentCallHeaderLeft}>
+              <View
+                style={[
+                  styles.iconContainer,
+                  {
+                    backgroundColor:
+                      theme.name === 'dark'
+                        ? '#FFD60A' + '20'
+                        : '#FFD60A' + '15',
+                  },
+                ]}
+              >
+                <Zap size={20} color="#FFD60A" />
+              </View>
+              <View style={styles.urgentCallInfo}>
+                <Text style={[styles.urgentCallTitle, { color: theme.colors.text }]}>
+                  Urgent Call
+                </Text>
+                <Text style={[styles.urgentCallDescription, { color: theme.colors.textMuted }]}>
+                  Allow users to call you even outside your scheduled availability
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={() => setUrgentCallEnabled(!urgentCallEnabled)}
+              style={[
+                styles.toggleButton,
+                {
+                  backgroundColor: urgentCallEnabled 
+                    ? (theme.name === 'dark' ? theme.colors.success : theme.colors.success + '40')
+                    : (theme.name === 'dark' ? theme.colors.surface : theme.colors.surface),
+                  borderColor: urgentCallEnabled 
+                    ? theme.colors.success 
+                    : theme.colors.border,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.toggleSwitch,
+                  {
+                    backgroundColor: urgentCallEnabled ? '#FFFFFF' : theme.colors.textMuted,
+                    alignSelf: urgentCallEnabled ? 'flex-end' : 'flex-start',
+                  },
+                ]}
+              />
+            </TouchableOpacity>
+          </View>
+          
+          {urgentCallEnabled && (
+            <View style={styles.urgentCallForm}>
+              {/* Currency */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: theme.colors.text }]}>
+                  Currency
+                </Text>
+                <View style={styles.optionsRow}>
+                  {currencyOptions.map(currency => (
+                    <TouchableOpacity
+                      key={currency}
+                      onPress={() => setUrgentCallCurrency(currency as any)}
+                      style={[
+                        styles.optionButton,
+                        { 
+                          backgroundColor: urgentCallCurrency === currency 
+                            ? theme.colors.primary + '20'
+                            : theme.colors.surface,
+                          borderColor: theme.colors.border,
+                        },
+                        urgentCallCurrency === currency && { borderColor: theme.colors.primary },
+                      ]}
+                    >
+                      <Text style={[
+                        styles.optionText,
+                        { color: theme.colors.text },
+                        urgentCallCurrency === currency && { color: theme.colors.primary, fontFamily: 'Inter-Bold' },
+                      ]}>
+                        {currencySymbols[currency]} {currency}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Urgent Call Price */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: theme.colors.text }]}>
+                  Urgent Call Price Per Minute
+                </Text>
+                <Input
+                  value={urgentCallPrice}
+                  onChangeText={(text) => setUrgentCallPrice(text)}
+                  placeholder="15.00"
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+          )}
+        </Card>
+
         {availabilities.length === 0 ? (
           <Card style={[styles.emptyCard, { backgroundColor: theme.colors.card }]}>
             <Calendar size={48} color={theme.colors.textMuted} />
@@ -864,6 +984,54 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     marginTop: 0,
+  },
+  urgentCallCard: {
+    borderRadius: 16,
+  },
+  urgentCallHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  urgentCallHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  urgentCallInfo: {
+    flex: 1,
+  },
+  urgentCallTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 4,
+  },
+  urgentCallDescription: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    lineHeight: 18,
+  },
+  toggleButton: {
+    width: 52,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleSwitch: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  urgentCallForm: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
   },
 });
 

@@ -29,6 +29,7 @@ import {
   Award,
   MessageCircle,
   DollarSign,
+  Zap,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { TabButtons } from '@/components/ui/TabButtons';
@@ -36,6 +37,7 @@ import { Card } from '@/components/ui/Card';
 import { mockProfessionals } from '@/mockData/professionals';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ShareProfileModal } from '@/components/profile/ShareProfileModal';
+import { mockUserProfile } from '@/mockData/user';
 
 type TabType = 'feed' | 'about' | 'availability' | 'cv';
 
@@ -266,6 +268,92 @@ export default function ProfessionalProfileScreen() {
       case 'availability':
         return (
           <View style={styles.availabilityContainer}>
+            {/* Urgent Call Card */}
+            {mockUserProfile.urgentCallEnabled && (
+              <Card
+                padding="none"
+                style={[
+                  styles.urgentCallCard,
+                  {
+                    backgroundColor:
+                      theme.name === 'dark' ? '#000000' : theme.colors.card,
+                    borderColor:
+                      theme.name === 'dark'
+                        ? 'rgba(255, 255, 255, 0.3)'
+                        : theme.colors.border,
+                    borderWidth: 1.5,
+                    padding: 16,
+                    marginBottom: 16,
+                  },
+                ]}
+              >
+                <View style={styles.urgentCallHeader}>
+                  <View style={styles.urgentCallHeaderLeft}>
+                    <View
+                      style={[
+                        styles.urgentCallIconContainer,
+                        {
+                          backgroundColor:
+                            theme.name === 'dark'
+                              ? '#FFD60A' + '20'
+                              : '#FFD60A' + '15',
+                        },
+                      ]}
+                    >
+                      <Zap size={20} color="#FFD60A" />
+                    </View>
+                    <View style={styles.urgentCallInfo}>
+                      <Text
+                        style={[
+                          styles.urgentCallTitle,
+                          { color: theme.colors.text },
+                        ]}
+                      >
+                        Urgent Call Available
+                      </Text>
+                      <Text
+                        style={[
+                          styles.urgentCallDescription,
+                          { color: theme.colors.textMuted },
+                        ]}
+                      >
+                        Available for urgent calls outside scheduled hours
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.urgentCallPriceRow}>
+                  <View
+                    style={[
+                      styles.urgentCallPriceBadge,
+                      {
+                        backgroundColor:
+                          theme.name === 'dark'
+                            ? '#FFD60A' + '20'
+                            : '#FFD60A' + '15',
+                      },
+                    ]}
+                  >
+                    <DollarSign size={16} color="#FFD60A" />
+                    <Text
+                      style={[
+                        styles.urgentCallPriceText,
+                        { color: '#FFD60A' },
+                      ]}
+                    >
+                      {mockUserProfile.urgentCallCurrency === 'USD'
+                        ? '$'
+                        : mockUserProfile.urgentCallCurrency === 'TRY'
+                        ? '₺'
+                        : '€'}
+                      {mockUserProfile.urgentCallPrice.toFixed(2)}/min
+                    </Text>
+                  </View>
+                </View>
+              </Card>
+            )}
+
             {mockAvailabilities.length === 0 ? (
               <Card
                 style={[
@@ -786,6 +874,27 @@ export default function ProfessionalProfileScreen() {
         contentContainerStyle={{ paddingBottom: 160 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Urgent Call Button */}
+        {mockUserProfile.urgentCallEnabled && (
+          <TouchableOpacity
+            style={styles.urgentCallButton}
+            onPress={() => {
+              // Handle urgent call action
+            }}
+          >
+            <Zap size={18} color="#000000" />
+            <Text style={styles.urgentCallButtonText}>
+              Urgent Call Now •{' '}
+              {mockUserProfile.urgentCallCurrency === 'USD'
+                ? '$'
+                : mockUserProfile.urgentCallCurrency === 'TRY'
+                ? '₺'
+                : '€'}
+              {mockUserProfile.urgentCallPrice.toFixed(2)}/min
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {/* Profile Header */}
         <Card
           style={[styles.profileCard, { backgroundColor: theme.colors.card }]}
@@ -1049,6 +1158,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 24,
   },
+  urgentCallButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFD60A',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  urgentCallButtonText: {
+    fontSize: 15,
+    fontFamily: 'Inter-Bold',
+    color: '#000000',
+  },
   profileCard: {
     marginBottom: 24,
   },
@@ -1309,6 +1434,59 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Regular',
     textAlign: 'center',
+  },
+  urgentCallCard: {
+    borderRadius: 16,
+  },
+  urgentCallHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  urgentCallHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  urgentCallIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  urgentCallInfo: {
+    flex: 1,
+  },
+  urgentCallTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 4,
+  },
+  urgentCallDescription: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    lineHeight: 18,
+  },
+  urgentCallPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  urgentCallPriceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+  },
+  urgentCallPriceText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
   },
   cvContainer: {
     padding: 16,

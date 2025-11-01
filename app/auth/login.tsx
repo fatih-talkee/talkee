@@ -16,14 +16,43 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useIsMounted } from '@/hooks/useIsMounted';
 import { useToast } from '@/lib/toastService';
+import { useTheme } from '@/contexts/ThemeContext';
+import { useEffect } from 'react';
 
 export default function LoginScreen() {
+  const { theme } = useTheme();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const isMountedRef = useIsMounted();
   const toast = useToast();
+
+  // Show 3 sample toasts when component mounts
+  useEffect(() => {
+    // Show them with short delays so they appear almost simultaneously
+    toast.success({
+      title: 'Success',
+      message: 'Your login was successful!',
+      duration: 4000,
+    });
+
+    setTimeout(() => {
+      toast.error({
+        title: 'Error',
+        message: 'Invalid credentials. Please try again.',
+        duration: 4000,
+      });
+    }, 300);
+
+    setTimeout(() => {
+      toast.info({
+        title: 'Info',
+        message: 'Welcome back to Talkee!',
+        duration: 4000,
+      });
+    }, 600);
+  }, []);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -41,7 +70,6 @@ export default function LoginScreen() {
   };
 
   const handleSocialLogin = (provider: string) => {
-    console.log(`Login with ${provider}`);
     // Mock social login - navigate directly to home
     setTimeout(() => {
       router.replace('/(tabs)');
@@ -49,7 +77,10 @@ export default function LoginScreen() {
   };
 
   return (
-    <LinearGradient colors={['#2e2461', theme.colors.brandPink]} style={styles.container}>
+    <LinearGradient
+      colors={['#2e2461', theme.colors.brandPink]}
+      style={styles.container}
+    >
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

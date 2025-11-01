@@ -41,13 +41,9 @@ export function RecordingPlaybackModal({
     setIsPlaying(!isPlaying);
   };
 
-  const handleDownload = () => {
-    console.log('Download recording:', recording.id);
-  };
+  const handleDownload = () => {};
 
-  const handleShare = () => {
-    console.log('Share recording:', recording.id);
-  };
+  const handleShare = () => {};
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);

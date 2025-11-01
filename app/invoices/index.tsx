@@ -11,7 +11,6 @@ import {
 import { router } from 'expo-router';
 import {
   FileText,
-  Search,
   DollarSign,
   Calendar,
   CheckCircle,
@@ -20,10 +19,9 @@ import {
   Download,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
-import { TabButtons } from '@/components/ui/TabButtons';
 import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
 import { useTheme } from '@/contexts/ThemeContext';
+import { SearchBar } from '@/components/ui/SearchBar';
 
 interface Invoice {
   id: string;
@@ -223,7 +221,6 @@ export default function InvoicesScreen() {
 
   const handleDownloadInvoice = (invoiceId: string) => {
     // Handle invoice download
-    console.log('Download invoice:', invoiceId);
   };
 
   const renderInvoiceItem = ({ item }: { item: Invoice }) => (
@@ -375,7 +372,11 @@ export default function InvoicesScreen() {
         showTabButtons={true}
         tabOptions={filters}
         selectedTabKey={selectedFilter}
-        onTabSelect={(key) => setSelectedFilter(key as any)}
+        onTabSelect={(key: string) =>
+          setSelectedFilter(
+            key as 'all' | 'paid' | 'pending' | 'overdue' | 'cancelled'
+          )
+        }
       />
 
       <FlatList
