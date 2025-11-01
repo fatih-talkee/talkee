@@ -20,6 +20,7 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   useFrameworkReady();
   const [i18nReady, setI18nReady] = useState(false);
+  const [initError, setInitError] = useState<Error | null>(null);
 
   const [fontsLoaded, fontError] = useFonts({
     'Inter-Regular': Inter_400Regular,
@@ -27,11 +28,32 @@ export default function RootLayout() {
     'Inter-Bold': Inter_700Bold,
   });
 
+  // Add timeout to prevent infinite hang
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (!i18nReady) {
+        console.warn('Initialization timeout - forcing ready state');
+        setI18nReady(true);
+      }
+    }, 10000); // 10 second timeout
+
+    return () => clearTimeout(timeout);
+  }, [i18nReady]);
+
   useEffect(() => {
     let mounted = true;
     (async () => {
-      await initI18n();
-      if (mounted) setI18nReady(true);
+      try {
+        console.log('[App] Starting i18n initialization...');
+        await initI18n();
+        console.log('[App] i18n initialized successfully');
+        if (mounted) setI18nReady(true);
+      } catch (error) {
+        console.error('[App] Failed to initialize i18n:', error);
+        setInitError(error instanceof Error ? error : new Error(String(error)));
+        // Still set ready to prevent app from hanging
+        if (mounted) setI18nReady(true);
+      }
     })();
     return () => {
       mounted = false;
@@ -39,8 +61,12 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
+    console.log('[App] State check - fontsLoaded:', fontsLoaded, 'fontError:', fontError, 'i18nReady:', i18nReady);
     if ((fontsLoaded || fontError) && i18nReady) {
-      SplashScreen.hideAsync();
+      console.log('[App] All initialization complete, hiding splash screen');
+      SplashScreen.hideAsync().catch((error) => {
+        console.error('[App] Error hiding splash screen:', error);
+      });
     }
   }, [fontsLoaded, fontError, i18nReady]);
 
