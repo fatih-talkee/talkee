@@ -23,6 +23,7 @@
     },
     "android": {
       "package": "net.talkee.app",
+      "versionCode": 1,
       "googleServicesFile": "./firebase/android/google-services.json",
       "permissions": [
         "RECORD_AUDIO",
@@ -34,7 +35,11 @@
         "BLUETOOTH_CONNECT",
         "WAKE_LOCK",
         "FOREGROUND_SERVICE"
-      ]
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#000000"
+      }
     },
     "web": {
       "bundler": "metro",
@@ -52,7 +57,10 @@
             "useFrameworks": "static"
           },
           "android": {
-            "usesCleartextTraffic": false
+            "usesCleartextTraffic": false,
+            "minSdkVersion": 23,
+            "targetSdkVersion": 34,
+            "compileSdkVersion": 34
           }
         }
       ]
