@@ -37,7 +37,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { mockCategories } from '@/mockData/professionals';
 import { useIsMounted } from '@/hooks/useIsMounted';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Modal, KeyboardAvoidingView } from 'react-native';
+import { Modal, KeyboardAvoidingView, Pressable } from 'react-native';
 
 interface Availability {
   id: string;
@@ -126,6 +126,8 @@ export default function BecomeProfessionalScreen() {
   const [isAvailable, setIsAvailable] = useState(true);
   const [isPublic, setIsPublic] = useState(true);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
+  const [policyType, setPolicyType] = useState<'terms' | 'privacy'>('terms');
 
   // Availability helpers
   const openAvailabilityModal = (availability?: Availability) => {
@@ -310,7 +312,7 @@ export default function BecomeProfessionalScreen() {
     setTimeout(() => {
       if (isMountedRef.current) {
         setLoading(false);
-        router.replace('/(tabs)');
+        router.replace('/(tabs)/index' as any);
       }
     }, 1000);
   };
@@ -361,28 +363,28 @@ export default function BecomeProfessionalScreen() {
   );
 
   const renderStep1 = () => (
-    <View style={styles.stepContent}>
+    <View style={[styles.stepContent, styles.stepContentCompact]}>
       <View
         style={[
-          styles.iconContainer,
+          styles.iconContainerCompact,
           { backgroundColor: theme.colors.surface },
         ]}
       >
         <View
-          style={[styles.iconCircle, { backgroundColor: theme.colors.primary }]}
+          style={[styles.iconCircleCompact, { backgroundColor: theme.colors.primary }]}
         >
-          <User size={32} color={theme.colors.surface} strokeWidth={2.5} />
+          <User size={20} color={theme.colors.surface} strokeWidth={2.5} />
         </View>
       </View>
 
-      <Text style={[styles.title, { color: theme.colors.text }]}>
+      <Text style={[styles.titleCompact, { color: theme.colors.text }]}>
         Professional Information
       </Text>
-      <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+      <Text style={[styles.subtitleCompact, { color: theme.colors.textSecondary }]}>
         Tell us about your professional background
       </Text>
 
-      <View style={styles.form}>
+      <View style={styles.formCompact}>
         <Input
           label="Full Name *"
           value={fullName}
@@ -410,12 +412,12 @@ export default function BecomeProfessionalScreen() {
         />
 
         <View style={styles.inputGroup}>
-          <Text style={[styles.label, { color: theme.colors.text }]}>
+          <Text style={[styles.labelCompact, { color: theme.colors.text }]}>
             Education *
           </Text>
           <TouchableOpacity
             style={[
-              styles.dropdownButton,
+              styles.dropdownButtonCompact,
               {
                 backgroundColor: theme.colors.surface,
                 borderColor: theme.colors.border,
@@ -423,10 +425,10 @@ export default function BecomeProfessionalScreen() {
             ]}
             onPress={() => setShowEducationDropdown(!showEducationDropdown)}
           >
-            <GraduationCap size={20} color={theme.colors.textMuted} />
+            <GraduationCap size={18} color={theme.colors.textMuted} />
             <Text
               style={[
-                styles.dropdownText,
+                styles.dropdownTextCompact,
                 {
                   color: education ? theme.colors.text : theme.colors.textMuted,
                 },
@@ -493,24 +495,24 @@ export default function BecomeProfessionalScreen() {
   );
 
   const renderStep2 = () => (
-    <View style={styles.stepContent}>
+    <View style={[styles.stepContent, styles.stepContentCompact]}>
       <View
         style={[
-          styles.iconContainer,
+          styles.iconContainerCompact,
           { backgroundColor: theme.colors.surface },
         ]}
       >
         <View
-          style={[styles.iconCircle, { backgroundColor: theme.colors.primary }]}
+          style={[styles.iconCircleCompact, { backgroundColor: theme.colors.primary }]}
         >
-          <Briefcase size={32} color={theme.colors.surface} strokeWidth={2.5} />
+          <Briefcase size={20} color={theme.colors.surface} strokeWidth={2.5} />
         </View>
       </View>
 
-      <Text style={[styles.title, { color: theme.colors.text }]}>
+      <Text style={[styles.titleCompact, { color: theme.colors.text }]}>
         Select Categories
       </Text>
-      <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+      <Text style={[styles.subtitleCompact, { color: theme.colors.textSecondary }]}>
         Choose categories where you can provide expertise
       </Text>
 
@@ -536,7 +538,7 @@ export default function BecomeProfessionalScreen() {
               {isSelected && (
                 <View style={styles.checkBadge}>
                   <Check
-                    size={14}
+                    size={12}
                     color={theme.colors.surface}
                     strokeWidth={3}
                   />
@@ -775,8 +777,8 @@ export default function BecomeProfessionalScreen() {
             >
               <Trash2 size={18} color="#ef4444" />
             </TouchableOpacity>
-          </View>
         </View>
+      </View>
 
         <View
           style={[styles.divider, { backgroundColor: theme.colors.border }]}
@@ -793,7 +795,7 @@ export default function BecomeProfessionalScreen() {
             <Text style={[styles.priceText, { color: theme.colors.primary }]}>
               {currencySymbols[item.currency]}
               {item.pricePerMinute} / min
-            </Text>
+      </Text>
           </View>
         </View>
       </Card>
@@ -806,37 +808,37 @@ export default function BecomeProfessionalScreen() {
     );
 
     return (
-      <View style={styles.stepContent}>
+      <View style={[styles.stepContent, styles.stepContentCompact]}>
         <View
           style={[
-            styles.iconContainer,
+            styles.iconContainerCompact,
             { backgroundColor: theme.colors.surface },
           ]}
         >
           <View
             style={[
-              styles.iconCircle,
+              styles.iconCircleCompact,
               { backgroundColor: theme.colors.primary },
             ]}
           >
             <Calendar
-              size={32}
+              size={20}
               color={theme.colors.surface}
               strokeWidth={2.5}
             />
           </View>
         </View>
 
-        <Text style={[styles.title, { color: theme.colors.text }]}>
+        <Text style={[styles.titleCompact, { color: theme.colors.text }]}>
           Set Your Availability
         </Text>
-        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+        <Text style={[styles.subtitleCompact, { color: theme.colors.textSecondary }]}>
           Add your availability schedule and set minimum call duration
-        </Text>
+      </Text>
 
-        <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>
+        <View style={styles.formCompact}>
+        <View style={styles.inputGroup}>
+            <Text style={[styles.labelCompact, { color: theme.colors.text }]}>
               Availability Schedule
             </Text>
             {availabilities.length === 0 ? (
@@ -899,42 +901,42 @@ export default function BecomeProfessionalScreen() {
                     ]}
                   >
                     Add Availability
-                  </Text>
+          </Text>
                 </TouchableOpacity>
               </>
             )}
-          </View>
+        </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>
+        <View style={styles.inputGroup}>
+            <Text style={[styles.labelCompact, { color: theme.colors.text }]}>
               Minimum Call Duration
             </Text>
-            <TouchableOpacity
+          <TouchableOpacity
               style={[
-                styles.dropdownButton,
+                styles.dropdownButtonCompact,
                 {
                   backgroundColor: theme.colors.surface,
                   borderColor: theme.colors.border,
                 },
               ]}
-              onPress={() => setShowDurationDropdown(!showDurationDropdown)}
-            >
-              <Clock size={20} color={theme.colors.textMuted} />
-              <Text style={[styles.dropdownText, { color: theme.colors.text }]}>
-                {selectedDuration?.label}
-              </Text>
-              <ChevronLeft
-                size={16}
-                color={theme.colors.textMuted}
+            onPress={() => setShowDurationDropdown(!showDurationDropdown)}
+          >
+              <Clock size={18} color={theme.colors.textMuted} />
+              <Text style={[styles.dropdownTextCompact, { color: theme.colors.text }]}>
+              {selectedDuration?.label}
+            </Text>
+            <ChevronLeft
+              size={16}
+              color={theme.colors.textMuted}
                 style={{
                   transform: [
                     { rotate: showDurationDropdown ? '90deg' : '-90deg' },
                   ],
                 }}
-              />
-            </TouchableOpacity>
+            />
+          </TouchableOpacity>
 
-            {showDurationDropdown && (
+          {showDurationDropdown && (
               <View
                 style={[
                   styles.dropdownMenu,
@@ -944,66 +946,66 @@ export default function BecomeProfessionalScreen() {
                   },
                 ]}
               >
-                {minimumDurations.map((duration) => (
-                  <TouchableOpacity
-                    key={duration.value}
-                    style={[
-                      styles.dropdownItem,
-                      { borderBottomColor: theme.colors.border },
+              {minimumDurations.map((duration) => (
+                <TouchableOpacity
+                  key={duration.value}
+                  style={[
+                    styles.dropdownItem,
+                    { borderBottomColor: theme.colors.border },
                       minimumDuration === duration.value && {
                         backgroundColor: theme.colors.primary,
                       },
-                    ]}
-                    onPress={() => {
-                      setMinimumDuration(duration.value);
-                      setShowDurationDropdown(false);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.dropdownItemText,
+                  ]}
+                  onPress={() => {
+                    setMinimumDuration(duration.value);
+                    setShowDurationDropdown(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.dropdownItemText,
                         {
                           color:
                             minimumDuration === duration.value
                               ? theme.colors.surface
                               : theme.colors.text,
                         },
-                      ]}
-                    >
-                      {duration.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-            <Text style={[styles.hint, { color: theme.colors.textMuted }]}>
-              Prevent calls shorter than this duration
-            </Text>
-          </View>
+                    ]}
+                  >
+                    {duration.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          <Text style={[styles.hint, { color: theme.colors.textMuted }]}>
+            Prevent calls shorter than this duration
+          </Text>
         </View>
       </View>
-    );
+    </View>
+  );
   };
 
   const renderStep4 = () => (
-    <View style={styles.stepContent}>
+    <View style={[styles.stepContent, styles.stepContentCompact]}>
       <View
         style={[
-          styles.iconContainer,
+          styles.iconContainerCompact,
           { backgroundColor: theme.colors.surface },
         ]}
       >
         <View
-          style={[styles.iconCircle, { backgroundColor: theme.colors.primary }]}
+          style={[styles.iconCircleCompact, { backgroundColor: theme.colors.primary }]}
         >
-          <Check size={32} color={theme.colors.surface} strokeWidth={3} />
+          <Check size={20} color={theme.colors.surface} strokeWidth={3} />
         </View>
       </View>
 
-      <Text style={[styles.title, { color: theme.colors.text }]}>
+      <Text style={[styles.titleCompact, { color: theme.colors.text }]}>
         Almost There!
       </Text>
-      <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+      <Text style={[styles.subtitleCompact, { color: theme.colors.textSecondary }]}>
         Just a few more settings to complete your professional profile
       </Text>
 
@@ -1099,7 +1101,10 @@ export default function BecomeProfessionalScreen() {
         <Text style={[styles.termsText, { color: theme.colors.textSecondary }]}>
           By continuing, you agree to our{' '}
           <TouchableOpacity
-            onPress={() => router.push('/profile/privacy-policy')}
+            onPress={() => {
+              setPolicyType('terms');
+              setShowPolicyModal(true);
+            }}
           >
             <Text style={[styles.termsLink, { color: theme.colors.primary }]}>
               Terms of Service
@@ -1107,7 +1112,10 @@ export default function BecomeProfessionalScreen() {
           </TouchableOpacity>{' '}
           and{' '}
           <TouchableOpacity
-            onPress={() => router.push('/profile/privacy-policy')}
+            onPress={() => {
+              setPolicyType('privacy');
+              setShowPolicyModal(true);
+            }}
           >
             <Text style={[styles.termsLink, { color: theme.colors.primary }]}>
               Privacy Policy
@@ -1528,6 +1536,236 @@ export default function BecomeProfessionalScreen() {
           />
         </View>
       )}
+
+      {/* Policy Modal */}
+      <Modal
+        visible={showPolicyModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowPolicyModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowPolicyModal(false)}
+        >
+          <Pressable
+            style={[
+              styles.policyModalContent,
+              {
+                backgroundColor:
+                  theme.name === 'dark' ? '#000000' : theme.colors.card,
+                borderColor:
+                  theme.name === 'dark'
+                    ? 'rgba(255, 255, 255, 0.3)'
+                    : theme.colors.border,
+                borderWidth: 1.5,
+              },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <TouchableOpacity
+              style={[
+                styles.modalCloseButton,
+                { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
+              ]}
+              onPress={() => setShowPolicyModal(false)}
+            >
+              <X size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            <ScrollView
+              style={styles.policyScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View
+                style={[
+                  styles.modalIconContainer,
+                  { backgroundColor: theme.colors.primary + '20' },
+                ]}
+              >
+                <FileText
+                  size={40}
+                  color={theme.colors.primary}
+                  strokeWidth={1.5}
+                />
+              </View>
+
+              <Text style={[styles.policyModalTitle, { color: theme.colors.text }]}>
+                {policyType === 'terms' ? 'Terms of Service' : 'Privacy Policy'}
+              </Text>
+
+              <Text
+                style={[
+                  styles.policyLastUpdated,
+                  { color: theme.colors.textMuted },
+                ]}
+              >
+                Last updated: October 21, 2025
+              </Text>
+
+              <Text
+                style={[
+                  styles.policySectionTitle,
+                  { color: theme.colors.text },
+                ]}
+              >
+                {policyType === 'terms' ? 'Introduction' : 'Introduction'}
+              </Text>
+              <Text
+                style={[
+                  styles.policyParagraph,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                {policyType === 'terms'
+                  ? 'Welcome to Talkee. By accessing or using our platform, you agree to be bound by these Terms of Service. Please read them carefully before using our services.'
+                  : 'At Talkee, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains how we collect, use, disclose, and safeguard your data when you use our platform. By using Talkee, you agree to the collection and use of information in accordance with this policy.'}
+              </Text>
+
+              {policyType === 'privacy' && (
+                <>
+                  <Text
+                    style={[
+                      styles.policySectionTitle,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    Information We Collect
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyParagraph,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    We may collect the following types of information:
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBulletPoint,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    • Personal information (name, email address, phone number)
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBulletPoint,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    • Payment details and transaction history
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBulletPoint,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    • Communication and call data between users
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBulletPoint,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    • Device and usage data (IP address, device type, location, app logs)
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBulletPoint,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    • Profile information (photos, biography, professional credentials)
+                  </Text>
+                </>
+              )}
+
+              {policyType === 'terms' && (
+                <>
+                  <Text
+                    style={[
+                      styles.policySectionTitle,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    User Responsibilities
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyParagraph,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    As a user of Talkee, you agree to:
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBulletPoint,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    • Provide accurate and truthful information
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBulletPoint,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    • Respect other users and maintain professional conduct
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBulletPoint,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    • Use the platform in accordance with all applicable laws
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBulletPoint,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    • Not share your account credentials with others
+                  </Text>
+                  <Text
+                    style={[
+                      styles.policyBulletPoint,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    • Report any suspicious or inappropriate behavior
+                  </Text>
+                </>
+              )}
+
+              <Text
+                style={[
+                  styles.policySectionTitle,
+                  { color: theme.colors.text },
+                ]}
+              >
+                {policyType === 'terms' ? 'Service Usage' : 'Data Protection'}
+              </Text>
+              <Text
+                style={[
+                  styles.policyParagraph,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                {policyType === 'terms'
+                  ? 'Talkee provides a platform for connecting professionals with clients. We reserve the right to modify, suspend, or discontinue any part of the service at any time. Users must comply with all platform rules and guidelines.'
+                  : 'We implement industry-standard security measures including advanced encryption, secure data storage, and regular security audits to protect your information. All payment information is processed through secure, PCI-compliant payment processors.'}
+              </Text>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1679,35 +1917,36 @@ const styles = StyleSheet.create({
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
     width: '100%',
   },
   categoryCard: {
     width: '47%',
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    borderWidth: 2,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
     alignItems: 'center',
     position: 'relative',
+    minHeight: 80,
   },
   checkBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   categoryEmoji: {
-    fontSize: 32,
-    marginBottom: 8,
+    fontSize: 24,
+    marginBottom: 6,
   },
   categoryName: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Inter-Bold',
     textAlign: 'center',
   },
@@ -2013,5 +2252,132 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 12,
     fontFamily: 'Inter-Regular',
+  },
+  // Compact styles for Step 1
+  stepContentCompact: {
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  iconContainerCompact: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    alignSelf: 'center',
+  },
+  iconCircleCompact: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleCompact: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 6,
+    textAlign: 'left',
+  },
+  subtitleCompact: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'left',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  formCompact: {
+    width: '100%',
+    gap: 16,
+  },
+  labelCompact: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    marginBottom: 6,
+  },
+  dropdownButtonCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 10,
+  },
+  dropdownTextCompact: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: 'Inter-Regular',
+  },
+  // Policy Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  policyModalContent: {
+    width: '100%',
+    maxWidth: 600,
+    maxHeight: '85%',
+    borderRadius: 20,
+    padding: 24,
+    position: 'relative',
+  },
+  modalCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 1,
+  },
+  modalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  policyModalTitle: {
+    fontSize: 22,
+    fontFamily: 'Inter-Bold',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  policyLastUpdated: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  policyScrollContent: {
+    flex: 1,
+  },
+  policySectionTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  policyParagraph: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  policyBulletPoint: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    lineHeight: 22,
+    marginBottom: 6,
+    paddingLeft: 8,
   },
 });

@@ -180,9 +180,9 @@ export default function ScheduleCallScreen() {
                   { color: theme.colors.textSecondary },
                 ]}
               >
-                {professional.title}
-              </Text>
-              <View style={styles.rateInfo}>
+            {professional.title}
+          </Text>
+          <View style={styles.rateInfo}>
                 <View
                   style={[
                     styles.rateBadge,
@@ -193,8 +193,8 @@ export default function ScheduleCallScreen() {
                   <Text
                     style={[styles.rateText, { color: theme.colors.primary }]}
                   >
-                    ${professional.ratePerMinute}/min
-                  </Text>
+                    {'$' + professional.ratePerMinute.toFixed(2) + '/min'}
+            </Text>
                 </View>
                 <View
                   style={[
@@ -202,18 +202,18 @@ export default function ScheduleCallScreen() {
                     { backgroundColor: theme.colors.success + '20' },
                   ]}
                 >
-                  <Clock size={12} color={theme.colors.success} />
+              <Clock size={12} color={theme.colors.success} />
                   <Text
                     style={[
                       styles.responseTimeText,
                       { color: theme.colors.success },
                     ]}
                   >
-                    {professional.responseTime}
-                  </Text>
-                </View>
-              </View>
+                {professional.responseTime}
+              </Text>
             </View>
+          </View>
+        </View>
           </View>
         </Card>
 
@@ -326,35 +326,35 @@ export default function ScheduleCallScreen() {
             padding="none"
           >
             <View style={styles.calendarContainer}>
-              <Calendar
-                current={new Date().toISOString().split('T')[0]}
-                minDate={new Date().toISOString().split('T')[0]}
-                onDayPress={(day) => handleDateSelect(day.dateString)}
-                markedDates={markedDates}
-                theme={{
+            <Calendar
+              current={new Date().toISOString().split('T')[0]}
+              minDate={new Date().toISOString().split('T')[0]}
+              onDayPress={(day) => handleDateSelect(day.dateString)}
+              markedDates={markedDates}
+              theme={{
                   backgroundColor:
                     theme.name === 'dark' ? '#000000' : theme.colors.card,
                   calendarBackground:
                     theme.name === 'dark' ? '#000000' : theme.colors.card,
-                  textSectionTitleColor: theme.colors.textMuted,
+                textSectionTitleColor: theme.colors.textMuted,
                   selectedDayBackgroundColor: theme.colors.primary,
                   selectedDayTextColor: '#FFFFFF',
                   todayTextColor: theme.colors.primary,
-                  dayTextColor: theme.colors.text,
-                  textDisabledColor: theme.colors.textMuted,
+                dayTextColor: theme.colors.text,
+                textDisabledColor: theme.colors.textMuted,
                   dotColor: theme.colors.primary,
                   selectedDotColor: '#FFFFFF',
                   arrowColor: theme.colors.primary,
-                  monthTextColor: theme.colors.text,
-                  textDayFontFamily: 'Inter-Regular',
-                  textMonthFontFamily: 'Inter-Bold',
-                  textDayHeaderFontFamily: 'Inter-Medium',
-                  textDayFontSize: 14,
-                  textMonthFontSize: 16,
-                  textDayHeaderFontSize: 12,
-                }}
-              />
-            </View>
+                monthTextColor: theme.colors.text,
+                textDayFontFamily: 'Inter-Regular',
+                textMonthFontFamily: 'Inter-Bold',
+                textDayHeaderFontFamily: 'Inter-Medium',
+                textDayFontSize: 14,
+                textMonthFontSize: 16,
+                textDayHeaderFontSize: 12,
+              }}
+            />
+          </View>
           </Card>
         </View>
 
@@ -383,7 +383,7 @@ export default function ScheduleCallScreen() {
                             ? theme.colors.primary
                             : theme.name === 'dark'
                             ? 'rgba(255, 255, 255, 0.3)'
-                            : theme.colors.border,
+                          : theme.colors.border,
                         borderWidth: 1.5,
                         opacity: slot.available ? 1 : 0.5,
                       },
@@ -400,9 +400,9 @@ export default function ScheduleCallScreen() {
                           color:
                             selectedTime === slot.time
                               ? '#FFFFFF'
-                              : slot.available
-                              ? theme.colors.text
-                              : theme.colors.textMuted,
+                            : slot.available
+                            ? theme.colors.text
+                            : theme.colors.textMuted,
                         },
                       ]}
                     >
@@ -468,9 +468,9 @@ export default function ScheduleCallScreen() {
             padding="none"
           >
             <View style={styles.summaryContent}>
-              <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>
-                Appointment Summary
-              </Text>
+            <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>
+              Appointment Summary
+            </Text>
 
               <View style={styles.summaryItem}>
                 <View style={styles.summaryItemLeft}>
@@ -494,13 +494,13 @@ export default function ScheduleCallScreen() {
                 <Text
                   style={[styles.summaryValue, { color: theme.colors.text }]}
                 >
-                  {new Date(selectedDate).toLocaleDateString('en-US', {
+                {new Date(selectedDate).toLocaleDateString('en-US', {
                     month: 'short',
-                    day: 'numeric',
+                  day: 'numeric',
                     year: 'numeric',
-                  })}
-                </Text>
-              </View>
+                })}
+              </Text>
+            </View>
 
               <View style={styles.summaryItem}>
                 <View style={styles.summaryItemLeft}>
@@ -511,7 +511,7 @@ export default function ScheduleCallScreen() {
                     ]}
                   >
                     <Clock size={16} color={theme.colors.success} />
-                  </View>
+            </View>
                   <Text
                     style={[
                       styles.summaryLabel,
@@ -554,9 +554,9 @@ export default function ScheduleCallScreen() {
                 <Text
                   style={[styles.summaryValue, { color: theme.colors.text }]}
                 >
-                  {callType === 'voice' ? 'Voice Call' : 'Video Call'}
-                </Text>
-              </View>
+                {callType === 'voice' ? 'Voice Call' : 'Video Call'}
+              </Text>
+            </View>
 
               <View
                 style={[
@@ -573,7 +573,7 @@ export default function ScheduleCallScreen() {
                   ]}
                 >
                   Rate
-                </Text>
+              </Text>
                 <View style={styles.summaryTotalValue}>
                   <DollarSign size={18} color={theme.colors.primary} />
                   <Text
@@ -582,10 +582,10 @@ export default function ScheduleCallScreen() {
                       { color: theme.colors.primary },
                     ]}
                   >
-                    {professional.ratePerMinute}/min
-                  </Text>
-                </View>
-              </View>
+                    {'$' + professional.ratePerMinute.toFixed(2) + '/min'}
+              </Text>
+            </View>
+          </View>
             </View>
           </Card>
         )}
@@ -620,7 +620,7 @@ export default function ScheduleCallScreen() {
             <TouchableOpacity
               style={[
                 styles.closeButton,
-                { backgroundColor: theme.colors.surface },
+                { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
               ]}
               onPress={() => setConfirmModalVisible(false)}
             >
@@ -799,7 +799,7 @@ export default function ScheduleCallScreen() {
                   { color: theme.colors.primary },
                 ]}
               >
-                ${professional.ratePerMinute}/minute
+                {'$' + professional.ratePerMinute.toFixed(2) + '/minute'}
               </Text>
             </View>
 

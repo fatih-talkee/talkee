@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image } from 'react-native';
 import { router } from 'expo-router';
-import { TrendingUp, TrendingDown, DollarSign, UserX } from 'lucide-react-native';
+import { TrendingUp, TrendingDown, DollarSign, UserX, UserCheck } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
+import { TabButtons } from '@/components/ui/TabButtons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Card } from '@/components/ui/Card';
 import { mockWalletTransactions, WalletTransaction } from '@/mockData/professionals';
@@ -156,18 +157,30 @@ export default function WalletHistoryScreen() {
                 styles.transactionAmount, 
                 { color: item.type === 'income' ? theme.colors.success : theme.colors.error }
               ]}>
-                {item.type === 'income' ? '+' : '-'}${item.amount.toFixed(2)}
+                {(item.type === 'income' ? '+' : '-') + '$' + item.amount.toFixed(2)}
               </Text>
             </View>
           </TouchableOpacity>
           
           {item.type === 'income' && item.caller && (
             <TouchableOpacity
-              style={[styles.blockButton, { backgroundColor: isUserBlocked ? theme.colors.success : theme.colors.error }]}
+              style={[
+                styles.blockButton,
+                {
+                  backgroundColor:
+                    theme.name === 'dark' ? '#000000' : theme.colors.surface,
+                  borderWidth: 1,
+                  borderColor: isUserBlocked ? theme.colors.success : theme.colors.error,
+                },
+              ]}
               onPress={() => toggleBlockUser(item.callerId!)}
             >
-              <UserX size={16} color="#ffffff" />
-              <Text style={styles.blockButtonText}>
+              {isUserBlocked ? (
+                <UserCheck size={16} color={theme.colors.success} />
+              ) : (
+                <UserX size={16} color={theme.colors.error} />
+              )}
+              <Text style={[styles.blockButtonText, { color: isUserBlocked ? theme.colors.success : theme.colors.error }]}>
                 {isUserBlocked ? 'Unblock' : 'Block'}
               </Text>
             </TouchableOpacity>
@@ -181,29 +194,11 @@ export default function WalletHistoryScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header showLogo showBack backPosition="right" />
 
-      <View style={[styles.filtersSection, { backgroundColor: '#000000' }]}>
-        <View style={styles.filters}>
-          {filters.map((filter) => (
-            <TouchableOpacity
-              key={filter.key}
-              style={[
-                styles.filterButton,
-                { backgroundColor: theme.colors.background, borderColor: theme.colors.border },
-                selectedFilter === filter.key && theme.name === 'dark' && { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent }
-              ]}
-              onPress={() => setSelectedFilter(filter.key as any)}
-            >
-              <Text style={[
-                styles.filterText,
-                { color: theme.colors.textSecondary },
-                selectedFilter === filter.key && { color: '#000000' }
-              ]}>
-                {filter.label} ({filter.count})
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+      <TabButtons
+        options={filters}
+        selectedKey={selectedFilter}
+        onSelect={(key) => setSelectedFilter(key as any)}
+      />
 
       <FlatList
         data={filteredTransactions}
@@ -228,24 +223,6 @@ export default function WalletHistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  filtersSection: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-  },
-  filters: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  filterText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
   },
   listContent: {
     padding: 24,
@@ -350,14 +327,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: 16,
+    minWidth: 80,
     marginHorizontal: 16,
     marginBottom: 12,
   },
   blockButtonText: {
     fontSize: 12,
     fontFamily: 'Inter-Medium',
-    color: '#ffffff',
     marginLeft: 4,
   },
   blockedBadge: {

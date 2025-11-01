@@ -144,7 +144,7 @@ export default function PurchaseScreen() {
               {creditsAmount.toLocaleString()} credits
             </Text>
             <Text style={[styles.packagePrice, { color: theme.colors.textSecondary }]}>
-              ${totalPrice.toFixed(2)}
+              {'$' + totalPrice.toFixed(2)}
             </Text>
           </Card>
 
@@ -264,7 +264,7 @@ export default function PurchaseScreen() {
         {/* Fixed Bottom Button */}
         <View style={[styles.bottomContainer, { backgroundColor: theme.colors.background }]}>
           <Button
-            title={loading ? "Processing..." : `Pay $${totalPrice.toFixed(2)}`}
+            title={loading ? "Processing..." : 'Pay $' + totalPrice.toFixed(2)}
             onPress={handlePurchase}
             disabled={!isFormValid() || loading}
             style={[styles.payButton, { backgroundColor: theme.colors.pinkTwo }]}

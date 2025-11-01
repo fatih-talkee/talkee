@@ -12,7 +12,7 @@ import {
   ScrollView,
   Platform,
 } from 'react-native';
-import { X, Copy, Share2, Star, BadgeCheck, QrCode } from 'lucide-react-native';
+import { X, Copy, Share2, Star, ShieldCheck, QrCode } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import QRCode from 'react-native-qrcode-svg';
 
@@ -30,18 +30,24 @@ interface ShareProfileModalProps {
     ratePerMinute: number;
     specialties: string[];
   };
+  username?: string;
+  userId?: string;
 }
 
 export function ShareProfileModal({
   visible,
   onClose,
   professionalData,
+  username,
+  userId,
 }: ShareProfileModalProps) {
   const { theme } = useTheme();
   const [copied, setCopied] = useState(false);
 
   const profileUrl = professionalData
     ? `https://talkee.app/professional/${professionalData.id}`
+    : userId
+    ? `https://talkee.app/user/${userId}`
     : 'https://talkee.app';
 
   const handleCopyLink = async () => {
@@ -62,6 +68,8 @@ export function ShareProfileModal({
     try {
       const shareMessage = professionalData
         ? `Check out ${professionalData.name} on Talkee! ${professionalData.title} - ${professionalData.rating}★ rating. ${profileUrl}`
+        : username
+        ? `Check out ${username}'s profile on Talkee! ${profileUrl}`
         : `Check out this profile on Talkee: ${profileUrl}`;
 
       await Share.share({
@@ -133,7 +141,7 @@ export function ShareProfileModal({
                         {professionalData.name}
                       </Text>
                       {professionalData.isVerified && (
-                        <BadgeCheck size={16} color={theme.colors.primary} />
+                        <ShieldCheck size={22} color={theme.colors.primary} strokeWidth={3} />
                       )}
                     </View>
                     <Text
@@ -190,12 +198,12 @@ export function ShareProfileModal({
                           { color: theme.colors.warning },
                         ]}
                       >
-                        ${professionalData.ratePerMinute}/min
+                        {'$' + professionalData.ratePerMinute.toFixed(2)}/min
                       </Text>
                     </View>
                     {professionalData.specialties &&
                       professionalData.specialties.length > 0 && (
-                        <View style={styles.specialtiesList}>
+                      <View style={styles.specialtiesList}>
                           {professionalData.specialties
                             .slice(0, 3)
                             .map((specialty, index) => (
@@ -215,25 +223,25 @@ export function ShareProfileModal({
                                     { color: theme.colors.primary },
                                   ]}
                                 >
-                                  {specialty}
-                                </Text>
-                              </View>
-                            ))}
-                        </View>
-                      )}
+                              {specialty}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
                   </View>
                 </View>
               )}
 
-              <View style={styles.qrSection}>
+            <View style={styles.qrSection}>
                 <Text
                   style={[
                     styles.sectionLabel,
                     { color: theme.colors.textSecondary },
                   ]}
                 >
-                  QR Code
-                </Text>
+                QR Code
+              </Text>
                 <View
                   style={[
                     styles.qrContainer,
@@ -243,87 +251,87 @@ export function ShareProfileModal({
                     },
                   ]}
                 >
-                  <View style={styles.qrCodeWrapper}>
-                    <QRCode
-                      value={profileUrl}
-                      size={180}
+                <View style={styles.qrCodeWrapper}>
+                  <QRCode
+                    value={profileUrl}
+                    size={180}
                       color={theme.name === 'dark' ? '#FFFFFF' : '#000000'}
                       backgroundColor={
                         theme.name === 'dark' ? '#1C1C1E' : '#FFFFFF'
                       }
-                      logo={require('../../assets/images/icon.png')}
-                      logoSize={40}
+                    logo={require('../../assets/images/icon.png')}
+                    logoSize={40}
                       logoBackgroundColor="#FFFFFF"
-                      logoMargin={2}
-                    />
-                  </View>
+                    logoMargin={2}
+                  />
                 </View>
               </View>
+            </View>
 
-              <View style={styles.linkSection}>
+            <View style={styles.linkSection}>
                 <Text
                   style={[
                     styles.linkLabel,
                     { color: theme.colors.textSecondary },
                   ]}
                 >
-                  Profile Link
-                </Text>
-                <View
-                  style={[
-                    styles.linkContainer,
-                    {
-                      backgroundColor: theme.colors.surface,
-                      borderColor: theme.colors.border,
+                Profile Link
+              </Text>
+              <View
+                style={[
+                  styles.linkContainer,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
                     },
-                  ]}
-                >
-                  <Text
+                ]}
+              >
+                <Text
                     style={[
                       styles.linkText,
                       { color: theme.colors.textSecondary },
                     ]}
-                    numberOfLines={1}
-                    ellipsizeMode="middle"
-                  >
-                    {profileUrl}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={handleCopyLink}
-                    style={[
-                      styles.copyButton,
+                  numberOfLines={1}
+                  ellipsizeMode="middle"
+                >
+                  {profileUrl}
+                </Text>
+                <TouchableOpacity
+                  onPress={handleCopyLink}
+                  style={[
+                    styles.copyButton,
                       { borderColor: theme.colors.primary },
-                    ]}
-                  >
-                    <Copy size={16} color={theme.colors.primary} />
+                  ]}
+                >
+                  <Copy size={16} color={theme.colors.primary} />
                     <Text
                       style={[styles.copyText, { color: theme.colors.primary }]}
                     >
-                      {copied ? 'Copied!' : 'Copy'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                    {copied ? 'Copied!' : 'Copy'}
+                  </Text>
+                </TouchableOpacity>
               </View>
+            </View>
 
-              <View style={styles.actions}>
-                <TouchableOpacity
-                  style={[
-                    styles.shareButton,
+            <View style={styles.actions}>
+              <TouchableOpacity
+                style={[
+                  styles.shareButton,
                     { backgroundColor: theme.colors.primary },
-                  ]}
-                  onPress={handleShare}
-                >
-                  <Share2 size={20} color={theme.colors.surface} />
+                ]}
+                onPress={handleShare}
+              >
+                <Share2 size={20} color={theme.colors.surface} />
                   <Text
                     style={[
                       styles.shareButtonText,
                       { color: theme.colors.surface },
                     ]}
                   >
-                    Share Profile
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                  Share Profile
+                </Text>
+              </TouchableOpacity>
+            </View>
             </View>
           </ScrollView>
         </TouchableOpacity>
@@ -342,7 +350,7 @@ const styles = StyleSheet.create({
   modalContainer: {
     width: Dimensions.get('window').width * 0.9,
     maxWidth: 400,
-    maxHeight: Dimensions.get('window').height * 0.85,
+    maxHeight: Dimensions.get('window').height * 0.92,
     borderRadius: 20,
     padding: 20,
     shadowColor: '#000',
@@ -368,7 +376,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   scrollContainer: {
-    maxHeight: Dimensions.get('window').height * 0.65,
+    maxHeight: Dimensions.get('window').height * 0.78,
   },
   content: {
     alignItems: 'center',

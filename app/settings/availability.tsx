@@ -245,18 +245,52 @@ export default function AvailabilitySettingsScreen() {
       {/* Header Section */}
       <View style={styles.cardHeader}>
         <View style={styles.cardHeaderLeft}>
-          <View style={[styles.iconContainer, { backgroundColor: theme.colors.primary + '20' }]}>
-            <Calendar size={20} color={theme.colors.primary} />
+          <View
+            style={[
+              styles.iconContainer,
+              {
+                backgroundColor:
+                  theme.name === 'dark'
+                    ? theme.colors.accent + '20'
+                    : theme.colors.accent + '15',
+              },
+            ]}
+          >
+            <Calendar size={20} color={theme.colors.accent} />
           </View>
           <View style={styles.headerInfo}>
             {item.availableAt === 'every' ? (
-              <Text style={[styles.scheduleBadge, { backgroundColor: theme.name === 'dark' ? theme.colors.primary + '40' : theme.colors.primary + '25', color: theme.colors.primary }]}>
-                Weekly Schedule
-              </Text>
+              <Text
+                style={[
+                  styles.scheduleBadge,
+                  {
+                    backgroundColor:
+                      theme.name === 'dark'
+                        ? theme.colors.accent + '40'
+                        : theme.colors.accent + '25',
+                    color: theme.colors.accent,
+                    alignSelf: 'flex-start',
+                  },
+                ]}
+              >
+                    Weekly Schedule
+                  </Text>
             ) : (
-              <Text style={[styles.scheduleBadge, { backgroundColor: theme.name === 'dark' ? theme.colors.accent + '40' : theme.colors.accent + '25', color: theme.colors.accent }]}>
-                One-time
-              </Text>
+              <Text
+                style={[
+                  styles.scheduleBadge,
+                  {
+                    backgroundColor:
+                      theme.name === 'dark'
+                        ? theme.colors.primary + '40'
+                        : theme.colors.primary + '25',
+                    color: theme.colors.primary,
+                    alignSelf: 'flex-start',
+                  },
+                ]}
+              >
+                  One-time
+                </Text>
             )}
           </View>
         </View>
@@ -275,41 +309,71 @@ export default function AvailabilitySettingsScreen() {
           </TouchableOpacity>
         </View>
       </View>
-
+      
       {/* Content Section */}
       <View style={styles.cardContent}>
         {item.availableAt === 'every' && (
           <View style={styles.daysContainer}>
             {item.days?.map((day, index) => (
-              <View key={index} style={[styles.dayTag, { backgroundColor: theme.colors.surface, borderColor: theme.colors.primary }]}>
-                <Text style={[styles.dayTagText, { color: theme.colors.primary }]}>
+              <View
+                key={index}
+                style={[
+                  styles.dayTag,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.accent,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.dayTagText,
+                    { color: theme.colors.accent },
+                  ]}
+                >
                   {day.substring(0, 3)}
                 </Text>
               </View>
             ))}
           </View>
         )}
-        
+
         {item.availableAt === 'specific' && (
           <View style={styles.dateContainer}>
             <Text style={[styles.dateText, { color: theme.colors.text }]}>
-              {item.date?.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              {item.date?.toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+              })}
             </Text>
           </View>
         )}
 
         <View style={styles.timePriceRow}>
           <View style={styles.timeContainer}>
-            <Clock size={16} color={theme.colors.textMuted} />
+            <Clock size={16} color={theme.colors.success} />
             <Text style={[styles.timeText, { color: theme.colors.text }]}>
               {item.startHour} - {item.endHour}
             </Text>
           </View>
-          <View style={[styles.priceBadge, { backgroundColor: theme.colors.surface }]}>
-            <DollarSign size={16} color={theme.colors.primary} />
-            <Text style={[styles.priceText, { color: theme.colors.primary }]}>
+          <View
+            style={[
+              styles.priceBadge,
+              {
+                backgroundColor:
+                  theme.name === 'dark'
+                    ? theme.colors.success + '20'
+                    : theme.colors.success + '15',
+              },
+            ]}
+          >
+            <DollarSign size={16} color={theme.colors.success} />
+            <Text
+              style={[styles.priceText, { color: theme.colors.success }]}
+            >
               {currencySymbols[item.currency]}{item.pricePerMinute}/min
-            </Text>
+          </Text>
           </View>
         </View>
       </View>
@@ -326,7 +390,7 @@ export default function AvailabilitySettingsScreen() {
             onPress={() => openModal()}
             style={[
               styles.addButton,
-              { backgroundColor: theme.colors.surface },
+              { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
             ]}
           >
             <Plus size={20} color="#FFFFFF" />
@@ -375,7 +439,7 @@ export default function AvailabilitySettingsScreen() {
               </Text>
               <TouchableOpacity 
                 onPress={closeModal}
-                style={[styles.closeButton, { backgroundColor: theme.colors.surface }]}
+                style={[styles.closeButton, { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? '#d60f83' : '#000000' }]}
               >
                 <X size={20} color="#FFFFFF" />
               </TouchableOpacity>

@@ -62,12 +62,31 @@ export function PrimaryHeader({
   // Android status bars can be taller on some devices, use a safe minimum
   const topPadding = Math.max(insets.top, Platform.OS === 'android' ? 56 : 0);
 
+  // Header background adapts to theme
+  // For dark theme: black, for other themes: use surface color (lighter backgrounds)
+  const headerBackground =
+    theme.name === 'dark' ? '#000000' : theme.colors.surface;
+
+  // Button background adapts to theme
+  // For dark theme: use surface (dark gray), for light theme: use brandPink from theme
+  // For other themes (green, blue): use black for contrast
+  const buttonBackground =
+    theme.name === 'dark'
+      ? theme.colors.surface
+      : theme.name === 'light'
+      ? theme.colors.brandPink
+      : '#000000';
+
+  // Icon color adapts to theme
+  // Always white for good contrast against all backgrounds
+  const iconColor = '#FFFFFF';
+
   return (
     <View
       style={[
         styles.header,
         {
-          backgroundColor: '#000000',
+          backgroundColor: headerBackground,
           paddingTop: 24,
         },
         containerStyle,
@@ -77,12 +96,9 @@ export function PrimaryHeader({
         {backPosition === 'left' && showBack ? (
           <TouchableOpacity
             onPress={handleBack}
-            style={[
-              styles.iconButton,
-              { backgroundColor: theme.colors.surface },
-            ]}
+            style={[styles.iconButton, { backgroundColor: buttonBackground }]}
           >
-            <ArrowLeft size={20} color="#FFFFFF" />
+            <ArrowLeft size={20} color={iconColor} />
           </TouchableOpacity>
         ) : showLogo ? (
           <TouchableOpacity disabled={!onLogoPress} onPress={onLogoPress}>
@@ -107,12 +123,9 @@ export function PrimaryHeader({
           <View style={styles.rightButtonWrapper}>
             <TouchableOpacity
               onPress={handleBack}
-              style={[
-                styles.iconButton,
-                { backgroundColor: theme.colors.surface },
-              ]}
+              style={[styles.iconButton, { backgroundColor: buttonBackground }]}
             >
-              <ArrowLeft size={20} color="#FFFFFF" />
+              <ArrowLeft size={20} color={iconColor} />
             </TouchableOpacity>
           </View>
         )}

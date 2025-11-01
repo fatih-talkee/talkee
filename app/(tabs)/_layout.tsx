@@ -10,11 +10,13 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: theme.colors.surface,
+          backgroundColor: theme.colors.tabBarBackground,
+          borderTopColor: theme.colors.tabBarBorder,
+          borderTopWidth: 1,
           paddingTop: 8,
           paddingBottom: 10,
           height: 90,
-          // shiny upward shadow/elevation (no divider)
+          // shiny upward shadow/elevation
           shadowColor: '#000',
           shadowOpacity: 0.08,
           shadowRadius: 16,

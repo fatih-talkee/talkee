@@ -9,8 +9,8 @@ import {
 } from 'react-native';
 import { Search, Filter } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
+import { SearchBar } from '@/components/ui/SearchBar';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
-import { Input } from '@/components/ui/Input';
 import { mockProfessionals } from '@/mockData/professionals';
 import { useTheme } from '@/contexts/ThemeContext';
 import { FilterModal } from '@/components/filters/FilterModal';
@@ -108,7 +108,7 @@ export default function SearchScreen() {
           <TouchableOpacity
             style={[
               styles.headerIconButton,
-              { backgroundColor: theme.colors.surface },
+              { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
             ]}
             onPress={() => setFilterVisible(true)}
           >
@@ -118,39 +118,14 @@ export default function SearchScreen() {
       />
 
       {/* Search Section */}
-      <View
-        style={[
-          styles.searchSection,
-          {
-            backgroundColor:
-              theme.name === 'dark' ? '#000000' : theme.colors.surface,
-          },
-        ]}
-      >
-        <Input
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search professionals..."
-          leftIcon={<Search size={20} color={theme.colors.textMuted} />}
-          style={[
-            {
-              backgroundColor: theme.colors.card,
-              borderColor: theme.colors.border,
-            },
-          ]}
-        />
-
-        <View style={styles.resultsHeader}>
-          <Text
-            style={[
-              styles.resultsCount,
-              { color: theme.colors.textSecondary },
-            ]}
-          >
-            {filteredProfessionals.length} professionals found
-          </Text>
-        </View>
-      </View>
+      <SearchBar
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        placeholder="Search professionals..."
+        showResultsCount={true}
+        resultsCount={filteredProfessionals.length}
+        resultsCountLabel={`${filteredProfessionals.length} professionals found`}
+      />
 
       {/* Results Section */}
       {filteredProfessionals.length > 0 ? (
@@ -195,21 +170,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  searchSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    marginBottom: 8,
-  },
-  resultsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  resultsCount: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
   },
   resultsContainer: {
     paddingHorizontal: 20,

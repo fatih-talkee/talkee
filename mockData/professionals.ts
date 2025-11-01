@@ -77,7 +77,7 @@ const originalProfessionals: Professional[] = [
     rating: 4.8,
     totalCalls: 892,
     isOnline: false,
-    isVerified: true,
+    isVerified: false,
     specialties: ['Startups', 'Product Strategy', 'Fundraising'],
     languages: ['English', 'Spanish'],
     responseTime: '< 5 min',

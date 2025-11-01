@@ -144,7 +144,7 @@ export default function CategoriesScreen() {
                 },
               ]}
             >
-              ${item.ratePerMinute}
+              {'$' + item.ratePerMinute.toFixed(2)}
             </Text>
             <Text
               style={[

@@ -20,10 +20,11 @@ import {
   UserCheck,
   ArrowUp,
   ArrowDown,
+  ShieldCheck,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
+import { SearchBar } from '@/components/ui/SearchBar';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { mockCallHistory, CallHistory } from '@/mockData/professionals';
 import { useToast } from '@/lib/toastService';
@@ -80,9 +81,9 @@ export default function CallHistoryScreen() {
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
+    return date.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit', 
       hour12: true,
     });
   };
@@ -112,8 +113,8 @@ export default function CallHistoryScreen() {
           const newBlockedStatus = !call.isBlocked;
           toast.success({
             title: newBlockedStatus ? 'User Blocked' : 'User Unblocked',
-            message: newBlockedStatus
-              ? 'This user can no longer contact you'
+            message: newBlockedStatus 
+              ? 'This user can no longer contact you' 
               : 'This user can now contact you',
           });
           return { ...call, isBlocked: newBlockedStatus };
@@ -124,13 +125,28 @@ export default function CallHistoryScreen() {
   };
 
   const renderCallItem = ({ item }: { item: CallHistory }) => (
-    <Card style={[styles.callCard, { backgroundColor: theme.colors.card }]}>
-      <View style={styles.callContainer}>
-        <TouchableOpacity
+    <Card
+      style={[
+        styles.callCard,
+        {
+          backgroundColor:
+            theme.name === 'dark' ? '#000000' : theme.colors.card,
+          borderColor:
+            theme.name === 'dark'
+              ? 'rgba(255, 255, 255, 0.3)'
+              : theme.colors.border,
+          borderWidth: 1.5,
+        },
+      ]}
+    >
+        <TouchableOpacity 
           style={styles.callItem}
           onPress={() => router.push(`/professional/${item.professionalId}`)}
-        >
-          <View style={styles.callLeft}>
+        activeOpacity={0.7}
+      >
+        {/* Top Row: Avatar, Name with Verification, and Block Button */}
+        <View style={styles.topRow}>
+          <View style={styles.headerLeft}>
             <Image
               source={{ uri: item.professional.avatar }}
               style={styles.avatar}
@@ -142,125 +158,182 @@ export default function CallHistoryScreen() {
               ]}
             >
               {item.type === 'video' ? (
-                <Video size={14} color="#ffffff" />
+                <Video size={12} color="#ffffff" />
               ) : (
-                <Phone size={14} color="#ffffff" />
+                <Phone size={12} color="#ffffff" />
               )}
             </View>
           </View>
 
-          <View style={styles.callInfo}>
-            <View style={styles.callHeader}>
+          <View style={styles.headerInfo}>
+            <View style={styles.nameRow}>
               <Text
                 style={[styles.professionalName, { color: theme.colors.text }]}
+                numberOfLines={1}
               >
                 {item.professional.name}
               </Text>
-              {item.isBlocked && (
-                <View
-                  style={[
-                    styles.blockedBadge,
-                    { backgroundColor: theme.colors.error },
-                  ]}
-                >
-                  <Text style={[styles.blockedBadgeText]}>Blocked</Text>
-                </View>
+              {item.professional.isVerified && (
+                <ShieldCheck
+                  size={18}
+                  color={theme.colors.primary}
+                  strokeWidth={2.5}
+                />
               )}
             </View>
-            <Text
-              style={[
-                styles.professionalTitle,
-                { color: theme.colors.textMuted },
-              ]}
-            >
-              {item.professional.title}
-            </Text>
-            <View style={styles.callDetails}>
-              <Text style={[styles.callDate, { color: theme.colors.text }]}>
-                {formatDate(item.date)}
-              </Text>
-              <Text
-                style={[styles.callTime, { color: theme.colors.textMuted }]}
-              >
-                {formatTime(item.date)}
-              </Text>
-            </View>
-            {item.direction && (
-              <View style={styles.directionRow}>
-                {item.direction === 'incoming' ? (
-                  <ArrowDown size={12} color={theme.colors.success} />
-                ) : (
-                  <ArrowUp size={12} color={theme.colors.primary} />
-                )}
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.blockButton,
+              {
+                backgroundColor:
+                  theme.name === 'dark' ? '#000000' : theme.colors.surface,
+                borderWidth: 1,
+                borderColor: item.isBlocked
+                  ? theme.colors.success
+                  : theme.colors.error,
+              },
+            ]}
+            onPress={(e) => {
+              e.stopPropagation();
+              toggleBlockUser(item.id);
+            }}
+          >
+            {item.isBlocked ? (
+              <>
+                <UserCheck
+                  size={14}
+                  color={theme.colors.success}
+                />
                 <Text
                   style={[
-                    styles.directionText,
+                    styles.blockButtonText,
                     {
-                      color:
-                        item.direction === 'incoming'
-                          ? theme.colors.success
-                          : theme.colors.primary,
+                      color: theme.colors.success,
                     },
                   ]}
                 >
+                  Unblock
+                </Text>
+              </>
+            ) : (
+              <>
+                <UserX
+                  size={14}
+                  color={theme.colors.error}
+                />
+                <Text
+                  style={[
+                    styles.blockButtonText,
+                    {
+                      color: theme.colors.error,
+                    },
+                  ]}
+                >
+                  Block
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Second Row: Title */}
+        <View style={styles.titleRow}>
+          <Text
+            style={[
+              styles.professionalTitle,
+              { color: theme.colors.textMuted },
+            ]}
+            numberOfLines={1}
+          >
+            {item.professional.title}
+          </Text>
+        </View>
+
+        {/* Third Row: Date, Time, and Direction */}
+        <View style={styles.metaRow}>
+          <View style={styles.metaItem}>
+            <Clock size={14} color={theme.colors.textMuted} />
+            <Text style={[styles.metaText, { color: theme.colors.text }]}>
+              {formatDate(item.date)}
+            </Text>
+            <Text
+              style={[
+                styles.metaText,
+                { color: theme.colors.textMuted, marginLeft: 4 },
+              ]}
+            >
+              {formatTime(item.date)}
+            </Text>
+            </View>
+            {item.direction && (
+            <View style={styles.metaItem}>
+                {item.direction === 'incoming' ? (
+                <ArrowDown size={14} color={theme.colors.success} />
+                ) : (
+                <ArrowUp size={14} color={theme.colors.primary} />
+                )}
+              <Text
+                style={[
+                  styles.metaText,
+                  {
+                    color:
+                      item.direction === 'incoming'
+                        ? theme.colors.success
+                        : theme.colors.primary,
+                  },
+                ]}
+              >
                   {item.direction === 'incoming' ? 'Received' : 'Placed'}
                 </Text>
               </View>
             )}
           </View>
 
-          <View style={styles.callRight}>
-            <View style={styles.callStats}>
-              <View style={styles.durationRow}>
-                <Clock size={14} color={theme.colors.textMuted} />
-                <Text
-                  style={[styles.duration, { color: theme.colors.textMuted }]}
-                >
-                  {formatDuration(item.duration)}
-                </Text>
+        {/* Bottom Row: Stats */}
+        <View style={styles.statsRow}>
+          {item.duration > 0 && (
+            <View style={styles.statBadge}>
+              <Clock size={12} color={theme.colors.textMuted} />
+              <Text
+                style={[styles.statText, { color: theme.colors.textMuted }]}
+              >
+                {formatDuration(item.duration)}
+              </Text>
               </View>
+          )}
               {item.status === 'completed' && item.cost > 0 && (
-                <View style={styles.costRow}>
-                  <DollarSign size={14} color={theme.colors.textMuted} />
-                  <Text style={[styles.cost, { color: theme.colors.text }]}>
-                    ${item.cost.toFixed(2)}
-                  </Text>
-                </View>
-              )}
-            </View>
             <View
               style={[
-                styles.statusIndicator,
-                { backgroundColor: getStatusColor(item.status) },
+                styles.statBadge,
+                { backgroundColor: theme.colors.surface },
               ]}
-            />
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.blockButton,
-            {
-              backgroundColor: item.isBlocked
-                ? theme.colors.success
-                : theme.colors.error,
-            },
-          ]}
-          onPress={() => toggleBlockUser(item.id)}
-        >
-          {item.isBlocked ? (
-            <>
-              <UserCheck size={14} color="#ffffff" />
-              <Text style={styles.blockButtonText}>Unblock</Text>
-            </>
-          ) : (
-            <>
-              <UserX size={14} color="#ffffff" />
-              <Text style={styles.blockButtonText}>Block</Text>
-            </>
+            >
+              <DollarSign size={12} color={theme.colors.primary} />
+              <Text style={[styles.statText, { color: theme.colors.text }]}>
+                {'$' + item.cost.toFixed(2)}
+              </Text>
+                </View>
+              )}
+          <View
+            style={[
+              styles.statusIndicator,
+              { backgroundColor: getStatusColor(item.status) },
+            ]}
+          />
+          {item.isBlocked && (
+            <View
+              style={[
+                styles.blockedBadge,
+                { backgroundColor: theme.colors.error },
+              ]}
+            >
+              <Text style={styles.blockedBadgeText}>Blocked</Text>
+            </View>
           )}
+        </View>
         </TouchableOpacity>
-      </View>
     </Card>
   );
 
@@ -270,51 +343,15 @@ export default function CallHistoryScreen() {
     >
       <Header showLogo showBack backPosition="right" />
 
-      <View style={[styles.searchSection, { backgroundColor: '#000000' }]}>
-        <Input
+      <SearchBar
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholder="Search call history..."
-          leftIcon={<Search size={20} color={theme.colors.textMuted} />}
-          style={[
-            {
-              backgroundColor: theme.colors.card,
-              borderColor: theme.colors.border,
-            },
-          ]}
-        />
-
-        <View style={styles.filters}>
-          {filters.map((filter) => (
-            <TouchableOpacity
-              key={filter.key}
-              style={[
-                styles.filterButton,
-                {
-                  backgroundColor: theme.colors.background,
-                  borderColor: theme.colors.border,
-                },
-                selectedFilter === filter.key &&
-                  theme.name === 'dark' && {
-                    backgroundColor: theme.colors.accent,
-                    borderColor: theme.colors.accent,
-                  },
-              ]}
-              onPress={() => setSelectedFilter(filter.key as any)}
-            >
-              <Text
-                style={[
-                  styles.filterText,
-                  { color: theme.colors.textSecondary },
-                  selectedFilter === filter.key && { color: '#000000' },
-                ]}
-              >
-                {filter.label} ({filter.count})
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+        showTabButtons={true}
+        tabOptions={filters}
+        selectedTabKey={selectedFilter}
+        onTabSelect={(key) => setSelectedFilter(key as any)}
+      />
 
       <FlatList
         data={filteredHistory}
@@ -352,50 +389,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  searchSection: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-  },
-  filters: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#f8fafc',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  filterButtonActive: {
-    backgroundColor: '#f59e0b',
-    borderColor: '#f59e0b',
-  },
-  filterText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    color: '#64748b',
-  },
-  filterTextActive: {
-    color: '#ffffff',
-  },
   listContent: {
     padding: 24,
   },
   callCard: {
     marginBottom: 12,
     padding: 0,
-  },
-  callContainer: {
-    position: 'relative',
+    overflow: 'hidden',
   },
   callItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
     padding: 16,
   },
-  callLeft: {
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  headerLeft: {
     position: 'relative',
     marginRight: 12,
   },
@@ -408,99 +418,93 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -2,
     right: -2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#3b82f6',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  callInfo: {
+  headerInfo: {
     flex: 1,
+    marginRight: 12,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   professionalName: {
     fontSize: 16,
     fontFamily: 'Inter-Bold',
-    color: '#1f2937',
-    marginBottom: 2,
   },
-  callHeader: {
+  blockButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    minWidth: 80,
   },
-  blockedBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
+  blockButtonText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Medium',
   },
-  blockedBadgeText: {
-    fontSize: 10,
-    fontFamily: 'Inter-Bold',
-    color: '#ffffff',
+  titleRow: {
+    marginBottom: 8,
   },
   professionalTitle: {
     fontSize: 13,
     fontFamily: 'Inter-Regular',
-    color: '#64748b',
-    marginBottom: 4,
   },
-  callDetails: {
+  metaRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 12,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  metaText: {
+    fontSize: 13,
+    fontFamily: 'Inter-Medium',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+    flexWrap: 'wrap',
   },
-  callDate: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    color: '#374151',
-  },
-  callTime: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    color: '#94a3b8',
-  },
-  directionRow: {
+  statBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
     gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  directionText: {
-    fontSize: 11,
-    fontFamily: 'Inter-Medium',
-  },
-  callRight: {
-    alignItems: 'flex-end',
-  },
-  callStats: {
-    alignItems: 'flex-end',
-    marginBottom: 8,
-  },
-  durationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  duration: {
+  statText: {
     fontSize: 12,
     fontFamily: 'Inter-Medium',
-    color: '#64748b',
-    marginLeft: 4,
-  },
-  costRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  cost: {
-    fontSize: 12,
-    fontFamily: 'Inter-Bold',
-    color: '#374151',
-    marginLeft: 4,
   },
   statusIndicator: {
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  blockedBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  blockedBadgeText: {
+    fontSize: 11,
+    fontFamily: 'Inter-Bold',
+    color: '#ffffff',
   },
   emptyState: {
     alignItems: 'center',
@@ -521,21 +525,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: 40,
-  },
-  blockButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginBottom: 12,
-  },
-  blockButtonText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    color: '#ffffff',
-    marginLeft: 4,
   },
 });

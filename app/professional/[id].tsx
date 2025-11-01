@@ -14,7 +14,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import {
   ArrowLeft,
   Star,
-  BadgeCheck,
+  ShieldCheck,
   Clock,
   MapPin,
   Phone,
@@ -31,6 +31,7 @@ import {
   DollarSign,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
+import { TabButtons } from '@/components/ui/TabButtons';
 import { Card } from '@/components/ui/Card';
 import { mockProfessionals } from '@/mockData/professionals';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -155,10 +156,10 @@ export default function ProfessionalProfileScreen() {
                         {professional.name}
                       </Text>
                       {professional.isVerified && (
-                        <BadgeCheck
-                          size={14}
+                        <ShieldCheck
+                          size={20}
                           color={theme.colors.primary}
-                          strokeWidth={2}
+                          strokeWidth={2.5}
                         />
                       )}
                     </View>
@@ -266,12 +267,22 @@ export default function ProfessionalProfileScreen() {
         return (
           <View style={styles.availabilityContainer}>
             {mockAvailabilities.length === 0 ? (
-              <Card style={[styles.emptyCard, { backgroundColor: theme.colors.card }]}>
+              <Card
+                style={[
+                  styles.emptyCard,
+                  { backgroundColor: theme.colors.card },
+                ]}
+              >
                 <Calendar size={48} color={theme.colors.textMuted} />
                 <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
                   No Availability Set
                 </Text>
-                <Text style={[styles.emptyDescription, { color: theme.colors.textMuted }]}>
+                <Text
+                  style={[
+                    styles.emptyDescription,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
                   This professional hasn't set their availability schedule yet
                 </Text>
               </Card>
@@ -329,6 +340,7 @@ export default function ProfessionalProfileScreen() {
                                     ? theme.colors.accent + '40'
                                     : theme.colors.accent + '25',
                                 color: theme.colors.accent,
+                                alignSelf: 'flex-start',
                               },
                             ]}
                           >
@@ -344,6 +356,7 @@ export default function ProfessionalProfileScreen() {
                                     ? theme.colors.primary + '40'
                                     : theme.colors.primary + '25',
                                 color: theme.colors.primary,
+                                alignSelf: 'flex-start',
                               },
                             ]}
                           >
@@ -715,20 +728,50 @@ export default function ProfessionalProfileScreen() {
             <TouchableOpacity
               style={[
                 styles.actionButton,
-                { backgroundColor: theme.colors.surface },
+                {
+                  backgroundColor:
+                    theme.name === 'dark'
+                      ? theme.colors.surface
+                      : theme.name === 'light'
+                      ? theme.colors.brandPink
+                      : '#000000',
+                },
               ]}
               onPress={() => setIsFavorite(!isFavorite)}
             >
               <Heart
                 size={20}
-                color={isFavorite ? theme.colors.error : '#FFFFFF'}
-                fill={isFavorite ? theme.colors.error : 'transparent'}
+                color={
+                  isFavorite
+                    ? theme.name === 'light'
+                      ? '#FFFFFF'
+                      : theme.name === 'dark'
+                      ? theme.colors.error
+                      : '#FFFFFF'
+                    : '#FFFFFF'
+                }
+                fill={
+                  isFavorite
+                    ? theme.name === 'light'
+                      ? '#FFFFFF'
+                      : theme.name === 'dark'
+                      ? theme.colors.error
+                      : '#FFFFFF'
+                    : 'transparent'
+                }
               />
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.actionButton,
-                { backgroundColor: theme.colors.surface },
+                {
+                  backgroundColor:
+                    theme.name === 'dark'
+                      ? theme.colors.surface
+                      : theme.name === 'light'
+                      ? theme.colors.brandPink
+                      : '#000000',
+                },
               ]}
               onPress={() => setShareModalVisible(true)}
             >
@@ -764,14 +807,16 @@ export default function ProfessionalProfileScreen() {
             </View>
             <View style={styles.profileInfo}>
               <View style={styles.nameRow}>
-                <Text style={[styles.profileName, { color: theme.colors.text }]}>
+                <Text
+                  style={[styles.profileName, { color: theme.colors.text }]}
+                >
                   {professional.name}
                 </Text>
                 {professional.isVerified && (
-                  <BadgeCheck
-                    size={18}
+                  <ShieldCheck
+                    size={22}
                     color={theme.colors.primary}
-                    strokeWidth={2}
+                    strokeWidth={3}
                   />
                 )}
               </View>
@@ -784,24 +829,27 @@ export default function ProfessionalProfileScreen() {
                 {professional.title}
               </Text>
               <View
-                style={[
-                  styles.profileLocation,
-                  { flexDirection: 'row', alignItems: 'center', gap: 4 },
-                ]}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
               >
                 <MapPin size={12} color={theme.colors.textMuted} />
-                <Text style={{ color: theme.colors.textMuted }}>
-                  {professional.location || 'Available Worldwide'}
+                <Text
+                  style={[
+                    styles.profileLocation,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  Available Worldwide
                 </Text>
               </View>
             </View>
           </View>
 
           <View
-            style={[
-              styles.statsRow,
-              { borderTopColor: theme.colors.divider },
-            ]}
+            style={[styles.statsRow, { borderTopColor: theme.colors.divider }]}
           >
             <View style={styles.stat}>
               <Text style={[styles.statNumber, { color: theme.colors.text }]}>
@@ -859,110 +907,24 @@ export default function ProfessionalProfileScreen() {
 
         {/* Tab Navigation */}
         <View
-          style={[
-            styles.tabNavigation,
-            {
-              backgroundColor: theme.name === 'dark' ? '#000000' : theme.colors.card,
-              borderBottomColor: theme.colors.border,
-            },
-          ]}
+          style={{
+            backgroundColor:
+              theme.name === 'dark' ? '#000000' : theme.colors.card,
+            paddingHorizontal: 16,
+            paddingVertical: 16,
+          }}
         >
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === 'feed' && {
-                borderBottomColor: theme.colors.primary,
-                borderBottomWidth: 2,
-              },
+          <TabButtons
+            options={[
+              { key: 'feed', label: 'Feed' },
+              { key: 'about', label: 'About' },
+              { key: 'availability', label: 'Availability' },
+              { key: 'cv', label: 'CV' },
             ]}
-            onPress={() => setActiveTab('feed')}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                {
-                  color:
-                    activeTab === 'feed'
-                      ? theme.colors.primary
-                      : theme.colors.textMuted,
-                },
-              ]}
-            >
-              Feed
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === 'about' && {
-                borderBottomColor: theme.colors.primary,
-                borderBottomWidth: 2,
-              },
-            ]}
-            onPress={() => setActiveTab('about')}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                {
-                  color:
-                    activeTab === 'about'
-                      ? theme.colors.primary
-                      : theme.colors.textMuted,
-                },
-              ]}
-            >
-              About
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === 'availability' && {
-                borderBottomColor: theme.colors.primary,
-                borderBottomWidth: 2,
-              },
-            ]}
-            onPress={() => setActiveTab('availability')}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                {
-                  color:
-                    activeTab === 'availability'
-                      ? theme.colors.primary
-                      : theme.colors.textMuted,
-                },
-              ]}
-            >
-              Availability
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === 'cv' && {
-                borderBottomColor: theme.colors.primary,
-                borderBottomWidth: 2,
-              },
-            ]}
-            onPress={() => setActiveTab('cv')}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                {
-                  color:
-                    activeTab === 'cv'
-                      ? theme.colors.primary
-                      : theme.colors.textMuted,
-                },
-              ]}
-            >
-              CV
-            </Text>
-          </TouchableOpacity>
+            selectedKey={activeTab}
+            onSelect={(key) => setActiveTab(key as TabType)}
+            showWrapper={false}
+          />
         </View>
 
         {/* Tab Content */}
@@ -1158,19 +1120,6 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     height: 40,
-  },
-  tabNavigation: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  tabText: {
-    fontSize: 15,
-    fontFamily: 'Inter-Bold',
   },
   feedContainer: {
     padding: 16,

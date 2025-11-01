@@ -61,7 +61,7 @@ export function CategoryGrid({ categories }: CategoryGridProps) {
   return (
     <View style={styles.container}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Browse by Category</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Browse by Category</Text>
       </View>
       <FlatList
         data={categories.slice(0, 8)}
@@ -86,7 +86,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 22,
     fontFamily: 'Inter-Bold',
-    color: '#FFFFFF',
   },
   gridContainer: {
     gap: 12,

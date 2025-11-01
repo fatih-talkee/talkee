@@ -24,10 +24,8 @@ import {
   Smartphone,
   Key,
   Download,
-  Trash2,
   ChevronRight,
   X,
-  AlertTriangle,
   CheckCircle,
   FileText,
   Mail,
@@ -47,7 +45,6 @@ export default function PrivacySecurityScreen() {
   const [allowMessageRequests, setAllowMessageRequests] = useState(false);
   const [twoFactorAuth, setTwoFactorAuth] = useState(false);
   const [loginAlerts, setLoginAlerts] = useState(true);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [userEmail] = useState('mila@example.com'); // In real app, this would come from user profile
 
@@ -66,17 +63,6 @@ export default function PrivacySecurityScreen() {
     );
   };
 
-  const handleDeleteAccount = () => {
-    setShowDeleteModal(true);
-  };
-
-  const handleConfirmDelete = () => {
-    setShowDeleteModal(false);
-    Alert.alert(
-      'Account Deleted',
-      'Your account has been scheduled for deletion.'
-    );
-  };
 
   const SettingRow = ({
     icon,
@@ -263,14 +249,6 @@ export default function PrivacySecurityScreen() {
               description="Request a copy of your data"
               showArrow
               onPress={handleDownloadData}
-            />
-            <SettingRow
-              icon={<Trash2 size={20} color="#ef4444" />}
-              iconColor="#ef4444"
-              title="Delete My Account"
-              description="Permanently delete your account"
-              showArrow
-              onPress={handleDeleteAccount}
               showDivider={false}
             />
           </Card>
@@ -295,115 +273,6 @@ export default function PrivacySecurityScreen() {
           </Text>
         </View>
       </ScrollView>
-
-      {/* Delete Account Confirmation Modal */}
-      <Modal
-        visible={showDeleteModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowDeleteModal(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowDeleteModal(false)}
-        >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          >
-            <Pressable
-              style={[
-                styles.modalContent,
-                {
-                  backgroundColor:
-                    theme.name === 'dark' ? '#000000' : theme.colors.card,
-                  borderColor:
-                    theme.name === 'dark'
-                      ? 'rgba(255, 255, 255, 0.3)'
-                      : theme.colors.border,
-                },
-              ]}
-              onPress={(e) => e.stopPropagation()}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.modalCloseButton,
-                  { backgroundColor: theme.colors.surface },
-                ]}
-                onPress={() => setShowDeleteModal(false)}
-              >
-                <X size={20} color="#FFFFFF" />
-              </TouchableOpacity>
-
-              <View
-                style={[
-                  styles.modalIconContainer,
-                  { backgroundColor: '#ef444420' },
-                ]}
-              >
-                <AlertTriangle size={40} color="#ef4444" />
-              </View>
-
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-                Delete Account
-              </Text>
-
-              <Text
-                style={[
-                  styles.modalDescription,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                Are you sure you want to permanently delete your account? This
-                action cannot be undone.
-              </Text>
-
-              <Text
-                style={[styles.modalWarning, { color: theme.colors.textMuted }]}
-              >
-                All your data, including profile, call history, favorites, and
-                account information will be permanently removed.
-              </Text>
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={[
-                    styles.modalButton,
-                    styles.modalCancelButton,
-                    {
-                      backgroundColor: theme.colors.surface,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  onPress={() => setShowDeleteModal(false)}
-                >
-                  <Text
-                    style={[
-                      styles.modalCancelText,
-                      { color: theme.colors.text },
-                    ]}
-                  >
-                    Cancel
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.modalButton,
-                    styles.modalDeleteButton,
-                    { backgroundColor: '#ef4444' },
-                  ]}
-                  onPress={handleConfirmDelete}
-                >
-                  <Trash2 size={18} color="#FFFFFF" />
-                  <Text style={[styles.modalDeleteText, { color: '#FFFFFF' }]}>
-                    Delete Account
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </Pressable>
-      </Modal>
 
       {/* Download Data Modal */}
       <Modal
@@ -436,7 +305,7 @@ export default function PrivacySecurityScreen() {
               <TouchableOpacity
                 style={[
                   styles.modalCloseButton,
-                  { backgroundColor: theme.colors.surface },
+                  { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
                 ]}
                 onPress={() => setShowDownloadModal(false)}
               >
@@ -766,16 +635,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   modalCancelText: {
-    fontSize: 15,
-    fontFamily: 'Inter-Bold',
-  },
-  modalDeleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  modalDeleteText: {
     fontSize: 15,
     fontFamily: 'Inter-Bold',
   },

@@ -25,7 +25,7 @@ export default function HomeScreen() {
             <TouchableOpacity 
               style={[
                 styles.iconButton,
-                { backgroundColor: theme.colors.surface },
+                { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
               ]}
               onPress={() => router.push('/appointments-calendar')}
             >
@@ -34,9 +34,9 @@ export default function HomeScreen() {
             <TouchableOpacity 
               style={[
                 styles.iconButton,
-                { backgroundColor: theme.colors.surface },
+                { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
               ]}
-              onPress={() => router.push('/notifications')}
+              onPress={() => router.push('/notifications' as any)}
             >
               <Bell size={20} color="#FFFFFF" />
             </TouchableOpacity>
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   carouselSection: {
-    marginBottom: 32,
+    marginBottom: 16,
   },
   section: {
     marginBottom: 32,

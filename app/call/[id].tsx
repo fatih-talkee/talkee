@@ -149,13 +149,13 @@ export default function CallScreen() {
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Cost</Text>
-            <Text style={styles.statValue}>${currentCost.toFixed(2)}</Text>
+            <Text style={styles.statValue}>{'$' + currentCost.toFixed(2)}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Rate</Text>
             <Text style={styles.statValue}>
-              ${professional.ratePerMinute}/min
+              {'$' + professional.ratePerMinute.toFixed(2)}/min
             </Text>
           </View>
         </View>
