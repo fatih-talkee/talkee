@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Talkee",
-    "slug": "bolt-expo-nativewind",
+    "slug": "talkee",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -25,10 +25,7 @@
         "NSCameraUsageDescription": "This app needs camera access for video calls and profile photos.",
         "NSPhotoLibraryUsageDescription": "This app needs photo library access to upload profile photos.",
         "NSPhotoLibraryAddUsageDescription": "This app needs permission to save photos to your library.",
-        "UIBackgroundModes": [
-          "audio",
-          "voip"
-        ],
+        "UIBackgroundModes": ["audio", "voip"],
         "AVAudioSessionCategory": "PlayAndRecord"
       }
     },
@@ -53,11 +50,6 @@
         "backgroundColor": "#000000"
       }
     },
-    "web": {
-      "bundler": "metro",
-      "output": "single",
-      "favicon": "./assets/images/favicon.png"
-    },
     "plugins": [
       "expo-router",
       "expo-font",
@@ -69,7 +61,7 @@
             "useFrameworks": "static"
           },
           "android": {
-            "usesCleartextTraffic": false,
+            "usesCleartextTraffic": true,
             "minSdkVersion": 24,
             "targetSdkVersion": 35,
             "compileSdkVersion": 35
@@ -82,7 +74,6 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
       "firebase": {
         "apiKey": "AIzaSyDEfmC53rDYrwAJdL-HwB-sYJ4_h_HWnA0",
         "authDomain": "talkee-d41d6.firebaseapp.com",

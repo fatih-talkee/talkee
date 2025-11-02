@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  ScrollView,
 } from 'react-native';
 import { Link, router } from 'expo-router';
 import { Phone, Lock, Eye, EyeOff } from 'lucide-react-native';
@@ -85,20 +86,26 @@ export default function LoginScreen() {
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.content}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
-          <View style={styles.header}>
-            <Image
-              source={require('../../assets/images/talkee_logoF.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>
-              Sign in to connect with professionals
-            </Text>
-          </View>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.header}>
+              <Image
+                source={require('../../assets/images/talkee_logoF.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+              <Text style={styles.title}>Welcome Back</Text>
+              <Text style={styles.subtitle}>
+                Sign in to connect with professionals
+              </Text>
+            </View>
 
-          <View style={styles.form}>
+            <View style={styles.form}>
             <Input
               variant="light"
               label="Phone Number"
@@ -207,6 +214,7 @@ export default function LoginScreen() {
               </Text>
             </View>
           </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </LinearGradient>
@@ -222,7 +230,10 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: 24,
+    paddingBottom: 24,
   },
   header: {
     marginTop: 40,
@@ -247,7 +258,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   form: {
-    flex: 1,
+    // Removed flex: 1 to allow ScrollView to handle scrolling properly
   },
   forgotPassword: {
     alignSelf: 'flex-end',

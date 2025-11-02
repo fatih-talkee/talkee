@@ -1,14 +1,21 @@
 {
-  "name": "bolt-expo-starter",
-  "main": "expo-router/entry",
+  "name": "talkee",
   "version": "1.0.0",
   "private": true,
+  "main": "expo-router/entry",
   "scripts": {
-    "dev": "EXPO_NO_TELEMETRY=1 expo start",
-    "build:web": "expo export --platform web",
+    "start": "EXPO_NO_TELEMETRY=1 expo start --dev-client",
+    "dev": "EXPO_NO_TELEMETRY=1 expo start --dev-client",
+    "reset": "rimraf $TMPDIR/metro-* $TMPDIR/haste-map-* || true && watchman watch-del-all || true",
     "lint": "expo lint",
-    "android": "expo run:android",
-    "ios": "expo run:ios"
+
+    "android": "expo run:android",             
+    "android:studio": "cd android && ./gradlew installDebug",     
+    "android:clean": "cd android && ./gradlew clean",
+
+    "build:apk": "cd android && ./gradlew assembleRelease",       
+    "build:aab": "cd android && ./gradlew bundleRelease",         
+    "build:web": "expo export --platform web"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.1",
@@ -28,13 +35,14 @@
     "expo-linking": "~7.1.3",
     "expo-localization": "~16.1.6",
     "expo-router": "~5.1.7",
-    "expo-splash-screen": "~0.30.6",
+    "expo-splash-screen": "~0.30.10",
     "expo-status-bar": "~2.2.2",
     "expo-symbols": "~0.4.3",
     "expo-system-ui": "~5.0.5",
     "expo-web-browser": "~14.2.0",
     "firebase": "^11.0.0",
     "i18next": "^23.15.2",
+    "intl-pluralrules": "^2.0.1",
     "lucide-react-native": "^0.475.0",
     "nativewind": "^4.1.23",
     "react": "19.0.0",
@@ -58,9 +66,14 @@
     "@babel/core": "^7.25.2",
     "@react-native-community/cli": "latest",
     "@types/react": "~19.0.10",
+    "expo-dev-client": "^6.0.16",
     "metro": "^0.82.0",
     "metro-config": "^0.82.0",
     "metro-core": "^0.82.0",
+    "rimraf": "^5.0.7",
     "typescript": "~5.8.3"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

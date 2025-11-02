@@ -3,6 +3,15 @@ import { initReactI18next } from 'react-i18next';
 import * as Localization from 'expo-localization';
 import { getItem, setItem } from './storage';
 
+// Polyfill for Intl.PluralRules (needed for Android compatibility)
+if (typeof Intl.PluralRules === 'undefined') {
+  try {
+    require('intl-pluralrules');
+  } catch (error) {
+    console.warn('[i18n] Failed to load PluralRules polyfill:', error);
+  }
+}
+
 import en from '../locales/en.json';
 import tr from '../locales/tr.json';
 import es from '../locales/es.json';
@@ -26,7 +35,7 @@ async function detect(): Promise<string> {
       console.log('[i18n] Using saved language:', saved);
       return saved;
     }
-    
+
     try {
       const deviceTag = Localization.getLocales?.()[0]?.languageTag || '';
       const base = deviceTag.split('-')[0];
@@ -34,10 +43,18 @@ async function detect(): Promise<string> {
       const normalized = aliases[base] || base;
       const supported = Object.keys(resources);
       const detected = supported.includes(normalized) ? normalized : fallback;
-      console.log('[i18n] Detected device language:', detected, 'from tag:', deviceTag);
+      console.log(
+        '[i18n] Detected device language:',
+        detected,
+        'from tag:',
+        deviceTag
+      );
       return detected;
     } catch (error) {
-      console.warn('[i18n] Error detecting device language, using fallback:', error);
+      console.warn(
+        '[i18n] Error detecting device language, using fallback:',
+        error
+      );
       return fallback;
     }
   } catch (error) {
@@ -53,12 +70,12 @@ export async function initI18n(): Promise<void> {
     console.log('[i18n] Already initialized, skipping');
     return;
   }
-  
+
   try {
     console.log('[i18n] Starting initialization...');
     const lng = await detect();
     console.log('[i18n] Detected language:', lng);
-    
+
     await i18n.use(initReactI18next).init({
       resources,
       lng,
@@ -66,6 +83,8 @@ export async function initI18n(): Promise<void> {
       defaultNS: 'translation',
       interpolation: { escapeValue: false },
       returnNull: false,
+      // Use v3 compatibility format to avoid Intl.PluralRules requirement
+      compatibilityJSON: 'v3',
     });
 
     console.log('[i18n] Initialization complete');

@@ -1,5 +1,8 @@
+// metro.config.js  — Expo projeleri için
 const { getDefaultConfig } = require('expo/metro-config');
 
-const config = getDefaultConfig(__dirname);
-
-module.exports = config;
+module.exports = (async () => {
+  const config = await getDefaultConfig(__dirname);
+  // İstersen burada resolver/transformer özelleştirmeleri yapabilirsin
+  return config;
+})();
