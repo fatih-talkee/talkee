@@ -237,16 +237,19 @@ export default function WalletScreen() {
                 style={[
                   styles.packageCard,
                   {
-                    backgroundColor: theme.colors.creditColor,
+                    backgroundColor:
+                      theme.name === 'dark'
+                        ? theme.colors.creditColor || '#FFFFFF'
+                        : theme.colors.creditColor || theme.colors.card,
                     borderColor: theme.colors.border,
                   },
                   pkg.popular && {
                     borderColor: theme.colors.accent,
-                    backgroundColor: theme.colors.accentLight,
+                    backgroundColor: theme.colors.accentLight || '#FFF3CD',
                   },
                   selectedPackage === pkg.id && {
                     borderColor: theme.colors.accent,
-                    backgroundColor: theme.colors.accentLight,
+                    backgroundColor: theme.colors.accentLight || '#FFF3CD',
                   },
                 ]}
                 onPress={() => handlePurchase(pkg.id)}
@@ -276,9 +279,7 @@ export default function WalletScreen() {
                       styles.packageAmount,
                       {
                         color:
-                          theme.name === 'dark'
-                            ? '#000000'
-                            : theme.colors.text,
+                          theme.name === 'dark' ? '#000000' : theme.colors.text,
                       },
                     ]}
                   >
@@ -290,7 +291,7 @@ export default function WalletScreen() {
                       {
                         color:
                           theme.name === 'dark'
-                            ? '#666666'
+                            ? '#333333'
                             : theme.colors.textMuted,
                       },
                     ]}

@@ -61,6 +61,7 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
+      onRequestClose={onClose}
     >
       <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
         {/* Header */}
@@ -93,6 +94,8 @@ export function FilterModal({ visible, onClose, onApply, initialFilters }: Filte
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled={true}
+          keyboardShouldPersistTaps="handled"
+          scrollEnabled={true}
         >
           {/* Price Range */}
           <View style={styles.section}>
@@ -299,8 +302,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    flexGrow: 1,
-    flexShrink: 1,
   },
   contentContainer: {
     padding: 20,

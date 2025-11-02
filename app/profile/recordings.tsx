@@ -200,7 +200,7 @@ export default function RecordingsScreen() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <Header showLogo showBack backPosition="right" />
+      <Header showLogo showBack  />
 
       <View style={styles.content}>
         <View style={styles.headerSection}>

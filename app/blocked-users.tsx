@@ -193,7 +193,7 @@ export default function BlockedUsersScreen() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <Header showLogo showBack backPosition="right" />
+      <Header showLogo showBack  />
 
       {blockedUsers.length === 0 ? (
         <View style={styles.emptyState}>

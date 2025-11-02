@@ -122,7 +122,7 @@ export default function ProfileScreen() {
           id: 'invoices',
           label: 'Invoices',
           icon: <FileText size={20} color="#10b981" />,
-          onPress: () => router.push('/invoices' as any),
+          onPress: () => router.push('/invoices'),
         },
         {
           id: 'recordings',

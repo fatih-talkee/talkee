@@ -304,13 +304,13 @@ export default function InvoicesScreen() {
             </View>
           </View>
 
-          {item.callDuration && (
+          {item.callDuration != null && item.callDuration > 0 && (
             <View style={styles.invoiceRow}>
               <Text style={[styles.label, { color: theme.colors.textMuted }]}>
                 Duration
               </Text>
               <Text style={[styles.durationText, { color: theme.colors.text }]}>
-                {item.callDuration} min
+                {item.callDuration.toString()} min
               </Text>
             </View>
           )}
@@ -363,7 +363,7 @@ export default function InvoicesScreen() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <Header showLogo showBack backPosition="right" />
+      <Header showLogo showBack  />
 
       <SearchBar
         value={searchQuery}

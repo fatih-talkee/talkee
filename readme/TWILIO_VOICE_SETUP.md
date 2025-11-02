@@ -10,7 +10,7 @@ This document explains how we integrate Twilio Programmable Voice into the app, 
   - iOS: NSMicrophoneUsageDescription, NSCameraUsageDescription, UIBackgroundModes [audio, voip], AVAudioSessionCategory: PlayAndRecord
   - Android: permissions RECORD_AUDIO, CAMERA, BLUETOOTH/BLUETOOTH_CONNECT, WAKE_LOCK, FOREGROUND_SERVICE
   - Added expo-build-properties plugin (ready for EAS builds / native props)
-- Headers safe areas fixed (PrimaryHeader/DetailHeader) to avoid Android status bar overlap
+- Headers safe areas fixed (PrimaryHeader) to avoid Android status bar overlap
 
 ---
 

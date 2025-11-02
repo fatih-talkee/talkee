@@ -73,7 +73,7 @@ export default function AccountSettingsScreen() {
       <Header
         showLogo
         showBack
-        backPosition="right"
+        
         rightButtons={[
           <TouchableOpacity
             key="edit"

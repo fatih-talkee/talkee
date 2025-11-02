@@ -146,7 +146,7 @@ export default function PrivacySecurityScreen() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <Header showLogo showBack backPosition="right" />
+      <Header showLogo showBack  />
 
       <ScrollView
         style={styles.content}

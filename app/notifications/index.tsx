@@ -186,7 +186,7 @@ export default function NotificationsScreen() {
       <Header 
         showLogo 
         showBack 
-        backPosition="right"
+        
         rightButton={
           unreadCount > 0 && (
             <TouchableOpacity 

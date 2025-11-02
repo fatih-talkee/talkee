@@ -192,7 +192,7 @@ export default function WalletHistoryScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Header showLogo showBack backPosition="right" />
+      <Header showLogo showBack  />
 
       <TabButtons
         options={filters}

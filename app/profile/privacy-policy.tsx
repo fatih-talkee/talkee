@@ -8,8 +8,6 @@ import {
   TouchableOpacity,
   Linking,
 } from 'react-native';
-import { router } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
 
@@ -25,18 +23,9 @@ export default function PrivacyPolicyScreen() {
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <Header
-        title="Privacy Policy"
-        leftButton={
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[
-              styles.backButton,
-              { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
-            ]}
-          >
-            <ArrowLeft size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-        }
+        showLogo
+        showBack
+        
       />
 
       <ScrollView
@@ -304,13 +293,6 @@ export default function PrivacyPolicyScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   content: {
     flex: 1,

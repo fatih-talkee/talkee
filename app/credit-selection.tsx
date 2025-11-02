@@ -1,5 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Minus, Plus } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
@@ -16,7 +26,7 @@ export default function CreditSelectionScreen() {
 
   const MIN_CREDITS = 1;
   const MAX_CREDITS = 2000;
-  const PRICE_PER_CREDIT = 1.00; // $1 per credit
+  const PRICE_PER_CREDIT = 1.0; // $1 per credit
 
   const handleDecrease = () => {
     if (credits > MIN_CREDITS) {
@@ -36,7 +46,7 @@ export default function CreditSelectionScreen() {
 
   const handleInputChange = (text: string) => {
     setInputValue(text);
-    
+
     // Parse the input and validate
     const numericValue = parseInt(text, 10);
     if (!isNaN(numericValue)) {
@@ -62,19 +72,19 @@ export default function CreditSelectionScreen() {
       pathname: '/purchase',
       params: {
         credits: credits.toString(),
-        price: totalPrice.toFixed(2)
-      }
+        price: totalPrice.toFixed(2),
+      },
     });
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Header 
-        showBack
-        backRoute="/(tabs)/wallet"
-      />
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      edges={['top', 'bottom']}
+    >
+      <Header showBack backRoute="/(tabs)/wallet" />
 
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoid}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
@@ -83,29 +93,41 @@ export default function CreditSelectionScreen() {
           style={styles.content}
           contentContainerStyle={[
             styles.contentContainer,
-            { paddingBottom: Math.max(insets.bottom, 24) },
+            {
+              paddingTop: 24,
+              paddingBottom: Math.max(insets.bottom, 24),
+            },
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.instructionSection}>
-            <Text style={[styles.instructionText, { color: theme.colors.text }]}>
+            <Text
+              style={[styles.instructionText, { color: theme.colors.text }]}
+            >
               Choose how many credits you want to buy.
             </Text>
           </View>
 
-          <Card style={[styles.selectorCard, { backgroundColor: theme.colors.card }]}>
-            <Text style={[styles.selectorLabel, { color: theme.colors.text }]}>Credit Amount</Text>
-            
+          <Card
+            style={[
+              styles.selectorCard,
+              { backgroundColor: theme.colors.card },
+            ]}
+          >
+            <Text style={[styles.selectorLabel, { color: theme.colors.text }]}>
+              Credit Amount
+            </Text>
+
             <View style={styles.stepperContainer}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
-                  styles.stepperButton, 
-                  { 
+                  styles.stepperButton,
+                  {
                     backgroundColor: theme.colors.surface,
                     borderColor: theme.colors.border,
-                    opacity: credits <= MIN_CREDITS ? 0.5 : 1
-                  }
+                    opacity: credits <= MIN_CREDITS ? 0.5 : 1,
+                  },
                 ]}
                 onPress={handleDecrease}
                 disabled={credits <= MIN_CREDITS}
@@ -119,12 +141,16 @@ export default function CreditSelectionScreen() {
                   {
                     borderColor: theme.colors.border,
                     color: theme.colors.text,
-                    textAlign: 'center', 
+                    textAlign: 'center',
                     textAlignVertical: 'center',
                     borderWidth: 0,
                     backgroundColor: 'transparent',
                     fontSize: 50,
-                  }
+                    height: Platform.OS === 'android' ? 80 : 70,
+                    paddingVertical: 0,
+                    paddingTop: Platform.OS === 'android' ? 0 : undefined,
+                    includeFontPadding: false,
+                  },
                 ]}
                 value={inputValue}
                 onChangeText={handleInputChange}
@@ -134,14 +160,14 @@ export default function CreditSelectionScreen() {
                 selectTextOnFocus
               />
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
-                  styles.stepperButton, 
-                  { 
+                  styles.stepperButton,
+                  {
                     backgroundColor: theme.colors.surface,
                     borderColor: theme.colors.border,
-                    opacity: credits >= MAX_CREDITS ? 0.5 : 1
-                  }
+                    opacity: credits >= MAX_CREDITS ? 0.5 : 1,
+                  },
                 ]}
                 onPress={handleIncrease}
                 disabled={credits >= MAX_CREDITS}
@@ -151,17 +177,28 @@ export default function CreditSelectionScreen() {
             </View>
 
             <View style={styles.rangeInfo}>
-              <Text style={[styles.rangeText, { color: theme.colors.textMuted }]}>
+              <Text
+                style={[styles.rangeText, { color: theme.colors.textMuted }]}
+              >
                 Min: {MIN_CREDITS} • Max: {MAX_CREDITS.toLocaleString()}
               </Text>
             </View>
           </Card>
 
-          <Card style={[styles.summaryCard, { backgroundColor: theme.colors.card }]}>
-            <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>Purchase Summary</Text>
-            
+          <Card
+            style={[styles.summaryCard, { backgroundColor: theme.colors.card }]}
+          >
+            <Text style={[styles.summaryTitle, { color: theme.colors.text }]}>
+              Purchase Summary
+            </Text>
+
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>
+              <Text
+                style={[
+                  styles.summaryLabel,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
                 You selected:
               </Text>
               <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
@@ -170,7 +207,12 @@ export default function CreditSelectionScreen() {
             </View>
 
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>
+              <Text
+                style={[
+                  styles.summaryLabel,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
                 Price per credit:
               </Text>
               <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
@@ -178,11 +220,19 @@ export default function CreditSelectionScreen() {
               </Text>
             </View>
 
-            <View style={[styles.summaryRow, styles.totalRow, { borderTopColor: theme.colors.divider }]}>
+            <View
+              style={[
+                styles.summaryRow,
+                styles.totalRow,
+                { borderTopColor: theme.colors.divider },
+              ]}
+            >
               <Text style={[styles.totalLabel, { color: theme.colors.text }]}>
                 Total Price:
               </Text>
-              <Text style={[styles.totalValue, { color: theme.colors.pinkTwo }]}>
+              <Text
+                style={[styles.totalValue, { color: theme.colors.pinkTwo }]}
+              >
                 {'$' + totalPrice.toFixed(2)}
               </Text>
             </View>
@@ -192,7 +242,10 @@ export default function CreditSelectionScreen() {
             <Button
               title="Continue to Payment"
               onPress={handleContinue}
-              style={[styles.continueButton, { backgroundColor: theme.colors.pinkTwo }]}
+              style={[
+                styles.continueButton,
+                { backgroundColor: theme.colors.pinkTwo },
+              ]}
             />
           </View>
         </ScrollView>
@@ -213,7 +266,6 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: 24,
-    paddingTop: 24,
   },
   instructionSection: {
     marginBottom: 32,
@@ -237,7 +289,9 @@ const styles = StyleSheet.create({
   stepperContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 16,
+    minHeight: 80,
   },
   stepperButton: {
     width: 56,
@@ -248,13 +302,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   creditInput: {
-    width: 120,
-    height: 56,
+    width: 140,
+    minHeight: 70,
     borderRadius: 12,
     borderWidth: 2,
     fontSize: 20,
     fontFamily: 'Inter-Bold',
     marginHorizontal: 16,
+    paddingVertical: 0,
+    includeFontPadding: false,
   },
   rangeInfo: {
     marginTop: 8,

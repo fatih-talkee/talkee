@@ -34,9 +34,9 @@ class MainApplication : Application(), ReactApplication {
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
           
-          // Disable developer support to use bundled assets instead of Metro
-          // Set to true if you want to use Metro bundler (requires device and computer on same network)
-          override fun getUseDeveloperSupport(): Boolean = false
+          // Enable developer support to use Metro bundler for hot reload
+          // Requires device and computer on same network, or use USB port forwarding
+          override fun getUseDeveloperSupport(): Boolean = BuildConfig.DEBUG
           
           // Return null so React Native uses getBundleAssetName() instead, which loads from assets
           override fun getJSBundleFile(): String? {

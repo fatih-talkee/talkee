@@ -12,6 +12,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 
+// Require logos at module level for proper bundling
+// Using relative paths because Metro bundler requires them for native platforms
+const logoDark = require('../../../assets/images/talkee_logoF.png');
+const logoLight = require('../../../assets/images/talkee_logoM.png');
+
 interface PrimaryHeaderProps {
   rightButtons?: React.ReactNode | React.ReactNode[];
   showLogo?: boolean;
@@ -19,7 +24,6 @@ interface PrimaryHeaderProps {
   onLogoPress?: () => void;
   showBack?: boolean;
   backRoute?: string;
-  backPosition?: 'left' | 'right';
 }
 
 export function PrimaryHeader({
@@ -29,16 +33,12 @@ export function PrimaryHeader({
   onLogoPress,
   showBack = false,
   backRoute,
-  backPosition = 'right',
 }: PrimaryHeaderProps) {
   const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const logo =
-    theme.name === 'dark'
-      ? require('../../../assets/images/talkee_logoF.png')
-      : require('../../../assets/images/talkee_logoM.png');
+  const logo = theme.name === 'dark' ? logoDark : logoLight;
 
   const renderRight = Array.isArray(rightButtons)
     ? rightButtons
@@ -93,14 +93,7 @@ export function PrimaryHeader({
       ]}
     >
       <View style={styles.leftSection}>
-        {backPosition === 'left' && showBack ? (
-          <TouchableOpacity
-            onPress={handleBack}
-            style={[styles.iconButton, { backgroundColor: buttonBackground }]}
-          >
-            <ArrowLeft size={20} color={iconColor} />
-          </TouchableOpacity>
-        ) : showLogo ? (
+        {showLogo ? (
           <TouchableOpacity 
             disabled={!onLogoPress} 
             onPress={onLogoPress}
@@ -125,7 +118,7 @@ export function PrimaryHeader({
             {btn}
           </View>
         ))}
-        {backPosition === 'right' && showBack && (
+        {showBack && (
           <View style={styles.rightButtonWrapper}>
             <TouchableOpacity
               onPress={handleBack}
@@ -195,5 +188,6 @@ const styles = StyleSheet.create({
     height: 40,
     flexShrink: 0,
     flexGrow: 0,
+    opacity: 1,
   },
 });

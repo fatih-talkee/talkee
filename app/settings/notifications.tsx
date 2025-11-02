@@ -121,7 +121,7 @@ export default function NotificationsSettingsScreen() {
       style={[styles.container, { backgroundColor: theme.colors.surface }]}
     >
       <Header
-        title="Notifications"
+        showLogo
         showBack
         rightButtons={
           hasChanges && (

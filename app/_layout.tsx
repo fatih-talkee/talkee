@@ -86,7 +86,6 @@ export default function RootLayout() {
         <Stack.Screen name="purchase" />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="wallet-history" />
-        <Stack.Screen name="invoices" />
         <Stack.Screen name="blocked-users" />
         <Stack.Screen name="how-it-works" />
         <Stack.Screen name="help" />

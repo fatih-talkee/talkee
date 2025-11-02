@@ -11,6 +11,7 @@ import {
   Image,
   ScrollView,
   Platform,
+  Pressable,
 } from 'react-native';
 import { X, Copy, Share2, Star, ShieldCheck, QrCode } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -89,18 +90,16 @@ export function ShareProfileModal({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <TouchableOpacity
+      <Pressable
         style={styles.overlay}
-        activeOpacity={1}
         onPress={onClose}
       >
-        <View
+        <Pressable
           style={[
             styles.modalContainer,
             { backgroundColor: theme.colors.card },
           ]}
-          onStartShouldSetResponder={() => true}
-          onMoveShouldSetResponder={() => true}
+          onPress={(e) => e.stopPropagation()}
         >
           <View style={styles.header}>
             <Text style={[styles.title, { color: theme.colors.text }]}>
@@ -117,6 +116,8 @@ export function ShareProfileModal({
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled={true}
             keyboardShouldPersistTaps="handled"
+            scrollEnabled={true}
+            bounces={true}
           >
             <View style={styles.content}>
               {professionalData && (
@@ -257,13 +258,13 @@ export function ShareProfileModal({
                 <View style={styles.qrCodeWrapper}>
                   <QRCode
                     value={profileUrl}
-                    size={180}
+                    size={70}
                       color={theme.name === 'dark' ? '#FFFFFF' : '#000000'}
                       backgroundColor={
                         theme.name === 'dark' ? '#1C1C1E' : '#FFFFFF'
                       }
                     logo={require('../../assets/images/icon.png')}
-                    logoSize={40}
+                    logoSize={15}
                       logoBackgroundColor="#FFFFFF"
                     logoMargin={2}
                   />
@@ -315,30 +316,30 @@ export function ShareProfileModal({
                 </TouchableOpacity>
               </View>
             </View>
-
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={[
-                  styles.shareButton,
-                    { backgroundColor: theme.colors.primary },
-                ]}
-                onPress={handleShare}
-              >
-                <Share2 size={20} color={theme.colors.surface} />
-                  <Text
-                    style={[
-                      styles.shareButtonText,
-                      { color: theme.colors.surface },
-                    ]}
-                  >
-                  Share Profile
-                </Text>
-              </TouchableOpacity>
-            </View>
             </View>
           </ScrollView>
-        </View>
-      </TouchableOpacity>
+
+          <View style={styles.footer}>
+            <TouchableOpacity
+              style={[
+                styles.shareButton,
+                { backgroundColor: theme.colors.primary },
+              ]}
+              onPress={handleShare}
+            >
+              <Share2 size={20} color={theme.colors.surface} />
+              <Text
+                style={[
+                  styles.shareButtonText,
+                  { color: theme.colors.surface },
+                ]}
+              >
+                Share Profile
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -354,9 +355,9 @@ const styles = StyleSheet.create({
     width: Dimensions.get('window').width * 0.9,
     maxWidth: 400,
     height: Dimensions.get('window').height * 0.85,
-    maxHeight: Dimensions.get('window').height * 0.95,
+    maxHeight: Dimensions.get('window').height * 0.90,
     borderRadius: 20,
-    padding: 20,
+    padding: 0,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -365,12 +366,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 10,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    marginBottom: 0,
   },
   title: {
     fontSize: 20,
@@ -381,12 +386,11 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flex: 1,
-    flexGrow: 1,
-    flexShrink: 1,
   },
   scrollContent: {
-    flexGrow: 1,
-    paddingBottom: 8,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
   },
   content: {
     alignItems: 'center',
@@ -468,14 +472,14 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   qrContainer: {
-    padding: 20,
+    padding: 12,
     borderRadius: 16,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qrCodeWrapper: {
-    padding: 12,
+    padding: 6,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
   },
@@ -515,8 +519,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
     marginLeft: 6,
   },
-  actions: {
-    width: '100%',
+  footer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: 'transparent',
   },
   shareButton: {
     flexDirection: 'row',
@@ -524,6 +530,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 14,
     borderRadius: 12,
+    width: '100%',
   },
   shareButtonText: {
     fontSize: 16,

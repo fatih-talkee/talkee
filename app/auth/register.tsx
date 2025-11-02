@@ -60,7 +60,7 @@ export default function RegisterScreen() {
           <ScrollView showsVerticalScrollIndicator={false}>
             <View style={styles.header}>
               <Image
-                source={require('@/assets/images/talkee_logoF.png')}
+                source={require('../../assets/images/talkee_logoF.png')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />

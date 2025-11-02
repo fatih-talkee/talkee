@@ -209,7 +209,7 @@ export default function DevicesScreen() {
         { backgroundColor: theme.name === 'dark' ? '#000000' : theme.colors.background },
       ]}
     >
-      <Header showLogo showBack backPosition="right" />
+      <Header showLogo showBack  />
 
       {devices.length === 0 ? (
         <View style={styles.emptyState}>

@@ -88,7 +88,7 @@ export default function LoginScreen() {
         >
           <View style={styles.header}>
             <Image
-              source={require('@/assets/images/talkee_logoF.png')}
+              source={require('../../assets/images/talkee_logoF.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />

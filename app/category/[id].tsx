@@ -67,7 +67,7 @@ export default function CategoryScreen() {
       <Header
         showLogo
         showBack
-        backPosition="right"
+        
         rightButtons={
           <TouchableOpacity
             style={[

@@ -337,10 +337,7 @@ export default function ProfessionalProfileScreen() {
                   >
                     <DollarSign size={16} color="#FFD60A" />
                     <Text
-                      style={[
-                        styles.urgentCallPriceText,
-                        { color: '#FFD60A' },
-                      ]}
+                      style={[styles.urgentCallPriceText, { color: '#FFD60A' }]}
                     >
                       {mockUserProfile.urgentCallCurrency === 'USD'
                         ? '$'
@@ -810,7 +807,6 @@ export default function ProfessionalProfileScreen() {
       <Header
         showLogo={true}
         showBack={true}
-        backPosition="right"
         rightButtons={[
           <View key="favorite-share" style={styles.headerActions}>
             <TouchableOpacity
@@ -1068,15 +1064,7 @@ export default function ProfessionalProfileScreen() {
           },
         ]}
       >
-        <View
-          style={[
-            styles.callActions,
-            {
-              borderTopColor: theme.colors.border,
-              shadowColor: theme.colors.text,
-            },
-          ]}
-        >
+        <View style={styles.callActions}>
           <View style={styles.callButtonsRow}>
             <TouchableOpacity
               style={[
@@ -1558,11 +1546,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
-    borderTopWidth: 1,
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 4,
   },
   callButtonsRow: {
     flexDirection: 'row',
