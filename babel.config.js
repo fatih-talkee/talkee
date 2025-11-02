@@ -1,19 +1,18 @@
+// babel.config.js
 module.exports = function (api) {
   api.cache(true);
   return {
     presets: ['babel-preset-expo'],
     plugins: [
-      // Expo Router için zorunlu
-      'expo-router/babel',
       [
         'module-resolver',
         {
-          root: ['.'],
+          root: ['./'],
           extensions: ['.tsx', '.ts', '.js', '.json'],
-          alias: { '@': './' },
+          alias: { '@': './', '@app': './app', '@components': './components' },
         },
       ],
-      // Reanimated mutlaka en sonda olmalı
+      // her zaman en sonda:
       'react-native-reanimated/plugin',
     ],
   };
