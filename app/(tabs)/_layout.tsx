@@ -1,7 +1,12 @@
 import { Tabs } from 'expo-router';
-import { Chrome as Home, Grid3x3, Wallet, Search, User } from 'lucide-react-native';
-import { useTheme } from '@/contexts/ThemeContext';
-
+import {
+  Chrome as Home,
+  Grid3x3,
+  Wallet,
+  Search,
+  User,
+} from 'lucide-react-native';
+import { useTheme } from '../../contexts/ThemeContext';
 export default function TabLayout() {
   const { theme } = useTheme();
 
@@ -30,7 +35,8 @@ export default function TabLayout() {
           fontSize: 10,
           marginTop: 4,
         },
-      }}>
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{

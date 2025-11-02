@@ -1,95 +1,14 @@
-# -------------------------------
-# Base: React Native / Hermes / TurboModules
-# -------------------------------
--keep class com.facebook.react.turbomodule.** { *; }
--keep class com.facebook.jni.** { *; }
--keep class com.facebook.hermes.** { *; }
--keep class com.facebook.hermes.unicode.** { *; }
--keep class com.facebook.proguard.annotations.DoNotStrip { *; }
--keep @com.facebook.proguard.annotations.DoNotStrip class * { *; }
--keepclasseswithmembers class * {
-    @com.facebook.proguard.annotations.DoNotStrip *;
-}
+# Add project specific ProGuard rules here.
+# By default, the flags in this file are appended to flags specified
+# in /usr/local/Cellar/android-sdk/24.3.3/tools/proguard/proguard-android.txt
+# You can edit the include path and order by changing the proguardFiles
+# directive in build.gradle.
+#
+# For more details, see
+#   http://developer.android.com/guide/developing/tools/proguard.html
 
-# RN bridge / packages / ReactMethod (reflections)
--keep class * extends com.facebook.react.bridge.JavaScriptModule { *; }
--keep class * extends com.facebook.react.bridge.NativeModule { *; }
--keep class * implements com.facebook.react.bridge.NativeModule { *; }
--keep class * implements com.facebook.react.ReactPackage { *; }
--keepclassmembers class * {
-    @com.facebook.react.bridge.ReactMethod <methods>;
-}
-
-# -------------------------------
-# Reanimated
-# -------------------------------
+# react-native-reanimated
 -keep class com.swmansion.reanimated.** { *; }
+-keep class com.facebook.react.turbomodule.** { *; }
 
-# -------------------------------
-# Expo Modules
-# -------------------------------
--keep class expo.modules.** { *; }
--dontwarn expo.modules.**
-
-# (Eski projelerde görülebilir)
--keep class host.exp.** { *; }
--dontwarn host.exp.**
-
-# -------------------------------
-# AndroidX / Parcelable / Annotations
-# -------------------------------
--keepclassmembers class * implements android.os.Parcelable {
-    public static final android.os.Parcelable$Creator CREATOR;
-}
--keepattributes *Annotation*,InnerClasses,EnclosingMethod,Signature
-
-# -------------------------------
-# OkHttp / Okio (genellikle gerekmez ama güvenli)
-# -------------------------------
--dontwarn okhttp3.**
--dontwarn okio.**
-
-# -------------------------------
-# Gson (kullanıyorsan)
-# -------------------------------
--keep class com.google.gson.** { *; }
--keep class * implements com.google.gson.JsonSerializer { *; }
--keep class * implements com.google.gson.JsonDeserializer { *; }
--dontwarn com.google.gson.**
-
-# -------------------------------
-# Firebase (google-services ile çoğu rule otomatik gelir; yine de güvenli)
-# -------------------------------
--dontwarn com.google.firebase.**
--keep class com.google.firebase.** { *; }
-
-# -------------------------------
-# WorkManager / AndroidX (bildirim/scheduler kullanan kütüphaneler için güvenli)
-# -------------------------------
--dontwarn androidx.work.**
--keep class androidx.work.** { *; }
-
-# -------------------------------
-# Misc: Kotlin / Coroutines (bazı lib'lerde yararlı)
-# -------------------------------
--dontwarn kotlin.**
--dontwarn kotlinx.coroutines.**
-
-# -------------------------------
-# Eğer Crashlytics vs. kullanıyorsan (opsiyonel)
-# -------------------------------
-# -keep class com.google.firebase.crashlytics.** { *; }
-
-# -------------------------------
-# Varsayılan: Sıkılaştırma sonrası log vs. kaldırmak istersen (opsiyonel)
-# -------------------------------
-# -assumenosideeffects class android.util.Log {
-#     public static *** d(...);
-#     public static *** v(...);
-#     public static *** i(...);
-#     public static *** w(...);
-# }
-
-# -------------------------------
-# Proje-özel ek kurallarını buraya koy
-# -------------------------------
+# Add any project specific keep options here:

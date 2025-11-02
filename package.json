@@ -8,14 +8,13 @@
     "dev": "EXPO_NO_TELEMETRY=1 expo start --dev-client",
     "reset": "rimraf $TMPDIR/metro-* $TMPDIR/haste-map-* || true && watchman watch-del-all || true",
     "lint": "expo lint",
-
-    "android": "expo run:android",             
-    "android:studio": "cd android && ./gradlew installDebug",     
+    "android": "expo run:android",
+    "android:studio": "cd android && ./gradlew installDebug",
     "android:clean": "cd android && ./gradlew clean",
-
-    "build:apk": "cd android && ./gradlew assembleRelease",       
-    "build:aab": "cd android && ./gradlew bundleRelease",         
-    "build:web": "expo export --platform web"
+    "build:apk": "cd android && ./gradlew assembleRelease",
+    "build:aab": "cd android && ./gradlew bundleRelease",
+    "build:web": "expo export --platform web",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.1",

@@ -1,14 +1,27 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, FlatList, Dimensions } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  SafeAreaView,
+  TouchableOpacity,
+  FlatList,
+  Dimensions,
+} from 'react-native';
 import { Link } from 'expo-router';
 import { Bell, Calendar } from 'lucide-react-native';
-import { Header } from '@/components/ui/Header';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
 import { CategoryGrid } from '@/components/listings/CategoryGrid';
 import { PromotionCarousel } from '@/components/carousel/PromotionCarousel';
 import { useTheme } from '@/contexts/ThemeContext';
-import { mockProfessionals, mockCategories, mockPromotions } from '@/mockData/professionals';
+import {
+  mockProfessionals,
+  mockCategories,
+  mockPromotions,
+} from '@/mockData/professionals';
 import { router } from 'expo-router';
+import { Header } from '@/components/ui/Header';
 
 const { width } = Dimensions.get('window');
 
@@ -17,24 +30,40 @@ export default function HomeScreen() {
   const featuredProfessionals = mockProfessionals.slice(0, 4);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Header 
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <Header
         showLogo={true}
         rightButton={
           <View style={styles.headerButtons}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[
                 styles.iconButton,
-                { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
+                {
+                  backgroundColor:
+                    theme.name === 'dark'
+                      ? theme.colors.surface
+                      : theme.name === 'light'
+                      ? theme.colors.brandPink
+                      : '#000000',
+                },
               ]}
               onPress={() => router.push('/appointments-calendar')}
             >
               <Calendar size={20} color="#FFFFFF" />
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[
                 styles.iconButton,
-                { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
+                {
+                  backgroundColor:
+                    theme.name === 'dark'
+                      ? theme.colors.surface
+                      : theme.name === 'light'
+                      ? theme.colors.brandPink
+                      : '#000000',
+                },
               ]}
               onPress={() => router.push('/notifications' as any)}
             >
@@ -58,16 +87,25 @@ export default function HomeScreen() {
         {/* Featured Professionals */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Featured Professionals</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Featured Professionals
+            </Text>
             <Link href="/search" asChild>
               <TouchableOpacity>
-                <Text style={[styles.seeAllText, { color: theme.colors.primary }]}>See All</Text>
+                <Text
+                  style={[styles.seeAllText, { color: theme.colors.primary }]}
+                >
+                  See All
+                </Text>
               </TouchableOpacity>
             </Link>
           </View>
           <View style={styles.professionalsGrid}>
             {featuredProfessionals.map((professional) => (
-              <ProfessionalCard key={professional.id} professional={professional} />
+              <ProfessionalCard
+                key={professional.id}
+                professional={professional}
+              />
             ))}
           </View>
         </View>

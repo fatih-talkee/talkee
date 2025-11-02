@@ -5,7 +5,14 @@ module.exports = function (api) {
     plugins: [
       // Expo Router için zorunlu
       'expo-router/babel',
-
+      [
+        'module-resolver',
+        {
+          root: ['.'],
+          extensions: ['.tsx', '.ts', '.js', '.json'],
+          alias: { '@': './' },
+        },
+      ],
       // Reanimated mutlaka en sonda olmalı
       'react-native-reanimated/plugin',
     ],
