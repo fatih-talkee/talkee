@@ -1946,10 +1946,6 @@ PODS:
   - RNSVG (15.11.2):
     - React-Core
   - SocketRocket (0.7.1)
-  - twilio-voice-react-native (1.7.0):
-    - React-Core
-    - TwilioVoice (= 6.13.3)
-  - TwilioVoice (6.13.3)
   - Yoga (0.0.0)
   - ZXingObjC/Core (3.6.9)
   - ZXingObjC/OneD (3.6.9):
@@ -2055,13 +2051,11 @@ DEPENDENCIES:
   - RNReanimated (from `../node_modules/react-native-reanimated`)
   - RNScreens (from `../node_modules/react-native-screens`)
   - RNSVG (from `../node_modules/react-native-svg`)
-  - "twilio-voice-react-native (from `../node_modules/@twilio/voice-react-native-sdk`)"
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
 SPEC REPOS:
   trunk:
     - SocketRocket
-    - TwilioVoice
     - ZXingObjC
 
 EXTERNAL SOURCES:
@@ -2256,8 +2250,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-screens"
   RNSVG:
     :path: "../node_modules/react-native-svg"
-  twilio-voice-react-native:
-    :path: "../node_modules/@twilio/voice-react-native-sdk"
   Yoga:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
@@ -2358,8 +2350,6 @@ SPEC CHECKSUMS:
   RNScreens: 7f9d84a9901679dbb435592612d5ac57a044adce
   RNSVG: ab84f2de7dd4f2c86d01825b8a65e0ef712fc36b
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
-  twilio-voice-react-native: f672df1bebb45ca95daaeaff47a48fd15222c855
-  TwilioVoice: 0eea89db614225bfea6b25cf2c909728dfcefa59
   Yoga: b37eeaa6148984cac70ecaf8022bb209e03296cb
   ZXingObjC: 8898711ab495761b2dbbdec76d90164a6d7e14c5
 
