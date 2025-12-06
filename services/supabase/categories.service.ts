@@ -1,0 +1,265 @@
+import { supabase } from '../../lib/supabase';
+import type { Category } from '../../types/database.types';
+
+class CategoriesService {
+  /**
+   * Get all active categories ordered by sort_order
+   */
+  async getCategories(): Promise<Category[]> {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching categories:', error);
+        throw new Error(`Failed to fetch categories: ${error.message}`);
+      }
+
+      return (data || []) as Category[];
+    } catch (error) {
+      console.error('Error in getCategories:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get all categories including inactive ones (for admin)
+   */
+  async getAllCategories(): Promise<Category[]> {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('sort_order', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching all categories:', error);
+        throw new Error(`Failed to fetch categories: ${error.message}`);
+      }
+
+      return (data || []) as Category[];
+    } catch (error) {
+      console.error('Error in getAllCategories:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get category by ID
+   */
+  async getCategoryById(categoryId: string): Promise<Category | null> {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('id', categoryId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching category:', error);
+        throw new Error(`Failed to fetch category: ${error.message}`);
+      }
+
+      return data as Category;
+    } catch (error) {
+      console.error('Error in getCategoryById:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get category by slug
+   */
+  async getCategoryBySlug(slug: string): Promise<Category | null> {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('slug', slug)
+        .single();
+
+      if (error) {
+        console.error('Error fetching category by slug:', error);
+        throw new Error(`Failed to fetch category: ${error.message}`);
+      }
+
+      return data as Category;
+    } catch (error) {
+      console.error('Error in getCategoryBySlug:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get category with professional count
+   */
+  async getCategoryWithProfessionalCount(categoryId: string): Promise<{
+    category: Category | null;
+    professionalCount: number;
+  }> {
+    try {
+      const category = await this.getCategoryById(categoryId);
+
+      if (!category) {
+        return { category: null, professionalCount: 0 };
+      }
+
+      const { count, error } = await supabase
+        .from('professionals')
+        .select('*', { count: 'exact', head: true })
+        .eq('category_id', categoryId);
+
+      if (error) {
+        console.error('Error counting professionals:', error);
+        return { category, professionalCount: 0 };
+      }
+
+      return {
+        category,
+        professionalCount: count || 0,
+      };
+    } catch (error) {
+      console.error('Error in getCategoryWithProfessionalCount:', error);
+      return { category: null, professionalCount: 0 };
+    }
+  }
+
+  /**
+   * Get all categories with their professional counts
+   */
+  async getCategoriesWithCounts(): Promise<
+    Array<Category & { professionalCount: number }>
+  > {
+    try {
+      const categories = await this.getCategories();
+
+      // Get professional counts for each category
+      const categoriesWithCounts = await Promise.all(
+        categories.map(async (category) => {
+          const { count, error } = await supabase
+            .from('professionals')
+            .select('*', { count: 'exact', head: true })
+            .eq('category_id', category.id);
+
+          if (error) {
+            console.error(
+              `Error counting professionals for ${category.id}:`,
+              error
+            );
+          }
+
+          return {
+            ...category,
+            professionalCount: count || 0,
+          };
+        })
+      );
+
+      return categoriesWithCounts;
+    } catch (error) {
+      console.error('Error in getCategoriesWithCounts:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Search categories by name
+   */
+  async searchCategories(query: string): Promise<Category[]> {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('is_active', true)
+        .ilike('name', `%${query}%`)
+        .order('sort_order', { ascending: true });
+
+      if (error) {
+        console.error('Error searching categories:', error);
+        throw new Error(`Failed to search categories: ${error.message}`);
+      }
+
+      return (data || []) as Category[];
+    } catch (error) {
+      console.error('Error in searchCategories:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get featured categories (with most professionals)
+   */
+  async getFeaturedCategories(
+    limit: number = 6
+  ): Promise<Array<Category & { professionalCount: number }>> {
+    try {
+      const categoriesWithCounts = await this.getCategoriesWithCounts();
+
+      // Sort by professional count and take top N
+      return categoriesWithCounts
+        .sort((a, b) => b.professionalCount - a.professionalCount)
+        .slice(0, limit);
+    } catch (error) {
+      console.error('Error in getFeaturedCategories:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Check if category slug is available
+   */
+  async isSlugAvailable(slug: string, excludeId?: string): Promise<boolean> {
+    try {
+      let query = supabase.from('categories').select('id').eq('slug', slug);
+
+      if (excludeId) {
+        query = query.neq('id', excludeId);
+      }
+
+      const { data, error } = await query.single();
+
+      // PGRST116 = no rows returned (slug is available)
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error checking slug availability:', error);
+      }
+
+      return !data; // Available if no data found
+    } catch (error) {
+      console.error('Error in isSlugAvailable:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get total categories count
+   */
+  async getTotalCount(activeOnly: boolean = true): Promise<number> {
+    try {
+      let query = supabase
+        .from('categories')
+        .select('*', { count: 'exact', head: true });
+
+      if (activeOnly) {
+        query = query.eq('is_active', true);
+      }
+
+      const { count, error } = await query;
+
+      if (error) {
+        console.error('Error getting categories count:', error);
+        return 0;
+      }
+
+      return count || 0;
+    } catch (error) {
+      console.error('Error in getTotalCount:', error);
+      return 0;
+    }
+  }
+}
+
+// Export singleton instance
+export const categoriesService = new CategoriesService();

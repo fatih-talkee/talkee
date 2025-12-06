@@ -13,12 +13,17 @@
     "allowJs": true,
     "noEmit": true,
     "isolatedModules": true,
-    "baseUrl": "*",
+    "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
-      "@assets/*": ["assets/*"],
-      "@app/*": ["app/*"],
-      "@components/*": ["components/*"]
+      "@components/*": ["components/*"],
+      "@lib/*": ["lib/*"],
+      "@services/*": ["services/*"],
+      "@hooks/*": ["hooks/*"],
+      "@contexts/*": ["contexts/*"],
+      "@types/*": ["types/*"],
+      "@utils/*": ["utils/*"],
+      "@assets/*": ["assets/*"]
     }
   },
   "include": [

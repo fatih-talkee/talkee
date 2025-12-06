@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useFrameworkReady } from '@/hooks/useFrameworkReady';
-import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
+import { useFrameworkReady } from '../hooks/useFrameworkReady';
+import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 import { useFonts } from 'expo-font';
-import { ToastStack } from '@/components/ui/ToastStack';
+import { ToastStack } from '../components/ui/ToastStack';
 import {
   Inter_400Regular,
   Inter_500Medium,
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
-import { initI18n } from '@/lib/i18n';
+import { initI18n } from '../lib/i18n';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -61,7 +61,14 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    console.log('[App] State check - fontsLoaded:', fontsLoaded, 'fontError:', fontError, 'i18nReady:', i18nReady);
+    console.log(
+      '[App] State check - fontsLoaded:',
+      fontsLoaded,
+      'fontError:',
+      fontError,
+      'i18nReady:',
+      i18nReady
+    );
     if ((fontsLoaded || fontError) && i18nReady) {
       console.log('[App] All initialization complete, hiding splash screen');
       SplashScreen.hideAsync().catch((error) => {

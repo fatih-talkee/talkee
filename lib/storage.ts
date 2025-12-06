@@ -18,3 +18,8 @@ export async function setItem(key: string, value: unknown): Promise<void> {
   const serialized = typeof value === 'string' ? value : JSON.stringify(value);
   await AsyncStorage.setItem(key, serialized);
 }
+
+export const storage = {
+  getItem,
+  setItem,
+};

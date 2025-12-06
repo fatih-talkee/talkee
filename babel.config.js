@@ -9,7 +9,18 @@ module.exports = function (api) {
         {
           root: ['./'],
           extensions: ['.tsx', '.ts', '.js', '.json'],
-          alias: { '@': './', '@app': './app', '@components': './components' },
+          alias: {
+            '@': './',
+            '@app': './app',
+            '@components': './components',
+            '@lib': './lib',
+            '@services': './services',
+            '@hooks': './hooks',
+            '@contexts': './contexts',
+            '@types': './types',
+            '@utils': './utils',
+            '@assets': './assets',
+          },
         },
       ],
       // her zaman en sonda:

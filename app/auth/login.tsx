@@ -1,3 +1,8 @@
+/**
+ * Login Screen - FIXED OAUTH VERSION
+ * Handles OAuth redirects for both web and mobile
+ */
+
 import React, { useState } from 'react';
 import {
   View,
@@ -15,66 +20,168 @@ import { Phone, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { useIsMounted } from '@/hooks/useIsMounted';
 import { useToast } from '@/lib/toastService';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 
 export default function LoginScreen() {
   const { theme } = useTheme();
+  const toast = useToast();
+
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const isMountedRef = useIsMounted();
-  const toast = useToast();
+  const [socialLoading, setSocialLoading] = useState<string | null>(null);
 
-  // Show 3 sample toasts when component mounts
-  useEffect(() => {
-    // Show them with short delays so they appear almost simultaneously
-    toast.success({
-      title: 'Success',
-      message: 'Your login was successful!',
-      duration: 4000,
-    });
-
-    setTimeout(() => {
-      toast.error({
-        title: 'Error',
-        message: 'Invalid credentials. Please try again.',
-        duration: 4000,
-      });
-    }, 300);
-
-    setTimeout(() => {
-      toast.info({
-        title: 'Info',
-        message: 'Welcome back to Talkee!',
-        duration: 4000,
-      });
-    }, 600);
-  }, []);
-
-  const handleLogin = async () => {
-    setLoading(true);
-    // Mock login - navigate directly to home without validation
-    setTimeout(() => {
-      if (isMountedRef.current) {
-        setLoading(false);
-        toast.success({
-          title: 'Logged in',
-          message: 'Welcome back!',
-        });
-        router.replace('/(tabs)');
-      }
-    }, 800);
+  const validatePhone = (phone: string) => {
+    const phoneRegex =
+      /^[\+]?[(]?[0-9]{1,3}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}$/;
+    return phoneRegex.test(phone.replace(/\s/g, ''));
   };
 
-  const handleSocialLogin = (provider: string) => {
-    // Mock social login - navigate directly to home
-    setTimeout(() => {
-      router.replace('/(tabs)');
-    }, 500);
+  const handleLogin = async () => {
+    // Validation
+    if (!phone.trim()) {
+      toast.error({
+        title: 'Phone Required',
+        message: 'Please enter your phone number',
+      });
+      return;
+    }
+
+    if (!validatePhone(phone)) {
+      toast.error({
+        title: 'Invalid Phone',
+        message: 'Please enter a valid phone number',
+      });
+      return;
+    }
+
+    if (!password) {
+      toast.error({
+        title: 'Password Required',
+        message: 'Please enter your password',
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      toast.error({
+        title: 'Invalid Password',
+        message: 'Password must be at least 6 characters',
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // For now, lookup user by phone to get email
+      // TODO: Implement proper phone→email lookup in backend
+      const { data: userData, error: lookupError } = await supabase
+        .from('users')
+        .select('email')
+        .eq('phone', phone.trim())
+        .single();
+
+      if (lookupError || !userData) {
+        toast.error({
+          title: 'Phone Not Found',
+          message: 'No account found with this phone number',
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Login with email
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: userData.email,
+        password,
+      });
+
+      if (error) {
+        console.error('Login error:', error);
+
+        if (error.message.includes('Invalid login credentials')) {
+          toast.error({
+            title: 'Login Failed',
+            message: 'Invalid phone or password. Please try again.',
+          });
+        } else if (error.message.includes('Email not confirmed')) {
+          toast.error({
+            title: 'Email Not Verified',
+            message: 'Please verify your email before logging in.',
+          });
+        } else {
+          toast.error({
+            title: 'Login Failed',
+            message: error.message || 'An error occurred during login',
+          });
+        }
+        return;
+      }
+
+      if (data.session) {
+        toast.success({
+          title: 'Welcome Back!',
+          message: 'Login successful',
+        });
+
+        router.replace('/(tabs)');
+      }
+    } catch (error: any) {
+      console.error('Unexpected login error:', error);
+      toast.error({
+        title: 'Error',
+        message: 'An unexpected error occurred. Please try again.',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSocialLogin = async (
+    provider: 'google' | 'facebook' | 'linkedin'
+  ) => {
+    setSocialLoading(provider);
+
+    try {
+      // ✅ FIXED: Different redirect URLs for web vs mobile
+      const redirectUrl =
+        Platform.OS === 'web' && typeof window !== 'undefined'
+          ? `${window.location.origin}/auth/callback` // Web: http://localhost:8081/auth/callback
+          : 'talkee://auth/callback'; // Mobile: Deep link
+
+      console.log('OAuth redirect URL:', redirectUrl); // Debug
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: false, // Let Supabase handle redirect
+        },
+      });
+
+      if (error) {
+        console.error(`${provider} login error:`, error);
+        toast.error({
+          title: 'Login Failed',
+          message: `Failed to sign in with ${provider}`,
+        });
+      }
+
+      // On web, this will redirect to OAuth provider
+      // On mobile, it will open in-app browser
+    } catch (error: any) {
+      console.error(`Unexpected ${provider} login error:`, error);
+      toast.error({
+        title: 'Error',
+        message: 'An unexpected error occurred. Please try again.',
+      });
+    } finally {
+      setSocialLoading(null);
+    }
   };
 
   return (
@@ -95,7 +202,7 @@ export default function LoginScreen() {
           >
             <View style={styles.header}>
               <Image
-                source={require('../../assets/images/talkee_logoF.png')}
+                source={require('@/assets/images/talkee_logoF.png')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
@@ -106,114 +213,125 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.form}>
-            <Input
-              variant="light"
-              label="Phone Number"
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="Enter your phone number"
-              keyboardType="phone-pad"
-              leftIcon={<Phone size={20} color="#9E9E9E" />}
-            />
+              <Input
+                variant="light"
+                label="Phone Number"
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="Enter your phone number"
+                keyboardType="phone-pad"
+                autoComplete="tel"
+                leftIcon={<Phone size={20} color="#9E9E9E" />}
+              />
 
-            <Input
-              variant="light"
-              label="Password"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              secureTextEntry={!showPassword}
-              leftIcon={<Lock size={20} color="#9E9E9E" />}
-              rightIcon={
+              <Input
+                variant="light"
+                label="Password"
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Enter your password"
+                secureTextEntry={!showPassword}
+                autoComplete="password"
+                leftIcon={<Lock size={20} color="#9E9E9E" />}
+                rightIcon={
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff size={20} color="#9E9E9E" />
+                    ) : (
+                      <Eye size={20} color="#9E9E9E" />
+                    )}
+                  </TouchableOpacity>
+                }
+              />
+
+              <TouchableOpacity
+                style={styles.forgotPassword}
+                onPress={() => router.push('/auth/forgot-password')}
+              >
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              </TouchableOpacity>
+
+              <Button
+                title={loading ? 'Signing In...' : 'Log In'}
+                onPress={handleLogin}
+                disabled={loading}
+                style={styles.loginButton}
+              />
+
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>or continue with</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <View style={styles.socialButtons}>
                 <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
+                  style={[styles.socialButton, styles.googleButton]}
+                  onPress={() => handleSocialLogin('google')}
+                  disabled={!!socialLoading}
                 >
-                  {showPassword ? (
-                    <EyeOff size={20} color="#9E9E9E" />
-                  ) : (
-                    <Eye size={20} color="#9E9E9E" />
-                  )}
+                  <View style={styles.socialButtonContent}>
+                    <View style={styles.googleIcon}>
+                      <Text style={styles.googleIconText}>G</Text>
+                    </View>
+                    <Text style={styles.googleButtonText}>
+                      {socialLoading === 'google'
+                        ? 'Connecting...'
+                        : 'Continue with Google'}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
-              }
-            />
 
-            <TouchableOpacity
-              style={styles.forgotPassword}
-              onPress={() => router.push('/auth/forgot-password')}
-            >
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-            </TouchableOpacity>
-
-            <Button
-              title={loading ? 'Signing In...' : 'Log In'}
-              onPress={handleLogin}
-              disabled={loading}
-              style={styles.loginButton}
-            />
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or continue with</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <View style={styles.socialButtons}>
-              <TouchableOpacity
-                style={[styles.socialButton, styles.googleButton]}
-                onPress={() => handleSocialLogin('Google')}
-              >
-                <View style={styles.socialButtonContent}>
-                  <View style={styles.googleIcon}>
-                    <Text style={styles.googleIconText}>G</Text>
+                <TouchableOpacity
+                  style={[styles.socialButton, styles.facebookButton]}
+                  onPress={() => handleSocialLogin('facebook')}
+                  disabled={!!socialLoading}
+                >
+                  <View style={styles.socialButtonContent}>
+                    <View style={styles.facebookIcon}>
+                      <Text style={styles.facebookIconText}>f</Text>
+                    </View>
+                    <Text style={styles.facebookButtonText}>
+                      {socialLoading === 'facebook'
+                        ? 'Connecting...'
+                        : 'Continue with Facebook'}
+                    </Text>
                   </View>
-                  <Text style={styles.googleButtonText}>
-                    Continue with Google
-                  </Text>
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.socialButton, styles.facebookButton]}
-                onPress={() => handleSocialLogin('Facebook')}
-              >
-                <View style={styles.socialButtonContent}>
-                  <View style={styles.facebookIcon}>
-                    <Text style={styles.facebookIconText}>f</Text>
+                <TouchableOpacity
+                  style={[styles.socialButton, styles.linkedinButton]}
+                  onPress={() => handleSocialLogin('linkedin')}
+                  disabled={!!socialLoading}
+                >
+                  <View style={styles.socialButtonContent}>
+                    <View style={styles.linkedinIcon}>
+                      <Text style={styles.linkedinIconText}>in</Text>
+                    </View>
+                    <Text style={styles.linkedinButtonText}>
+                      {socialLoading === 'linkedin'
+                        ? 'Connecting...'
+                        : 'Continue with LinkedIn'}
+                    </Text>
                   </View>
-                  <Text style={styles.facebookButtonText}>
-                    Continue with Facebook
-                  </Text>
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity
-                style={[styles.socialButton, styles.linkedinButton]}
-                onPress={() => handleSocialLogin('LinkedIn')}
-              >
-                <View style={styles.socialButtonContent}>
-                  <View style={styles.linkedinIcon}>
-                    <Text style={styles.linkedinIconText}>in</Text>
-                  </View>
-                  <Text style={styles.linkedinButtonText}>
-                    Continue with LinkedIn
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
+              <View style={styles.dividerBottom}>
+                <View style={styles.dividerLine} />
+              </View>
 
-            <View style={styles.dividerBottom}>
-              <View style={styles.dividerLine} />
+              <View style={styles.footer}>
+                <Text style={styles.footerText}>
+                  Don't have an account?{' '}
+                  <Link href="/auth/register" asChild>
+                    <Text style={styles.footerLink}>Sign Up</Text>
+                  </Link>
+                </Text>
+              </View>
             </View>
-
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>
-                Don't have an account?{' '}
-                <Link href="/auth/register" asChild>
-                  <Text style={styles.footerLink}>Sign Up</Text>
-                </Link>
-              </Text>
-            </View>
-          </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -257,9 +375,7 @@ const styles = StyleSheet.create({
     color: '#9E9E9E',
     textAlign: 'center',
   },
-  form: {
-    // Removed flex: 1 to allow ScrollView to handle scrolling properly
-  },
+  form: {},
   forgotPassword: {
     alignSelf: 'flex-end',
     marginBottom: 24,
