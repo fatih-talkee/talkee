@@ -10,6 +10,7 @@ declare module '@assets/*';
 
 // Window type for React Native Web
 interface Window {
+  localStorage: any;
   location: {
     origin: string;
     href: string;

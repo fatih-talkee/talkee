@@ -18,7 +18,12 @@ export default function AuthCallbackScreen() {
     if (hasRun.current) return;
     hasRun.current = true;
 
-    handleCallback();
+    // Wait a bit for router to be ready
+    const timer = setTimeout(() => {
+      handleCallback();
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, []);
 
   const handleCallback = async () => {
@@ -87,8 +92,18 @@ export default function AuthCallbackScreen() {
             });
           }
 
-          // Navigate to main app
-          router.replace('/(tabs)');
+          // Navigate to main app - wait for router to be ready
+          setTimeout(() => {
+            try {
+              router.replace('/(tabs)');
+            } catch (error) {
+              console.error('Navigation error:', error);
+              // Fallback: try again after a short delay
+              setTimeout(() => {
+                router.replace('/(tabs)');
+              }, 500);
+            }
+          }, 200);
         } else {
           // ✅ New OAuth user - Create profile
           console.log('Creating new profile for OAuth user...');
@@ -178,8 +193,18 @@ export default function AuthCallbackScreen() {
             message: 'Your account has been created',
           });
 
-          // Navigate to main app
-          router.replace('/(tabs)');
+          // Navigate to main app - wait for router to be ready
+          setTimeout(() => {
+            try {
+              router.replace('/(tabs)');
+            } catch (error) {
+              console.error('Navigation error:', error);
+              // Fallback: try again after a short delay
+              setTimeout(() => {
+                router.replace('/(tabs)');
+              }, 500);
+            }
+          }, 200);
         }
       } else {
         // No session

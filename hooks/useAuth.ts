@@ -3,23 +3,45 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { router } from 'expo-router';
+import { Href, router } from 'expo-router';
 
 export function useAuth() {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // ✅ Start with true
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   // Check authentication status
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setIsAuthenticated(!!session);
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        console.log(
+          '🔐 Session check:',
+          session ? 'Authenticated' : 'Not authenticated'
+        );
+        setIsAuthenticated(!!session);
+      } catch (error) {
+        console.error('❌ Auth check error:', error);
+        setIsAuthenticated(false);
+      } finally {
+        setLoading(false); // ✅ Stop loading after initial check
+      }
     };
 
     checkAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // ✅ Listen for auth state changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('🔄 Auth state changed:', event);
       setIsAuthenticated(!!session);
+
+      // ✅ Auto-redirect on sign out
+      if (event === 'SIGNED_OUT') {
+        router.replace('/(auth)/login' as Href<'/(auth)/login'>);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -33,45 +55,64 @@ export function useAuth() {
         password,
       });
       if (error) throw error;
+
+      console.log('✅ Sign in successful');
       return { data, error: null };
     } catch (error) {
-      console.error('Sign in error:', error);
+      console.error('❌ Sign in error:', error);
       return { data: null, error };
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const signUp = useCallback(async ({ email, password, name }: { email: string; password: string; name?: string }) => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name,
+  const signUp = useCallback(
+    async ({
+      email,
+      password,
+      name,
+    }: {
+      email: string;
+      password: string;
+      name?: string;
+    }) => {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              name,
+            },
           },
-        },
-      });
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      console.error('Sign up error:', error);
-      return { data: null, error };
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        });
+        if (error) throw error;
+
+        console.log('✅ Sign up successful');
+        return { data, error: null };
+      } catch (error) {
+        console.error('❌ Sign up error:', error);
+        return { data: null, error };
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
 
   const signOut = useCallback(async () => {
     try {
       setLoading(true);
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      router.replace('/(auth)/login');
+
+      console.log('✅ Sign out successful');
+      // onAuthStateChange will handle redirect automatically
     } catch (error) {
-      console.error('Sign out error:', error);
+      console.error('❌ Sign out error:', error);
+      // Still redirect even if error
+      router.replace('/auth/login' as Href<'/(auth)/login'>);
       throw error;
     } finally {
       setLoading(false);
@@ -82,12 +123,16 @@ export function useAuth() {
     try {
       setLoading(true);
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${process.env.EXPO_PUBLIC_API_URL || 'exp://localhost:8081'}/reset-password`,
+        redirectTo: `${
+          process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8081'
+        }/reset-password`,
       });
       if (error) throw error;
+
+      console.log('✅ Password reset email sent');
       return { error: null };
     } catch (error) {
-      console.error('Reset password error:', error);
+      console.error('❌ Reset password error:', error);
       return { error };
     } finally {
       setLoading(false);
@@ -103,4 +148,3 @@ export function useAuth() {
     loading,
   };
 }
-

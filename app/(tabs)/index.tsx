@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   ScrollView,
   SafeAreaView,
   TouchableOpacity,
-  FlatList,
   Dimensions,
 } from 'react-native';
 import { Link } from 'expo-router';
@@ -15,19 +14,35 @@ import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
 import { CategoryGrid } from '@/components/listings/CategoryGrid';
 import { PromotionCarousel } from '@/components/carousel/PromotionCarousel';
 import { useTheme } from '@/contexts/ThemeContext';
-import {
-  mockProfessionals,
-  mockCategories,
-  mockPromotions,
-} from '@/mockData/professionals';
 import { router } from 'expo-router';
 import { Header } from '@/components/ui/Header';
+
+// ✅ API HOOKS ONLY - No mock data imports
+import { useFeaturedProfessionals } from '@/hooks/useProfessionals';
+import { useCategories } from '@/hooks/useCategories';
+import { useFeaturedPromotions } from '@/hooks/usePromotions';
+
+// ✅ TYPE ADAPTERS - Convert API types to UI types
+import {
+  adaptProfessionals,
+  adaptCategories,
+  UIProfessional,
+} from '@/utils/typeAdapters';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const { theme } = useTheme();
-  const featuredProfessionals = mockProfessionals.slice(0, 4);
+
+  // ✅ PURE API CALLS - No mock data fallback
+  const { data: professionalsData = [] } = useFeaturedProfessionals(4);
+  const { data: categoriesData = [] } = useCategories();
+  const { data: promotionsData = [] } = useFeaturedPromotions(5);
+
+  // ✅ Convert API types to UI types
+  const professionals = adaptProfessionals(professionalsData);
+  const categories = adaptCategories(categoriesData);
+  const promotions = promotionsData;
 
   return (
     <SafeAreaView
@@ -75,14 +90,18 @@ export default function HomeScreen() {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Promotion Carousel */}
-        <View style={styles.carouselSection}>
-          <PromotionCarousel promotions={mockPromotions} />
-        </View>
+        {promotions.length > 0 && (
+          <View style={styles.carouselSection}>
+            <PromotionCarousel promotions={promotions} />
+          </View>
+        )}
 
         {/* Browse by Category */}
-        <View style={styles.section}>
-          <CategoryGrid categories={mockCategories} />
-        </View>
+        {categories.length > 0 && (
+          <View style={styles.section}>
+            <CategoryGrid categories={categories} />
+          </View>
+        )}
 
         {/* Featured Professionals */}
         <View style={styles.section}>
@@ -100,14 +119,29 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </Link>
           </View>
-          <View style={styles.professionalsGrid}>
-            {featuredProfessionals.map((professional) => (
-              <ProfessionalCard
-                key={professional.id}
-                professional={professional}
-              />
-            ))}
-          </View>
+
+          {professionals.length > 0 ? (
+            <View style={styles.professionalsGrid}>
+              {professionals.map(
+                (
+                  professional: ReturnType<typeof adaptProfessionals>[number]
+                ) => (
+                  <ProfessionalCard
+                    key={professional.id}
+                    professional={professional}
+                  />
+                )
+              )}
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text
+                style={[styles.emptyText, { color: theme.colors.textMuted }]}
+              >
+                No professionals available yet
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -155,5 +189,15 @@ const styles = StyleSheet.create({
   },
   professionalsGrid: {
     paddingHorizontal: 20,
+  },
+  emptyState: {
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
   },
 });

@@ -11,9 +11,15 @@ import { Search, Filter } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
-import { mockProfessionals } from '@/mockData/professionals';
 import { useTheme } from '@/contexts/ThemeContext';
 import { FilterModal } from '@/components/filters/FilterModal';
+
+// ✅ API HOOKS - No mock data
+import { useProfessionals } from '@/hooks/useProfessionals';
+import { ProfessionalFilters } from '@/types/database.types';
+
+// ✅ TYPE ADAPTERS
+import { adaptProfessionals } from '@/utils/typeAdapters';
 
 interface FilterState {
   priceRange: [number, number];
@@ -35,39 +41,49 @@ export default function SearchScreen() {
     verifiedOnly: false,
   });
 
-  const filteredProfessionals = mockProfessionals.filter((professional) => {
-    const matchesSearch =
-      professional.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      professional.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      professional.category.toLowerCase().includes(searchQuery.toLowerCase());
+  // ✅ Build API filters from UI state
+  const apiFilters: ProfessionalFilters = {};
+  
+  if (filters.availability === 'online' || filters.availability === 'quick-response') {
+    apiFilters.isOnline = true;
+  } else if (filters.availability === 'offline') {
+    apiFilters.isOnline = false;
+  }
+  
+  if (filters.rating > 0) {
+    apiFilters.minRating = filters.rating;
+  }
+  
+  if (filters.priceRange[0] > 0 || filters.priceRange[1] < 100) {
+    apiFilters.minRate = filters.priceRange[0];
+    apiFilters.maxRate = filters.priceRange[1];
+  }
+  
+  if (filters.verifiedOnly) {
+    apiFilters.isVerified = true;
+  }
+  
+  if (filters.categories.length > 0) {
+    apiFilters.categoryId = filters.categories[0];
+  }
 
-    const matchesPrice =
-      professional.ratePerMinute >= filters.priceRange[0] &&
-      professional.ratePerMinute <= filters.priceRange[1];
+  // ✅ FETCH FROM API
+  const { data: apiProfessionals = [] } = useProfessionals(apiFilters, 100);
+  
+  // ✅ Convert API types
+  const professionals = adaptProfessionals(apiProfessionals);
 
-    const matchesRating = professional.rating >= filters.rating;
+  // ✅ Client-side search filtering (for text search)
+  const filteredProfessionals = professionals.filter((professional) => {
+    if (!searchQuery.trim()) return true;
 
-    const matchesAvailability =
-      filters.availability === 'all' ||
-      (filters.availability === 'online' && professional.isOnline) ||
-      (filters.availability === 'offline' && !professional.isOnline) ||
-      (filters.availability === 'quick-response' && professional.isOnline);
+    const query = searchQuery.toLowerCase();
+    const matchesName = professional.name?.toLowerCase().includes(query);
+    const matchesTitle = professional.title?.toLowerCase().includes(query);
+    const matchesCategory = professional.category?.toLowerCase().includes(query);
+    const matchesBio = professional.bio?.toLowerCase().includes(query);
 
-    const matchesCategories =
-      filters.categories.length === 0 ||
-      filters.categories.includes(professional.category);
-
-    const matchesVerification =
-      !filters.verifiedOnly || professional.isVerified;
-
-    return (
-      matchesSearch &&
-      matchesPrice &&
-      matchesRating &&
-      matchesAvailability &&
-      matchesCategories &&
-      matchesVerification
-    );
+    return matchesName || matchesTitle || matchesCategory || matchesBio;
   });
 
   const handleApplyFilters = (modalFilters: {
@@ -78,7 +94,7 @@ export default function SearchScreen() {
   }) => {
     setFilters({
       ...modalFilters,
-      verifiedOnly: filters.verifiedOnly, // Keep verifiedOnly as is for now
+      verifiedOnly: filters.verifiedOnly,
     });
   };
 
@@ -108,7 +124,14 @@ export default function SearchScreen() {
           <TouchableOpacity
             style={[
               styles.headerIconButton,
-              { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
+              {
+                backgroundColor:
+                  theme.name === 'dark'
+                    ? theme.colors.surface
+                    : theme.name === 'light'
+                    ? theme.colors.brandPink
+                    : '#000000',
+              },
             ]}
             onPress={() => setFilterVisible(true)}
           >
@@ -142,9 +165,7 @@ export default function SearchScreen() {
           <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
             No professionals found
           </Text>
-          <Text
-            style={[styles.emptyText, { color: theme.colors.textMuted }]}
-          >
+          <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
             Try adjusting your search terms or filters
           </Text>
         </View>

@@ -21,6 +21,7 @@ interface Promotion {
   image: string;
   ctaText: string;
   gradient: string[];
+  ctaLink?: string;
 }
 
 interface PromotionCarouselProps {
@@ -32,52 +33,62 @@ const CARD_WIDTH = width - 40;
 
 export function PromotionCarousel({ promotions }: PromotionCarouselProps) {
   const handlePromotionPress = (promotion: Promotion) => {
-    if (promotion.id === '1') {
-      // Navigate to Become a Professional screen for the first promotion
-      router.push('/become-professional');
-    } else if (promotion.id === '2') {
-      // Navigate to How It Works screen for the "Explore Now" button
-      router.push('/how-it-works');
-    } else if (promotion.id === '3') {
-      // Navigate to Search page for the "Book Session" button
-      router.push('/(tabs)/search');
-    } else if (promotion.id === '4') {
-      // Navigate to Search page for the "Connect" button
-      router.push('/(tabs)/search');
+    if (promotion.ctaLink) {
+      router.push(promotion.ctaLink as any);
     } else {
-      // Handle other promotions
+      router.push('/(tabs)/search');
     }
   };
 
-  const renderPromotion = ({ item }: { item: Promotion }) => (
-    <TouchableOpacity
-      style={styles.promotionCard}
-      activeOpacity={0.9}
-      onPress={() => handlePromotionPress(item)}
-    >
-      <View style={styles.cardInner}>
-        <Image source={{ uri: item.image }} style={styles.backgroundImage} />
-        <LinearGradient
-          colors={item.gradient as [ColorValue, ColorValue, ...ColorValue[]]}
-          style={styles.overlay}
-        >
-          <View style={styles.content}>
-            <View style={styles.textContent}>
-              <Text style={styles.title}>{item.title}</Text>
-              <Text style={styles.subtitle}>{item.subtitle}</Text>
+  const renderPromotion = ({ item }: { item: Promotion }) => {
+    // ✅ Convert hex colors to rgba for transparency
+    const gradientColors = item.gradient.map(color => {
+      // Add 80% opacity to gradient colors
+      if (color.startsWith('#')) {
+        return `${color}CC`; // Adds CC (80% opacity) to hex color
+      }
+      return color;
+    });
+
+    return (
+      <TouchableOpacity
+        style={styles.promotionCard}
+        activeOpacity={0.9}
+        onPress={() => handlePromotionPress(item)}
+      >
+        <View style={styles.cardInner}>
+          {/* ✅ Background Image */}
+          <Image 
+            source={{ uri: item.image }} 
+            style={styles.backgroundImage}
+            resizeMode="cover"
+          />
+          
+          {/* ✅ Semi-transparent Gradient Overlay */}
+          <LinearGradient
+            colors={gradientColors as [ColorValue, ColorValue, ...ColorValue[]]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.overlay}
+          >
+            <View style={styles.content}>
+              <View style={styles.textContent}>
+                <Text style={styles.title}>{item.title}</Text>
+                <Text style={styles.subtitle}>{item.subtitle}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.ctaContainer}
+                onPress={() => handlePromotionPress(item)}
+              >
+                <Text style={styles.ctaText}>{item.ctaText}</Text>
+                <ArrowRight size={16} color="#007AFF" />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={styles.ctaContainer}
-              onPress={() => handlePromotionPress(item)}
-            >
-              <Text style={styles.ctaText}>{item.ctaText}</Text>
-              <ArrowRight size={16} color="#007AFF" />
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-      </View>
-    </TouchableOpacity>
-  );
+          </LinearGradient>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -130,6 +141,8 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     position: 'absolute',
+    top: 0,
+    left: 0,
   },
   overlay: {
     flex: 1,
@@ -149,6 +162,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginBottom: 8,
     lineHeight: 28,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 10,
   },
   subtitle: {
     fontSize: 16,
@@ -156,11 +172,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     opacity: 0.9,
     lineHeight: 22,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 10,
   },
   ctaContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.50)',
+    backgroundColor: 'rgba(255, 255, 255, 0.90)',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,

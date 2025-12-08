@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '../hooks/useFrameworkReady';
-import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
+import { ThemeProvider } from '../contexts/ThemeContext';
 import { useFonts } from 'expo-font';
 import { ToastStack } from '../components/ui/ToastStack';
 import {
@@ -12,10 +12,21 @@ import {
 } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
 import { initI18n } from '../lib/i18n';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 SplashScreen.preventAutoHideAsync();
 
 // Toast stack component is now handled by ToastStack component
+
+// Create a QueryClient instance
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 export default function RootLayout() {
   useFrameworkReady();
@@ -82,33 +93,35 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="auth" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="become-professional" />
-        <Stack.Screen name="appointments-calendar" />
-        <Stack.Screen name="call-review/[id]" />
-        <Stack.Screen name="credit-selection" />
-        <Stack.Screen name="purchase" />
-        <Stack.Screen name="notifications" />
-        <Stack.Screen name="wallet-history" />
-        <Stack.Screen name="blocked-users" />
-        <Stack.Screen name="how-it-works" />
-        <Stack.Screen name="help" />
-        <Stack.Screen name="settings/theme" />
-        <Stack.Screen name="settings/language" />
-        <Stack.Screen name="settings/notifications" />
-        <Stack.Screen name="settings/change-password" />
-        <Stack.Screen name="settings/availability" />
-        <Stack.Screen name="+not-found" />
-        <Stack.Screen name="profile/professional-settings" />
-        <Stack.Screen name="profile/privacy-security" />
-        <Stack.Screen name="profile/devices" />
-        <Stack.Screen name="schedule-call/[id]" />
-      </Stack>
-      <StatusBar style="auto" translucent={false} />
-      <ToastStack />
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="auth" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="become-professional" />
+          <Stack.Screen name="appointments-calendar" />
+          <Stack.Screen name="call-review/[id]" />
+          <Stack.Screen name="credit-selection" />
+          <Stack.Screen name="purchase" />
+          <Stack.Screen name="notifications" />
+          <Stack.Screen name="wallet-history" />
+          <Stack.Screen name="blocked-users" />
+          <Stack.Screen name="how-it-works" />
+          <Stack.Screen name="help" />
+          <Stack.Screen name="settings/theme" />
+          <Stack.Screen name="settings/language" />
+          <Stack.Screen name="settings/notifications" />
+          <Stack.Screen name="settings/change-password" />
+          <Stack.Screen name="settings/availability" />
+          <Stack.Screen name="+not-found" />
+          <Stack.Screen name="profile/professional-settings" />
+          <Stack.Screen name="profile/privacy-security" />
+          <Stack.Screen name="profile/devices" />
+          <Stack.Screen name="schedule-call/[id]" />
+        </Stack>
+        <StatusBar style="auto" translucent={false} />
+        <ToastStack />
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }

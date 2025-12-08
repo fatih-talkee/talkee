@@ -1,7 +1,11 @@
 // hooks/useProfessionals.ts
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { professionalsService } from '@/services/supabase';
-import { ProfessionalFilters, Professional } from '@/types/database.types';
+import {
+  ProfessionalFilters,
+  Professional,
+  ProfessionalWithRelations,
+} from '@/types/database.types';
 
 /**
  * Get professionals with filters and pagination
@@ -12,9 +16,20 @@ export function useProfessionals(
   limit: number = 20,
   offset: number = 0
 ) {
-  return useQuery<Professional[]>({
+  return useQuery<ProfessionalWithRelations[]>({
     queryKey: ['professionals', filters, limit, offset],
-    queryFn: () => professionalsService.getProfessionals(filters, limit, offset),
+    queryFn: async () => {
+      const page = Math.floor(offset / limit) + 1;
+      const result = await professionalsService.getProfessionals(filters, {
+        page,
+        limit,
+      });
+      // Extract data array from paginated response
+      if ('data' in result) {
+        return result.data;
+      }
+      return result;
+    },
     staleTime: 1000 * 60 * 2, // 2 minutes
     gcTime: 1000 * 60 * 10, // 10 minutes
   });
