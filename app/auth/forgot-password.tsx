@@ -1,3 +1,8 @@
+/**
+ * Forgot Password Screen - PHONE VERSION
+ * Send OTP to phone for password reset
+ */
+
 import React, { useState } from 'react';
 import {
   View,
@@ -10,35 +15,98 @@ import {
   Image,
 } from 'react-native';
 import { Link, router } from 'expo-router';
-import { Mail, ArrowLeft } from 'lucide-react-native';
-import { Input } from '@/components/ui/Input';
+import { Phone } from 'lucide-react-native';
+import MaskInput from 'react-native-mask-input';
 import { Button } from '@/components/ui/Button';
-import { useIsMounted } from '@/hooks/useIsMounted';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
+import { supabase } from '@/lib/supabase';
+import { useToast } from '@/lib/toastService';
+
+// Turkish phone mask: +90 XXX XXX XX XX
+const PHONE_MASK = [
+  '+',
+  '9',
+  '0',
+  ' ',
+  /\d/,
+  /\d/,
+  /\d/,
+  ' ',
+  /\d/,
+  /\d/,
+  /\d/,
+  ' ',
+  /\d/,
+  /\d/,
+  ' ',
+  /\d/,
+  /\d/,
+];
 
 export default function ForgotPasswordScreen() {
   const { theme } = useTheme();
-  const [email, setEmail] = useState('');
+  const toast = useToast();
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
-  const isMountedRef = useIsMounted();
+  const [phoneFocused, setPhoneFocused] = useState(false);
+
+  const validatePhone = (phone: string) => {
+    const cleaned = phone.replace(/\s/g, '');
+    return cleaned.length >= 13; // +90 + 10 digits
+  };
 
   const handleResetPassword = async () => {
+    if (!phone.trim() || !validatePhone(phone)) {
+      toast.error({
+        title: 'Invalid Phone',
+        message: 'Please enter a valid phone number',
+      });
+      return;
+    }
+
     setLoading(true);
-    // Mock reset delay
-    setTimeout(() => {
-      if (isMountedRef.current) {
-        setLoading(false);
-        const to = encodeURIComponent(email || '');
-        router.push(`/auth/otp?context=forgot&to=${to}`);
+
+    try {
+      const cleanPhone = phone.replace(/\s/g, '');
+      
+      // ✅ Send OTP for password reset
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: cleanPhone,
+      });
+
+      if (error) {
+        console.error('Password reset error:', error);
+        toast.error({
+          title: 'Reset Failed',
+          message: error.message || 'Failed to send verification code',
+        });
+        return;
       }
-    }, 1500);
+
+      setSent(true);
+      toast.success({
+        title: 'Code Sent',
+        message: 'Check your phone for the verification code',
+      });
+    } catch (error: any) {
+      console.error('Unexpected reset error:', error);
+      toast.error({
+        title: 'Error',
+        message: 'An unexpected error occurred. Please try again.',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (sent) {
     return (
-      <LinearGradient colors={['#2e2461', theme.colors.brandPink]} style={styles.container}>
+      <LinearGradient
+        colors={['#2e2461', theme.colors.brandPink]}
+        style={styles.container}
+      >
         <SafeAreaView style={styles.safeArea}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -46,29 +114,38 @@ export default function ForgotPasswordScreen() {
           >
             <View style={styles.header}>
               <Image
-                source={require('../../assets/images/talkee_logoF.png')}
+                source={require('@/assets/images/talkee_logoF.png')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
-              <Text style={styles.titleLight}>Reset Password</Text>
-              <Text style={styles.subtitleLight}>
-                Enter your email address and we'll send you a link to reset your
-                password
-              </Text>
             </View>
+
             <View style={styles.successContainer}>
               <View style={styles.successIcon}>
-                <Mail size={48} color="#10b981" />
+                <Phone size={48} color="#10b981" />
               </View>
-              <Text style={styles.successTitleLight}>Check Your Email</Text>
-              <Text style={styles.successTextLight}>
-                We've sent a password reset link to {email}. Please check your
-                inbox and follow the instructions to reset your password.
+              <Text style={styles.successTitle}>Check Your Phone</Text>
+              <Text style={styles.successText}>
+                We've sent a verification code to {phone}. Enter the code to reset your password.
               </Text>
+
               <Button
-                title="Back to Sign In"
-                onPress={() => router.push('/auth/login')}
+                title="Enter Code"
+                onPress={() => {
+                  const cleanPhone = phone.replace(/\s/g, '');
+                  router.push(`/auth/otp?phone=${encodeURIComponent(cleanPhone)}&reset=true`);
+                }}
                 style={styles.backToLoginButton}
+              />
+
+              <Button
+                title="Resend Code"
+                onPress={() => {
+                  setSent(false);
+                  handleResetPassword();
+                }}
+                style={styles.resendButton}
+                variant="outline"
               />
             </View>
           </KeyboardAvoidingView>
@@ -78,7 +155,10 @@ export default function ForgotPasswordScreen() {
   }
 
   return (
-    <LinearGradient colors={['#2e2461', theme.colors.brandPink]} style={styles.container}>
+    <LinearGradient
+      colors={['#2e2461', theme.colors.brandPink]}
+      style={styles.container}
+    >
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -90,29 +170,43 @@ export default function ForgotPasswordScreen() {
               style={styles.logoImage}
               resizeMode="contain"
             />
-            <Text style={styles.titleLight}>Reset Password</Text>
-            <Text style={styles.subtitleLight}>
-              Enter your email address and we'll send you a link to reset your
-              password
+            <Text style={styles.title}>Reset Password</Text>
+            <Text style={styles.subtitle}>
+              Enter your phone number and we'll send you a verification code
             </Text>
           </View>
 
           <View style={styles.form}>
-            <Input
-              variant="light"
-              label="Email"
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Enter your email"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              leftIcon={<Mail size={20} color="#9E9E9E" />}
-            />
+            {/* Phone Number with Mask */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Phone Number</Text>
+              <View
+                style={[
+                  styles.phoneInputWrapper,
+                  phoneFocused && styles.phoneInputWrapperFocused,
+                ]}
+              >
+                <Phone size={20} color="#9E9E9E" style={styles.phoneIcon} />
+                <MaskInput
+                  value={phone}
+                  onChangeText={(masked, unmasked) => {
+                    setPhone(masked);
+                  }}
+                  onFocus={() => setPhoneFocused(true)}
+                  onBlur={() => setPhoneFocused(false)}
+                  mask={PHONE_MASK}
+                  placeholder="+90 555 123 45 67"
+                  keyboardType="phone-pad"
+                  style={styles.phoneInput}
+                  placeholderTextColor="#9E9E9E"
+                />
+              </View>
+            </View>
 
             <Button
-              title={loading ? 'Sending...' : 'Send Reset Link'}
+              title={loading ? 'Sending...' : 'Send Verification Code'}
               onPress={handleResetPassword}
-              disabled={loading || !email}
+              disabled={loading}
               style={styles.resetButton}
             />
           </View>
@@ -152,13 +246,13 @@ const styles = StyleSheet.create({
     height: 60,
     marginBottom: 24,
   },
-  titleLight: {
+  title: {
     fontSize: 28,
     fontFamily: 'Inter-Bold',
     color: '#FFFFFF',
     marginBottom: 12,
   },
-  subtitleLight: {
+  subtitle: {
     fontSize: 16,
     fontFamily: 'Inter-Regular',
     color: '#9E9E9E',
@@ -168,8 +262,41 @@ const styles = StyleSheet.create({
   form: {
     flex: 1,
   },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  phoneInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 25,
+    paddingHorizontal: 16,
+    height: 56,
+    borderWidth: 1.5,
+    borderColor: '#E5E5E5',
+  },
+  phoneInputWrapperFocused: {
+    borderColor: '#2e2461',
+  },
+  phoneIcon: {
+    marginRight: 12,
+  },
+  phoneInput: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#000000',
+    outlineStyle: 'none',
+  },
   resetButton: {
     marginTop: 8,
+    backgroundColor: '#2e2461',
   },
   footer: {
     paddingBottom: 24,
@@ -202,13 +329,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 24,
   },
-  successTitleLight: {
+  successTitle: {
     fontSize: 24,
     fontFamily: 'Inter-Bold',
     color: '#FFFFFF',
     marginBottom: 12,
   },
-  successTextLight: {
+  successText: {
     fontSize: 16,
     fontFamily: 'Inter-Regular',
     color: '#E5E5E5',
@@ -216,7 +343,14 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginBottom: 32,
   },
+  resendButton: {
+    width: '100%',
+    marginBottom: 12,
+    backgroundColor: 'transparent',
+    borderColor: '#FFFFFF',
+  },
   backToLoginButton: {
     width: '100%',
+    backgroundColor: '#2e2461',
   },
 });

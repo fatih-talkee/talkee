@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   TextInput,
   View,
   Text,
   StyleSheet,
   TextInputProps,
+  Platform,
 } from 'react-native';
 
 type InputVariant = 'light' | 'dark';
@@ -26,6 +27,8 @@ export function Input({
   style,
   ...props
 }: InputProps) {
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
     <View style={styles.container}>
       {label && <Text style={styles.label}>{label}</Text>}
@@ -34,6 +37,7 @@ export function Input({
           styles.inputContainer,
           variant === 'light' ? styles.containerLight : styles.containerDark,
           error ? styles.inputError : undefined,
+          isFocused && !error && (variant === 'light' ? styles.containerLightFocused : styles.containerDarkFocused),
           style as any,
         ]}
       >
@@ -46,8 +50,17 @@ export function Input({
             rightIcon ? styles.inputWithRightIcon : undefined,
             style as any,
             styles.inputBGTransparent,
+            Platform.OS === 'web' && styles.inputWeb,
           ]}
           placeholderTextColor={variant === 'light' ? '#6B7280' : '#6B7280'}
+          onFocus={(e) => {
+            setIsFocused(true);
+            props.onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setIsFocused(false);
+            props.onBlur?.(e);
+          }}
           {...props}
         />
         {rightIcon && <View style={styles.rightIcon}>{rightIcon}</View>}
@@ -83,6 +96,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderColor: '#E5E5E5',
   },
+  containerLightFocused: {
+    borderColor: '#2e2461',
+  },
+  containerDarkFocused: {
+    borderColor: '#2e2461',
+  },
   inputError: {
     borderColor: '#FF6B6B',
   },
@@ -95,6 +114,11 @@ const styles = StyleSheet.create({
   },
   inputBGTransparent: {
     backgroundColor: 'transparent',
+  },
+  inputWeb: {
+    outlineStyle: 'none',
+    outlineWidth: 0,
+    outlineColor: 'transparent',
   },
   inputWithLeftIcon: {
     paddingLeft: 48,

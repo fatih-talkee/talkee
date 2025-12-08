@@ -14,10 +14,17 @@ import { ArrowLeft, Check } from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useIsMounted } from '@/hooks/useIsMounted';
+import { supabase } from '@/lib/supabase';
+import { useToast } from '@/lib/toastService';
 
 export default function VerifyPhoneScreen() {
-  const { phone } = useLocalSearchParams();
+  const { phone, name, context } = useLocalSearchParams();
+  const cleanPhone = Array.isArray(phone) ? phone[0] : phone;
+  const userName = Array.isArray(name) ? name[0] : name;
+  const verifyContext = Array.isArray(context) ? context[0] : context;
+
   const { theme } = useTheme();
+  const toast = useToast();
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -93,38 +100,141 @@ export default function VerifyPhoneScreen() {
   };
 
   const handleVerify = async (verificationCode: string) => {
+    if (!cleanPhone) {
+      toast.error({
+        title: 'Error',
+        message: 'Phone number not found',
+      });
+      return;
+    }
+
     setLoading(true);
     setError('');
 
-    setTimeout(() => {
-      if (isMountedRef.current) {
-        if (verificationCode === '123456') {
-          setLoading(false);
-          router.replace('/auth/setup-account');
-        } else {
-          setLoading(false);
-          setError('Invalid verification code. Please try again.');
-          setCode(['', '', '', '', '', '']);
-          inputRefs.current[0]?.focus();
-          shakeInputs();
+    try {
+      // ✅ Verify OTP with Supabase
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        phone: cleanPhone,
+        token: verificationCode,
+        type: 'sms',
+      });
+
+      if (verifyError) {
+        console.error('OTP verification error:', verifyError);
+
+        setError('Invalid verification code. Please try again.');
+        setCode(['', '', '', '', '', '']);
+        if (inputRefs.current[0]) {
+          inputRefs.current[0].focus();
         }
+        shakeInputs();
+
+        toast.error({
+          title: 'Verification Failed',
+          message: verifyError.message || 'Invalid code',
+        });
+
+        setLoading(false);
+        return;
       }
-    }, 1000);
+
+      if (data.session) {
+        // ✅ Success! User is verified and logged in
+
+        // Create user profile
+        try {
+          // Check if profile exists
+          const { data: existingProfile } = await supabase
+            .from('users')
+            .select('id')
+            .eq('auth_id', data.user?.id || '')
+            .single();
+
+          if (!existingProfile) {
+            // Create profile with email from auth.users
+            await supabase.from('users').insert({
+              auth_id: data.user?.id || '',
+              phone: cleanPhone,
+              primary_email: data.user?.email || '', // Get email from auth
+              name: userName || cleanPhone,
+              role: 'user',
+            });
+          }
+        } catch (profileError) {
+          console.error('Error creating profile:', profileError);
+          // Don't fail - user can update profile later
+        }
+
+        toast.success({
+          title: 'Phone Verified!',
+          message: 'Your account is now active',
+        });
+
+        setLoading(false);
+        router.replace('/auth/setup-account');
+      }
+    } catch (error: any) {
+      console.error('Unexpected verification error:', error);
+      setError('An error occurred. Please try again.');
+      setCode(['', '', '', '', '', '']);
+      if (inputRefs.current[0]) {
+        inputRefs.current[0].focus();
+      }
+      shakeInputs();
+
+      toast.error({
+        title: 'Error',
+        message: 'An unexpected error occurred',
+      });
+
+      setLoading(false);
+    }
   };
 
-  const handleResendCode = () => {
-    if (!canResend) return;
+  const handleResendCode = async () => {
+    if (!canResend || !cleanPhone) return;
 
-    setCanResend(false);
-    setResendTimer(60);
-    setError('');
+    setLoading(true);
+
+    try {
+      // ✅ Resend OTP
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: cleanPhone,
+      });
+
+      if (error) {
+        console.error('Resend error:', error);
+        toast.error({
+          title: 'Resend Failed',
+          message: error.message || 'Failed to resend code',
+        });
+      } else {
+        toast.success({
+          title: 'Code Resent',
+          message: 'A new verification code has been sent',
+        });
+        setCanResend(false);
+        setResendTimer(60);
+        setError('');
+      }
+    } catch (error: any) {
+      console.error('Unexpected resend error:', error);
+      toast.error({
+        title: 'Error',
+        message: 'Failed to resend code',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const formatPhoneNumber = (phoneNumber: string | string[]) => {
+  const formatPhoneNumber = (phoneNumber: string | string[] | undefined) => {
+    if (!phoneNumber) return '';
     const phoneStr = Array.isArray(phoneNumber) ? phoneNumber[0] : phoneNumber;
     if (!phoneStr || phoneStr.length < 4) return phoneStr;
+    // Show last 4 digits: +90 *** *** 45 67
     const lastFour = phoneStr.slice(-4);
-    return `***${lastFour}`;
+    return `+90 *** *** ${lastFour.substring(0, 2)} ${lastFour.substring(2)}`;
   };
 
   return (
@@ -158,15 +268,19 @@ export default function VerifyPhoneScreen() {
         </View>
 
         <Text style={[styles.title, { color: theme.colors.text }]}>
-          Verify Your Phone
+          {verifyContext === 'pending'
+            ? 'Complete Verification'
+            : 'Verify Your Phone'}
         </Text>
 
         <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-          We've sent a 6-digit verification code to
+          {verifyContext === 'pending'
+            ? "You're almost there! Enter the code to complete your registration"
+            : "We've sent a 6-digit verification code to"}
         </Text>
 
         <Text style={[styles.phoneNumber, { color: theme.colors.primary }]}>
-          {formatPhoneNumber(phone || '')}
+          {formatPhoneNumber(cleanPhone)}
         </Text>
 
         <Animated.View

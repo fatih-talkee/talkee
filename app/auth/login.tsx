@@ -1,6 +1,6 @@
 /**
- * Login Screen - FIXED OAUTH VERSION
- * Handles OAuth redirects for both web and mobile
+ * Login Screen - PHONE + PASSWORD (FINAL VERSION)
+ * Direct phone authentication without email lookup
  */
 
 import React, { useState } from 'react';
@@ -16,13 +16,35 @@ import {
   ScrollView,
 } from 'react-native';
 import { Link, router } from 'expo-router';
-import { Phone, Lock, Eye, EyeOff } from 'lucide-react-native';
+import { Phone, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import MaskInput from 'react-native-mask-input';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/lib/toastService';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/lib/supabase';
+
+// Turkish phone mask: +90 XXX XXX XX XX
+const PHONE_MASK = [
+  '+',
+  '9',
+  '0',
+  ' ',
+  /\d/,
+  /\d/,
+  /\d/,
+  ' ',
+  /\d/,
+  /\d/,
+  /\d/,
+  ' ',
+  /\d/,
+  /\d/,
+  ' ',
+  /\d/,
+  /\d/,
+];
 
 export default function LoginScreen() {
   const { theme } = useTheme();
@@ -33,11 +55,13 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
+  const [phoneFocused, setPhoneFocused] = useState(false);
+  const [pendingVerification, setPendingVerification] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
 
   const validatePhone = (phone: string) => {
-    const phoneRegex =
-      /^[\+]?[(]?[0-9]{1,3}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}$/;
-    return phoneRegex.test(phone.replace(/\s/g, ''));
+    const cleaned = phone.replace(/\s/g, '');
+    return cleaned.length >= 13; // +90 + 10 digits
   };
 
   const handleLogin = async () => {
@@ -75,43 +99,34 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
+    setPendingVerification(false);
 
     try {
-      // For now, lookup user by phone to get email
-      // TODO: Implement proper phone→email lookup in backend
-      const { data: userData, error: lookupError } = await supabase
-        .from('users')
-        .select('email')
-        .eq('phone', phone.trim())
-        .single();
+      const cleanPhone = phone.replace(/\s/g, '');
 
-      if (lookupError || !userData) {
-        toast.error({
-          title: 'Phone Not Found',
-          message: 'No account found with this phone number',
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Login with email
+      // ✅ Direct phone + password login (Supabase handles phone auth)
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: userData.email,
+        phone: cleanPhone,
         password,
       });
 
       if (error) {
         console.error('Login error:', error);
 
-        if (error.message.includes('Invalid login credentials')) {
+        // Check if phone not confirmed
+        if (
+          error.message.includes('not confirmed') ||
+          error.message.includes('Phone not confirmed')
+        ) {
+          setPendingVerification(true);
+          toast.error({
+            title: 'Phone Not Verified',
+            message: 'Please verify your phone number first',
+          });
+        } else if (error.message.includes('Invalid login credentials')) {
           toast.error({
             title: 'Login Failed',
             message: 'Invalid phone or password. Please try again.',
-          });
-        } else if (error.message.includes('Email not confirmed')) {
-          toast.error({
-            title: 'Email Not Verified',
-            message: 'Please verify your email before logging in.',
           });
         } else {
           toast.error({
@@ -141,25 +156,68 @@ export default function LoginScreen() {
     }
   };
 
+  const handleResendCode = async () => {
+    if (!phone.trim() || !validatePhone(phone)) {
+      toast.error({
+        title: 'Invalid Phone',
+        message: 'Please enter your phone number first',
+      });
+      return;
+    }
+
+    setResendLoading(true);
+
+    try {
+      const cleanPhone = phone.replace(/\s/g, '');
+
+      // Resend OTP
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: cleanPhone,
+      });
+
+      if (error) {
+        console.error('Resend error:', error);
+        toast.error({
+          title: 'Resend Failed',
+          message: error.message || 'Failed to resend code',
+        });
+      } else {
+        toast.success({
+          title: 'Code Sent',
+          message: 'A new verification code has been sent to your phone',
+        });
+
+        // Navigate to OTP
+        router.push(
+          `/auth/otp?phone=${encodeURIComponent(cleanPhone)}&context=resend`
+        );
+      }
+    } catch (error: any) {
+      console.error('Unexpected resend error:', error);
+      toast.error({
+        title: 'Error',
+        message: 'Failed to resend code',
+      });
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   const handleSocialLogin = async (
     provider: 'google' | 'facebook' | 'linkedin'
   ) => {
     setSocialLoading(provider);
 
     try {
-      // ✅ FIXED: Different redirect URLs for web vs mobile
       const redirectUrl =
         Platform.OS === 'web' && typeof window !== 'undefined'
-          ? `${window.location.origin}/auth/callback` // Web: http://localhost:8081/auth/callback
-          : 'talkee://auth/callback'; // Mobile: Deep link
+          ? `${window.location.origin}/auth/callback`
+          : 'talkee://auth/callback';
 
-      console.log('OAuth redirect URL:', redirectUrl); // Debug
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: false, // Let Supabase handle redirect
         },
       });
 
@@ -167,14 +225,11 @@ export default function LoginScreen() {
         console.error(`${provider} login error:`, error);
         toast.error({
           title: 'Login Failed',
-          message: `Failed to sign in with ${provider}`,
+          message: error.message || `Failed to login with ${provider}`,
         });
       }
-
-      // On web, this will redirect to OAuth provider
-      // On mobile, it will open in-app browser
     } catch (error: any) {
-      console.error(`Unexpected ${provider} login error:`, error);
+      console.error(`Unexpected ${provider} error:`, error);
       toast.error({
         title: 'Error',
         message: 'An unexpected error occurred. Please try again.',
@@ -192,14 +247,14 @@ export default function LoginScreen() {
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.content}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+          style={styles.keyboardView}
         >
           <ScrollView
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
+            {/* Header */}
             <View style={styles.header}>
               <Image
                 source={require('@/assets/images/talkee_logoF.png')}
@@ -207,23 +262,39 @@ export default function LoginScreen() {
                 resizeMode="contain"
               />
               <Text style={styles.title}>Welcome Back</Text>
-              <Text style={styles.subtitle}>
-                Sign in to connect with professionals
-              </Text>
+              <Text style={styles.subtitle}>Sign in to continue</Text>
             </View>
 
+            {/* Form */}
             <View style={styles.form}>
-              <Input
-                variant="light"
-                label="Phone Number"
-                value={phone}
-                onChangeText={setPhone}
-                placeholder="Enter your phone number"
-                keyboardType="phone-pad"
-                autoComplete="tel"
-                leftIcon={<Phone size={20} color="#9E9E9E" />}
-              />
+              {/* Phone Number with Mask */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Phone Number</Text>
+                <View
+                  style={[
+                    styles.phoneInputWrapper,
+                    phoneFocused && styles.phoneInputWrapperFocused,
+                  ]}
+                >
+                  <Phone size={20} color="#9E9E9E" style={styles.phoneIcon} />
+                  <MaskInput
+                    value={phone}
+                    onChangeText={(masked, unmasked) => {
+                      setPhone(masked);
+                      setPendingVerification(false);
+                    }}
+                    onFocus={() => setPhoneFocused(true)}
+                    onBlur={() => setPhoneFocused(false)}
+                    mask={PHONE_MASK}
+                    placeholder="+90 555 123 45 67"
+                    keyboardType="phone-pad"
+                    style={styles.phoneInput}
+                    placeholderTextColor="#9E9E9E"
+                  />
+                </View>
+              </View>
 
+              {/* Password Input */}
               <Input
                 variant="light"
                 label="Password"
@@ -231,6 +302,7 @@ export default function LoginScreen() {
                 onChangeText={setPassword}
                 placeholder="Enter your password"
                 secureTextEntry={!showPassword}
+                autoCapitalize="none"
                 autoComplete="password"
                 leftIcon={<Lock size={20} color="#9E9E9E" />}
                 rightIcon={
@@ -246,26 +318,56 @@ export default function LoginScreen() {
                 }
               />
 
-              <TouchableOpacity
-                style={styles.forgotPassword}
-                onPress={() => router.push('/auth/forgot-password')}
-              >
-                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-              </TouchableOpacity>
+              {/* Forgot Password Link */}
+              <View style={styles.forgotPasswordContainer}>
+                <Link href="/auth/forgot-password" asChild>
+                  <TouchableOpacity>
+                    <Text style={styles.forgotPasswordText}>
+                      Forgot Password?
+                    </Text>
+                  </TouchableOpacity>
+                </Link>
+              </View>
 
+              {/* Pending Verification Card */}
+              {pendingVerification && (
+                <View style={styles.verificationCard}>
+                  <View style={styles.verificationHeader}>
+                    <AlertCircle size={20} color="#f59e0b" />
+                    <Text style={styles.verificationTitle}>
+                      Pending Verification
+                    </Text>
+                  </View>
+                  <Text style={styles.verificationText}>
+                    Your phone number hasn't been verified yet. Please verify to
+                    continue.
+                  </Text>
+                  <Button
+                    title={resendLoading ? 'Sending...' : 'Resend Code'}
+                    onPress={handleResendCode}
+                    disabled={resendLoading}
+                    style={styles.resendButton}
+                    variant="outline"
+                  />
+                </View>
+              )}
+
+              {/* Login Button */}
               <Button
-                title={loading ? 'Signing In...' : 'Log In'}
+                title={loading ? 'Signing In...' : 'Sign In'}
                 onPress={handleLogin}
                 disabled={loading}
                 style={styles.loginButton}
               />
 
+              {/* Divider */}
               <View style={styles.divider}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or continue with</Text>
+                <Text style={styles.dividerText}>Or continue with</Text>
                 <View style={styles.dividerLine} />
               </View>
 
+              {/* Social Login Buttons */}
               <View style={styles.socialButtons}>
                 <TouchableOpacity
                   style={[styles.socialButton, styles.googleButton]}
@@ -318,19 +420,16 @@ export default function LoginScreen() {
                   </View>
                 </TouchableOpacity>
               </View>
+            </View>
 
-              <View style={styles.dividerBottom}>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <View style={styles.footer}>
-                <Text style={styles.footerText}>
-                  Don't have an account?{' '}
-                  <Link href="/auth/register" asChild>
-                    <Text style={styles.footerLink}>Sign Up</Text>
-                  </Link>
-                </Text>
-              </View>
+            {/* Footer */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>
+                Don't have an account?{' '}
+                <Link href="/auth/register" asChild>
+                  <Text style={styles.footerLink}>Sign Up</Text>
+                </Link>
+              </Text>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -346,15 +445,15 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  content: {
+  keyboardView: {
     flex: 1,
   },
   scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: 24,
-    paddingBottom: 24,
   },
   header: {
-    marginTop: 40,
+    marginTop: 60,
     marginBottom: 40,
     alignItems: 'center',
   },
@@ -373,37 +472,104 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter-Regular',
     color: '#9E9E9E',
-    textAlign: 'center',
   },
-  form: {},
-  forgotPassword: {
-    alignSelf: 'flex-end',
-    marginBottom: 24,
+  form: {
+    flex: 1,
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  phoneInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 25,
+    paddingHorizontal: 16,
+    height: 56,
+    borderWidth: 1.5,
+    borderColor: '#E5E5E5',
+  },
+  phoneInputWrapperFocused: {
+    borderColor: '#2e2461',
+  },
+  phoneIcon: {
+    marginRight: 12,
+  },
+  phoneInput: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#000000',
+    ...(Platform.OS === 'web' && {
+      outlineStyle: 'none' as any,
+      outlineWidth: 0,
+      outlineColor: 'transparent',
+    }),
+  },
+  forgotPasswordContainer: {
+    alignItems: 'flex-end',
+    marginBottom: 16,
   },
   forgotPasswordText: {
     fontSize: 14,
     fontFamily: 'Inter-Medium',
     color: '#FFFFFF',
   },
+  verificationCard: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+  },
+  verificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  verificationTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    color: '#f59e0b',
+  },
+  verificationText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#FFFFFF',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  resendButton: {
+    backgroundColor: 'transparent',
+    borderColor: '#f59e0b',
+  },
   loginButton: {
-    marginBottom: 24,
+    marginTop: 8,
     backgroundColor: '#2e2461',
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginVertical: 24,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   dividerText: {
     marginHorizontal: 16,
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-    color: '#FFFFFF',
+    color: '#9E9E9E',
   },
   socialButtons: {
     gap: 12,
@@ -489,12 +655,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
     color: '#FFFFFF',
   },
-  dividerBottom: {
-    marginBottom: 20,
-  },
   footer: {
+    paddingVertical: 24,
     alignItems: 'center',
-    paddingBottom: 24,
   },
   footerText: {
     fontSize: 16,

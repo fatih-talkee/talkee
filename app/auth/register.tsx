@@ -1,3 +1,8 @@
+/**
+ * Register Screen - WITH EMAIL (FINAL VERSION)
+ * Email + Phone + Password registration with SMS OTP
+ */
+
 import React, { useState } from 'react';
 import {
   View,
@@ -11,40 +16,202 @@ import {
   Image,
 } from 'react-native';
 import { Link, router } from 'expo-router';
-import { Phone, Lock, Eye, EyeOff } from 'lucide-react-native';
+import { User, Phone, Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import MaskInput from 'react-native-mask-input';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { useIsMounted } from '@/hooks/useIsMounted';
+import { useToast } from '@/lib/toastService';
 import { useTheme } from '@/contexts/ThemeContext';
+import { supabase } from '@/lib/supabase';
+
+// Turkish phone mask: +90 XXX XXX XX XX
+const PHONE_MASK = [
+  '+',
+  '9',
+  '0',
+  ' ',
+  /\d/,
+  /\d/,
+  /\d/,
+  ' ',
+  /\d/,
+  /\d/,
+  /\d/,
+  ' ',
+  /\d/,
+  /\d/,
+  ' ',
+  /\d/,
+  /\d/,
+];
 
 export default function RegisterScreen() {
   const { theme } = useTheme();
+  const toast = useToast();
+
+  const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const isMountedRef = useIsMounted();
+  const [socialLoading, setSocialLoading] = useState<string | null>(null);
+  const [phoneFocused, setPhoneFocused] = useState(false);
 
-  const handleRegister = async () => {
-    setLoading(true);
-    // Mock: after basic client checks, go to OTP verification
-    setTimeout(() => {
-      if (isMountedRef.current) {
-        setLoading(false);
-        const to = encodeURIComponent(phone || '');
-        router.push(`/auth/otp?context=register&to=${to}`);
-      }
-    }, 400);
+  // Validation functions
+  const validatePhone = (phone: string) => {
+    const cleaned = phone.replace(/\s/g, '');
+    return cleaned.length >= 13; // +90 + 10 digits
   };
 
-  const handleSocialRegister = (provider: string) => {
-    // Mock social register - navigate directly to home
-    setTimeout(() => {
-      router.replace('/(tabs)');
-    }, 500);
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const handleRegister = async () => {
+    // Validation
+    if (!name.trim() || name.trim().length < 2) {
+      toast.error({
+        title: 'Invalid Name',
+        message: 'Please enter your full name (min 2 characters)',
+      });
+      return;
+    }
+
+    if (!phone.trim() || !validatePhone(phone)) {
+      toast.error({
+        title: 'Invalid Phone',
+        message: 'Please enter a valid phone number',
+      });
+      return;
+    }
+
+    if (!email.trim() || !validateEmail(email)) {
+      toast.error({
+        title: 'Invalid Email',
+        message: 'Please enter a valid email address',
+      });
+      return;
+    }
+
+    if (!password || password.length < 6) {
+      toast.error({
+        title: 'Weak Password',
+        message: 'Password must be at least 6 characters',
+      });
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      toast.error({
+        title: "Passwords Don't Match",
+        message: 'Please make sure your passwords match',
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Clean phone and email
+      const cleanPhone = phone.replace(/\s/g, '');
+      const cleanEmail = email.trim().toLowerCase();
+
+      // ✅ Sign up with phone + email + password
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        phone: cleanPhone,
+        email: cleanEmail,
+        password,
+        options: {
+          data: {
+            name: name.trim(),
+          },
+        },
+      });
+
+      if (authError) {
+        console.error('Registration error:', authError);
+
+        if (authError.message.includes('already registered')) {
+          toast.error({
+            title: 'Already Registered',
+            message:
+              'This phone or email is already registered. Please login instead.',
+          });
+        } else {
+          toast.error({
+            title: 'Registration Failed',
+            message:
+              authError.message || 'An error occurred during registration',
+          });
+        }
+        return;
+      }
+
+      if (authData.user) {
+        // Supabase + Twilio automatically sends SMS with 6-digit code
+
+        toast.success({
+          title: 'Verification Code Sent',
+          message: 'Check your phone for the 6-digit code',
+        });
+
+        // Navigate to OTP with phone and name
+        router.push(
+          `/auth/otp?phone=${encodeURIComponent(
+            cleanPhone
+          )}&name=${encodeURIComponent(name.trim())}&context=register`
+        );
+      }
+    } catch (error: any) {
+      console.error('Unexpected registration error:', error);
+      toast.error({
+        title: 'Error',
+        message: 'An unexpected error occurred. Please try again.',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSocialRegister = async (
+    provider: 'google' | 'facebook' | 'linkedin'
+  ) => {
+    setSocialLoading(provider);
+
+    try {
+      const redirectUrl =
+        Platform.OS === 'web' && typeof window !== 'undefined'
+          ? `${window.location.origin}/auth/callback`
+          : 'talkee://auth/callback';
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: redirectUrl,
+        },
+      });
+
+      if (error) {
+        console.error(`${provider} registration error:`, error);
+        toast.error({
+          title: 'Registration Failed',
+          message: error.message || `Failed to register with ${provider}`,
+        });
+      }
+    } catch (error: any) {
+      console.error(`Unexpected ${provider} error:`, error);
+      toast.error({
+        title: 'Error',
+        message: 'An unexpected error occurred. Please try again.',
+      });
+    } finally {
+      setSocialLoading(null);
+    }
   };
 
   return (
@@ -55,39 +222,87 @@ export default function RegisterScreen() {
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.content}
+          style={styles.keyboardView}
         >
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Header */}
             <View style={styles.header}>
               <Image
-                source={require('../../assets/images/talkee_logoF.png')}
+                source={require('@/assets/images/talkee_logoF.png')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
               <Text style={styles.title}>Create Account</Text>
-              <Text style={styles.subtitle}>
-                Join thousands of users connecting with experts
-              </Text>
+              <Text style={styles.subtitle}>Sign up to get started</Text>
             </View>
 
+            {/* Form */}
             <View style={styles.form}>
+              {/* Name Input */}
               <Input
                 variant="light"
-                label="Phone Number"
-                value={phone}
-                onChangeText={setPhone}
-                placeholder="Enter your phone number"
-                keyboardType="phone-pad"
-                leftIcon={<Phone size={20} color="#9E9E9E" />}
+                label="Full Name"
+                value={name}
+                onChangeText={setName}
+                placeholder="John Doe"
+                autoCapitalize="words"
+                autoComplete="name"
+                leftIcon={<User size={20} color="#9E9E9E" />}
               />
 
+              {/* Phone Number with Mask */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Phone Number</Text>
+                <View
+                  style={[
+                    styles.phoneInputWrapper,
+                    phoneFocused && styles.phoneInputWrapperFocused,
+                  ]}
+                >
+                  <Phone size={20} color="#9E9E9E" style={styles.phoneIcon} />
+                  <MaskInput
+                    value={phone}
+                    onChangeText={(masked, unmasked) => {
+                      setPhone(masked);
+                    }}
+                    onFocus={() => setPhoneFocused(true)}
+                    onBlur={() => setPhoneFocused(false)}
+                    mask={PHONE_MASK}
+                    placeholder="+90 555 123 45 67"
+                    keyboardType="phone-pad"
+                    style={styles.phoneInput}
+                    placeholderTextColor="#9E9E9E"
+                  />
+                </View>
+              </View>
+
+              {/* Email Input */}
+              <Input
+                variant="light"
+                label="Email"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="your@email.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+                leftIcon={<Mail size={20} color="#9E9E9E" />}
+              />
+
+              {/* Password Input */}
               <Input
                 variant="light"
                 label="Password"
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Create a password"
+                placeholder="Min. 6 characters"
                 secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoComplete="password"
                 leftIcon={<Lock size={20} color="#9E9E9E" />}
                 rightIcon={
                   <TouchableOpacity
@@ -102,13 +317,16 @@ export default function RegisterScreen() {
                 }
               />
 
+              {/* Confirm Password Input */}
               <Input
                 variant="light"
                 label="Confirm Password"
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
-                placeholder="Confirm your password"
+                placeholder="Re-enter password"
                 secureTextEntry={!showConfirmPassword}
+                autoCapitalize="none"
+                autoComplete="password"
                 leftIcon={<Lock size={20} color="#9E9E9E" />}
                 rightIcon={
                   <TouchableOpacity
@@ -123,85 +341,84 @@ export default function RegisterScreen() {
                 }
               />
 
+              {/* Register Button */}
               <Button
                 title={loading ? 'Creating Account...' : 'Sign Up'}
                 onPress={handleRegister}
-                disabled={
-                  loading || !phone || !password || password !== confirmPassword
-                }
+                disabled={loading}
                 style={styles.registerButton}
               />
 
+              {/* Divider */}
               <View style={styles.divider}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or continue with</Text>
+                <Text style={styles.dividerText}>Or continue with</Text>
                 <View style={styles.dividerLine} />
               </View>
 
+              {/* Social Login Buttons */}
               <View style={styles.socialButtons}>
                 <TouchableOpacity
                   style={[styles.socialButton, styles.googleButton]}
-                  onPress={() => handleSocialRegister('Google')}
+                  onPress={() => handleSocialRegister('google')}
+                  disabled={!!socialLoading}
                 >
                   <View style={styles.socialButtonContent}>
                     <View style={styles.googleIcon}>
                       <Text style={styles.googleIconText}>G</Text>
                     </View>
                     <Text style={styles.googleButtonText}>
-                      Continue with Google
+                      {socialLoading === 'google'
+                        ? 'Connecting...'
+                        : 'Continue with Google'}
                     </Text>
                   </View>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[styles.socialButton, styles.facebookButton]}
-                  onPress={() => handleSocialRegister('Facebook')}
+                  onPress={() => handleSocialRegister('facebook')}
+                  disabled={!!socialLoading}
                 >
                   <View style={styles.socialButtonContent}>
                     <View style={styles.facebookIcon}>
                       <Text style={styles.facebookIconText}>f</Text>
                     </View>
                     <Text style={styles.facebookButtonText}>
-                      Continue with Facebook
+                      {socialLoading === 'facebook'
+                        ? 'Connecting...'
+                        : 'Continue with Facebook'}
                     </Text>
                   </View>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[styles.socialButton, styles.linkedinButton]}
-                  onPress={() => handleSocialRegister('LinkedIn')}
+                  onPress={() => handleSocialRegister('linkedin')}
+                  disabled={!!socialLoading}
                 >
                   <View style={styles.socialButtonContent}>
                     <View style={styles.linkedinIcon}>
                       <Text style={styles.linkedinIconText}>in</Text>
                     </View>
                     <Text style={styles.linkedinButtonText}>
-                      Continue with LinkedIn
+                      {socialLoading === 'linkedin'
+                        ? 'Connecting...'
+                        : 'Continue with LinkedIn'}
                     </Text>
                   </View>
                 </TouchableOpacity>
               </View>
+            </View>
 
-              <View style={styles.terms}>
-                <Text style={styles.termsText}>
-                  By creating an account, you agree to our{' '}
-                  <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
-                  <Text style={styles.termsLink}>Privacy Policy</Text>
-                </Text>
-              </View>
-
-              <View style={styles.dividerBottom}>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <View style={styles.footer}>
-                <Text style={styles.footerText}>
-                  Already have an account?{' '}
-                  <Link href="/auth/login" asChild>
-                    <Text style={styles.footerLink}>Log In</Text>
-                  </Link>
-                </Text>
-              </View>
+            {/* Footer */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>
+                Already have an account?{' '}
+                <Link href="/auth/login" asChild>
+                  <Text style={styles.footerLink}>Sign In</Text>
+                </Link>
+              </Text>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -217,8 +434,11 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  content: {
+  keyboardView: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: 24,
   },
   header: {
@@ -232,39 +452,74 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontFamily: 'Inter-Bold',
     color: '#FFFFFF',
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 16,
     fontFamily: 'Inter-Regular',
     color: '#9E9E9E',
-    textAlign: 'center',
   },
   form: {
     flex: 1,
   },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  phoneInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 25,
+    paddingHorizontal: 16,
+    height: 56,
+    borderWidth: 1.5,
+    borderColor: '#E5E5E5',
+  },
+  phoneInputWrapperFocused: {
+    borderColor: '#2e2461',
+  },
+  phoneIcon: {
+    marginRight: 12,
+  },
+  phoneInput: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#000000',
+    ...(Platform.OS === 'web' && {
+      outlineStyle: 'none' as any,
+      outlineWidth: 0,
+      outlineColor: 'transparent',
+    }),
+  },
   registerButton: {
-    marginBottom: 24,
+    marginTop: 8,
     backgroundColor: '#2e2461',
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginVertical: 24,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   dividerText: {
     marginHorizontal: 16,
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-    color: '#FFFFFF',
+    color: '#9E9E9E',
   },
   socialButtons: {
     gap: 12,
@@ -350,26 +605,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
     color: '#FFFFFF',
   },
-  terms: {
-    marginBottom: 20,
-  },
-  termsText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  termsLink: {
-    color: '#2e2461',
-    fontFamily: 'Inter-Medium',
-  },
-  dividerBottom: {
-    marginBottom: 20,
-  },
   footer: {
+    paddingVertical: 24,
     alignItems: 'center',
-    paddingBottom: 24,
   },
   footerText: {
     fontSize: 16,

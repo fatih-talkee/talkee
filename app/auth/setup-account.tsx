@@ -209,7 +209,11 @@ export default function SetupAccountScreen() {
               mode="date"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={(event, selectedDate) => {
-                setShowDatePicker(Platform.OS === 'ios');
+                // On Android, always close picker after selection
+                // On iOS, keep it open for spinner mode
+                if (Platform.OS === 'android') {
+                  setShowDatePicker(false);
+                }
                 if (selectedDate) {
                   setBirthDate(selectedDate);
                 }
