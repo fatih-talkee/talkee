@@ -23,4 +23,4 @@ export * from './usePayments';
 export * from './useIsMounted';
 export * from './useFrameworkReady';
 export * from './useAuth';
-
+export * from './useProfessionalFeeds';

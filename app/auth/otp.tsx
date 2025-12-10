@@ -16,11 +16,13 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useIsMounted } from '@/hooks/useIsMounted';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/lib/toastService';
+import { UserPreferencesService } from '@/services/supabase/userPreferences.service';
 
 export default function VerifyPhoneScreen() {
-  const { phone, name, context } = useLocalSearchParams();
+  const { phone, name, email, context } = useLocalSearchParams();
   const cleanPhone = Array.isArray(phone) ? phone[0] : phone;
   const userName = Array.isArray(name) ? name[0] : name;
+  const userEmail = Array.isArray(email) ? email[0] : email;
   const verifyContext = Array.isArray(context) ? context[0] : context;
 
   const { theme } = useTheme();
@@ -120,8 +122,6 @@ export default function VerifyPhoneScreen() {
       });
 
       if (verifyError) {
-        console.error('OTP verification error:', verifyError);
-
         setError('Invalid verification code. Please try again.');
         setCode(['', '', '', '', '', '']);
         if (inputRefs.current[0]) {
@@ -141,7 +141,7 @@ export default function VerifyPhoneScreen() {
       if (data.session) {
         // ✅ Success! User is verified and logged in
 
-        // Create user profile
+        // Create user profile with smart defaults
         try {
           // Check if profile exists
           const { data: existingProfile } = await supabase
@@ -151,17 +151,26 @@ export default function VerifyPhoneScreen() {
             .single();
 
           if (!existingProfile) {
-            // Create profile with email from auth.users
+            // 🎨 Get smart defaults from device
+            const defaultTheme = UserPreferencesService.getDefaultTheme();
+            const defaultLanguage = UserPreferencesService.getDefaultLanguage();
+
+            // Create profile with email and smart defaults
             await supabase.from('users').insert({
               auth_id: data.user?.id || '',
               phone: cleanPhone,
-              primary_email: data.user?.email || '', // Get email from auth
+              primary_email: userEmail || data.user?.email || '', // Use email from register form or auth
               name: userName || cleanPhone,
+
+              // 🎨 Smart defaults based on device settings
+              theme_preference: defaultTheme,
+              language_preference: defaultLanguage,
+
               role: 'user',
             });
+
           }
         } catch (profileError) {
-          console.error('Error creating profile:', profileError);
           // Don't fail - user can update profile later
         }
 
@@ -174,7 +183,6 @@ export default function VerifyPhoneScreen() {
         router.replace('/auth/setup-account');
       }
     } catch (error: any) {
-      console.error('Unexpected verification error:', error);
       setError('An error occurred. Please try again.');
       setCode(['', '', '', '', '', '']);
       if (inputRefs.current[0]) {
@@ -203,7 +211,6 @@ export default function VerifyPhoneScreen() {
       });
 
       if (error) {
-        console.error('Resend error:', error);
         toast.error({
           title: 'Resend Failed',
           message: error.message || 'Failed to resend code',
@@ -218,7 +225,6 @@ export default function VerifyPhoneScreen() {
         setError('');
       }
     } catch (error: any) {
-      console.error('Unexpected resend error:', error);
       toast.error({
         title: 'Error',
         message: 'Failed to resend code',

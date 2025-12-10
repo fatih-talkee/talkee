@@ -8,6 +8,7 @@ import {
   ScrollView,
   Image,
   Share,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -33,10 +34,14 @@ import {
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
 import { router } from 'expo-router';
 import { useToast } from '@/lib/toastService';
 import { ShareProfileModal } from '@/components/profile/ShareProfileModal';
+import { AvatarUploadModal } from '@/components/profile/AvatarUploadModal';
+import { useProfile } from '@/hooks/useProfile';
+import { supabase } from '@/lib/supabase';
 
 interface MenuSection {
   title: string;
@@ -53,22 +58,55 @@ export default function ProfileScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [avatarModalVisible, setAvatarModalVisible] = useState(false);
   const toast = useToast();
-  const [userProfile] = useState({
-    name: 'Mila Victoria',
-    email: 'mila@example.com',
-    avatar:
-      'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=400',
-    memberSince: 'January 2024',
-    totalCalls: 23,
-    favoriteCount: 8,
-  });
+
+  // ✅ Use real profile data
+  const { user, stats, isProfessional, isLoading } = useProfile();
+
+  // ✅ Format date helper
+  const formatMemberSince = (date: string) => {
+    return new Date(date).toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric',
+    });
+  };
+
+  // ✅ Loading state
+  if (isLoading) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <Header showLogo={true} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ✅ No user state (shouldn't happen, but defensive)
+  if (!user || !stats) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <Header showLogo={true} />
+        <View style={styles.loadingContainer}>
+          <Text style={{ color: theme.colors.text }}>
+            Unable to load profile
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const handleShareProfile = async () => {
     try {
       const result = await Share.share({
-        message: `Check out my Talkee profile! ${userProfile.name}`,
-        title: `Share ${userProfile.name}'s Profile`,
+        message: `Check out my Talkee profile! ${user.name}`,
+        title: `Share ${user.name}'s Profile`,
       });
 
       if (result.action === Share.sharedAction) {
@@ -94,10 +132,49 @@ export default function ProfileScreen() {
   };
 
   const handleChangePhoto = () => {
-    toast.info({
-      title: 'Change Photo',
-      message: 'Photo upload functionality coming soon',
+    setAvatarModalVisible(true);
+  };
+
+  const handleAvatarUploadComplete = (avatarUrl: string) => {
+    // Optimistic update - React Query will auto-refetch
+    toast.success({
+      title: 'Avatar Updated',
+      message: 'Your profile photo has been updated successfully',
     });
+  };
+
+  const handleSignOutPress = async () => {
+    try {
+      // ✅ Sign out from Supabase Auth
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        console.error('Sign out error:', error);
+        toast.error({
+          title: 'Sign Out Failed',
+          message: error.message || 'Unable to sign out',
+        });
+        return;
+      }
+
+      // ✅ Success feedback
+        toast.success({
+          title: 'Signed Out',
+        message: 'See you soon!',
+        });
+
+      // ✅ Navigate to login screen
+      // Use setTimeout to ensure toast is visible before navigation
+      setTimeout(() => {
+        router.replace('/auth/login');
+      }, 1000);
+    } catch (error: any) {
+      console.error('Unexpected sign out error:', error);
+      toast.error({
+        title: 'Sign Out Error',
+        message: 'An unexpected error occurred',
+      });
+    }
   };
 
   const menuSections: MenuSection[] = [
@@ -109,32 +186,35 @@ export default function ProfileScreen() {
           label: 'Favorites',
           icon: <Heart size={20} color="#ef4444" />,
           onPress: () => router.push('/favorites'),
-          badge: userProfile.favoriteCount.toString(),
+          badge: stats.favorites_count?.toString(),
         },
         {
           id: 'history',
           label: 'Call History',
           icon: <Clock size={20} color="#3b82f6" />,
           onPress: () => router.push('/call-history'),
-          badge: userProfile.totalCalls.toString(),
+          badge: stats.total_calls?.toString(),
         },
         {
           id: 'invoices',
           label: 'Invoices',
           icon: <FileText size={20} color="#10b981" />,
           onPress: () => router.push('/invoices'),
+          badge: stats.invoices_count?.toString(),
         },
-        {
-          id: 'recordings',
-          label: 'Recordings',
-          icon: <Mic size={20} color="#8b5cf6" />,
-          onPress: () => router.push('/profile/recordings'),
-        },
+        // TODO: Recordings feature - to be developed later
+        // {
+        //   id: 'recordings',
+        //   label: 'Recordings',
+        //   icon: <Mic size={20} color="#8b5cf6" />,
+        //   onPress: () => router.push('/profile/recordings'),
+        // },
         {
           id: 'blocked',
           label: 'Blocked Users',
           icon: <UserX size={20} color="#f59e0b" />,
           onPress: () => router.push('/blocked-users'),
+          badge: stats.blocked_users_count?.toString(),
         },
       ],
     },
@@ -186,7 +266,7 @@ export default function ProfileScreen() {
           id: 'logout',
           label: 'Sign Out',
           icon: <LogOut size={20} color="#ef4444" />,
-          onPress: () => router.push('/auth/login'),
+          onPress: handleSignOutPress,
         },
       ],
     },
@@ -213,7 +293,9 @@ export default function ProfileScreen() {
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
               <Image
-                source={{ uri: userProfile.avatar }}
+                source={{
+                  uri: user.avatar_url || 'https://via.placeholder.com/80',
+                }}
                 style={styles.avatar}
               />
               <TouchableOpacity
@@ -228,7 +310,7 @@ export default function ProfileScreen() {
             </View>
             <View style={styles.profileInfo}>
               <Text style={[styles.profileName, { color: theme.colors.text }]}>
-                {userProfile.name}
+                {user.name}
               </Text>
               <Text
                 style={[
@@ -236,12 +318,12 @@ export default function ProfileScreen() {
                   { color: theme.colors.textSecondary },
                 ]}
               >
-                {userProfile.email}
+                {user.primary_email || 'No email'}
               </Text>
               <Text
                 style={[styles.memberSince, { color: theme.colors.textMuted }]}
               >
-                Member since {userProfile.memberSince}
+                Member since {formatMemberSince(stats.member_since)}
               </Text>
             </View>
           </View>
@@ -251,7 +333,7 @@ export default function ProfileScreen() {
           >
             <View style={styles.stat}>
               <Text style={[styles.statNumber, { color: theme.colors.text }]}>
-                {userProfile.totalCalls}
+                {stats.total_calls || 0}
               </Text>
               <Text
                 style={[
@@ -270,7 +352,7 @@ export default function ProfileScreen() {
             />
             <View style={styles.stat}>
               <Text style={[styles.statNumber, { color: theme.colors.text }]}>
-                {userProfile.favoriteCount}
+                {stats.favorites_count || 0}
               </Text>
               <Text
                 style={[
@@ -281,29 +363,12 @@ export default function ProfileScreen() {
                 Favorites
               </Text>
             </View>
-            <View
-              style={[
-                styles.statDivider,
-                { backgroundColor: theme.colors.divider },
-              ]}
-            />
-            <View style={styles.stat}>
-              <Text style={[styles.statNumber, { color: theme.colors.text }]}>
-                4.8
-              </Text>
-              <Text
-                style={[
-                  styles.statLabel,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                Avg Rating
-              </Text>
-            </View>
           </View>
         </Card>
 
-        {/* I'm a Professional Section */}
+        {/* Professional Section - Conditional */}
+        {isProfessional ? (
+          // If professional - show settings
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
             I'm a Professional
@@ -335,7 +400,9 @@ export default function ProfileScreen() {
                       borderColor: theme.colors.border,
                     },
                   ]}
-                  onPress={() => router.push('/profile/professional-settings')}
+                    onPress={() =>
+                      router.push('/become-professional?mode=edit')
+                    }
                 >
                   <Settings size={16} color={theme.colors.text} />
                   <Text
@@ -369,6 +436,47 @@ export default function ProfileScreen() {
             </View>
           </Card>
         </View>
+        ) : (
+          // If not professional - show become professional button
+          <View style={styles.section}>
+            <Card
+              style={[
+                styles.becomeProfessionalCard,
+                { backgroundColor: theme.colors.card },
+              ]}
+            >
+              <View style={styles.becomeProfessionalContent}>
+                <Text
+                  style={[
+                    styles.becomeProfessionalTitle,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  Share Your Expertise
+                </Text>
+                <Text
+                  style={[
+                    styles.becomeProfessionalDescription,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Join our community of professionals and start earning by
+                  sharing your knowledge.
+                </Text>
+                <Button
+                  title="Become a Professional"
+                  onPress={() => router.push('/become-professional')}
+                  variant="primary"
+                  size="medium"
+                  style={[
+                    { width: '100%' },
+                    { backgroundColor: theme.colors.primary },
+                  ]}
+                />
+              </View>
+            </Card>
+          </View>
+        )}
 
         {/* Menu Sections */}
         <View style={styles.section}>
@@ -489,11 +597,20 @@ export default function ProfileScreen() {
           </View>
         ))}
       </ScrollView>
+
       <ShareProfileModal
         visible={shareModalVisible}
         onClose={() => setShareModalVisible(false)}
         username="milavictoria"
         userId="123"
+      />
+
+      <AvatarUploadModal
+        visible={avatarModalVisible}
+        currentAvatar={user.avatar_url}
+        userId={user.id}
+        onClose={() => setAvatarModalVisible(false)}
+        onUploadComplete={handleAvatarUploadComplete}
       />
     </SafeAreaView>
   );
@@ -678,5 +795,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter-Medium',
     marginLeft: 6,
+  },
+  becomeProfessionalCard: {
+    marginBottom: 0,
+  },
+  becomeProfessionalContent: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  becomeProfessionalTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  becomeProfessionalDescription: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

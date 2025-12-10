@@ -12,6 +12,7 @@ interface HeaderProps {
   // back handling
   showBack?: boolean;
   backRoute?: string;
+  onBackPress?: () => void;
 }
 
 export function Header({
@@ -22,6 +23,7 @@ export function Header({
   onLogoPress,
   showBack,
   backRoute,
+  onBackPress,
 }: HeaderProps) {
   const normalizedRight =
     rightButtons !== undefined
@@ -38,6 +40,7 @@ export function Header({
       onLogoPress={onLogoPress}
       showBack={showBack}
       backRoute={backRoute}
+      onBackPress={onBackPress}
     />
   );
 }

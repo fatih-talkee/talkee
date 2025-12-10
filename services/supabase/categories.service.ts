@@ -26,6 +26,94 @@ class CategoriesService {
   }
 
   /**
+   * Get categories grouped by category groups
+   * Returns: { groupName: string, groupEmoji: string, categories: Category[] }[]
+   */
+  async getCategoriesGrouped(): Promise<
+    Array<{
+      id: string;
+      name: string;
+      emoji: string | null;
+      slug: string;
+      sort_order: number;
+      categories: Category[];
+    }>
+  > {
+    try {
+      // Fetch all active categories with their groups
+      const { data: categories, error: categoriesError } = await supabase
+        .from('categories')
+        .select(
+          `
+          *,
+          category_groups (
+            id,
+            name,
+            slug,
+            emoji,
+            sort_order
+          )
+        `
+        )
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      if (categoriesError) {
+        console.error('Error fetching grouped categories:', categoriesError);
+        throw new Error(
+          `Failed to fetch categories: ${categoriesError.message}`
+        );
+      }
+
+      // Group categories by their category_groups
+      const groupedMap = new Map<
+        string,
+        {
+          id: string;
+          name: string;
+          emoji: string | null;
+          slug: string;
+          sort_order: number;
+          categories: Category[];
+        }
+      >();
+
+      categories?.forEach((category: any) => {
+        const group = category.category_groups;
+
+        if (!group) return; // Skip categories without a group
+
+        const groupKey = group.id;
+
+        if (!groupedMap.has(groupKey)) {
+          groupedMap.set(groupKey, {
+            id: group.id,
+            name: group.name,
+            emoji: group.emoji,
+            slug: group.slug,
+            sort_order: group.sort_order,
+            categories: [],
+          });
+        }
+
+        const groupData = groupedMap.get(groupKey)!;
+
+        // Remove the category_groups nested object before adding
+        const { category_groups, ...categoryData } = category;
+        groupData.categories.push(categoryData as Category);
+      });
+
+      // Convert map to array and sort by group sort_order
+      return Array.from(groupedMap.values()).sort(
+        (a, b) => a.sort_order - b.sort_order
+      );
+    } catch (error) {
+      console.error('Error in getCategoriesGrouped:', error);
+      return [];
+    }
+  }
+
+  /**
    * Get all categories including inactive ones (for admin)
    */
   async getAllCategories(): Promise<Category[]> {

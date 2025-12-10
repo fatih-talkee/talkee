@@ -9,17 +9,24 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
-  FlatList,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Plus, X, Edit2, Trash2, Calendar, DollarSign, Clock, Globe, Zap } from 'lucide-react-native';
+import {
+  Plus,
+  X,
+  Edit2,
+  Trash2,
+  Calendar,
+  DollarSign,
+  Clock,
+  Zap,
+} from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useToast } from '@/lib/toastService';
-import { mockUserProfile } from '@/mockData/user';
 
 interface Availability {
   id: string;
@@ -28,89 +35,40 @@ interface Availability {
   date?: Date;
   startHour: string;
   endHour: string;
-  currency: 'USD' | 'TRY' | 'EUR';
   pricePerMinute: string;
 }
-
-const mockAvailabilities: Availability[] = [
-  {
-    id: '1',
-    availableAt: 'every',
-    days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-    startHour: '09:00',
-    endHour: '17:00',
-    currency: 'USD',
-    pricePerMinute: '2.50',
-  },
-  {
-    id: '2',
-    availableAt: 'every',
-    days: ['Saturday', 'Sunday'],
-    startHour: '10:00',
-    endHour: '18:00',
-    currency: 'USD',
-    pricePerMinute: '3.00',
-  },
-  {
-    id: '3',
-    availableAt: 'specific',
-    date: new Date('2025-12-25'),
-    startHour: '10:00',
-    endHour: '14:00',
-    currency: 'EUR',
-    pricePerMinute: '3.00',
-  },
-  {
-    id: '4',
-    availableAt: 'specific',
-    date: new Date('2026-01-15'),
-    startHour: '08:00',
-    endHour: '12:00',
-    currency: 'USD',
-    pricePerMinute: '4.50',
-  },
-  {
-    id: '5',
-    availableAt: 'every',
-    days: ['Monday', 'Wednesday', 'Friday'],
-    startHour: '18:00',
-    endHour: '21:00',
-    currency: 'TRY',
-    pricePerMinute: '50.00',
-  },
-];
 
 export default function AvailabilitySettingsScreen() {
   const { theme } = useTheme();
   const toast = useToast();
-  const [availabilities, setAvailabilities] = useState<Availability[]>(mockAvailabilities);
+  const [availabilities, setAvailabilities] = useState<Availability[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [editingAvailability, setEditingAvailability] = useState<Availability | null>(null);
+  const [editingAvailability, setEditingAvailability] =
+    useState<Availability | null>(null);
   
-  // Urgent call settings - initialized from mock user data
-  const [urgentCallEnabled, setUrgentCallEnabled] = useState(mockUserProfile.urgentCallEnabled);
-  const [urgentCallPrice, setUrgentCallPrice] = useState(mockUserProfile.urgentCallPrice.toString());
-  const [urgentCallCurrency, setUrgentCallCurrency] = useState<'USD' | 'TRY' | 'EUR'>(mockUserProfile.urgentCallCurrency);
+  // Urgent call settings
+  const [urgentCallEnabled, setUrgentCallEnabled] = useState(false);
+  const [urgentCallPrice, setUrgentCallPrice] = useState('');
 
   const [formData, setFormData] = useState<Partial<Availability>>({
     availableAt: 'every',
     days: [],
     startHour: '',
     endHour: '',
-    currency: 'USD',
     pricePerMinute: '',
   });
 
   const availableAtOptions = ['every', 'specific'];
-  const daysOptions = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  const currencyOptions = ['USD', 'TRY', 'EUR'];
-
-  const currencySymbols = {
-    USD: '$',
-    TRY: '₺',
-    EUR: '€',
-  };
+  const daysOptions = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
 
   const openModal = (availability?: Availability) => {
     if (availability) {
@@ -121,7 +79,6 @@ export default function AvailabilitySettingsScreen() {
         date: availability.date,
         startHour: availability.startHour,
         endHour: availability.endHour,
-        currency: availability.currency,
         pricePerMinute: availability.pricePerMinute,
       });
     } else {
@@ -131,7 +88,6 @@ export default function AvailabilitySettingsScreen() {
         days: [],
         startHour: '',
         endHour: '',
-        currency: 'USD',
         pricePerMinute: '',
       });
     }
@@ -146,7 +102,6 @@ export default function AvailabilitySettingsScreen() {
       days: [],
       startHour: '',
       endHour: '',
-      currency: 'USD',
       pricePerMinute: '',
     });
   };
@@ -154,14 +109,17 @@ export default function AvailabilitySettingsScreen() {
   const toggleDay = (day: string) => {
     const currentDays = formData.days || [];
     const newDays = currentDays.includes(day)
-      ? currentDays.filter(d => d !== day)
+      ? currentDays.filter((d) => d !== day)
       : [...currentDays, day];
     setFormData({ ...formData, days: newDays });
   };
 
   const handleSave = () => {
     // Validation
-    if (formData.availableAt === 'every' && (!formData.days || formData.days.length === 0)) {
+    if (
+      formData.availableAt === 'every' &&
+      (!formData.days || formData.days.length === 0)
+    ) {
       toast.error({
         title: 'Error',
         message: 'Please select at least one day',
@@ -195,11 +153,13 @@ export default function AvailabilitySettingsScreen() {
 
     if (editingAvailability) {
       // Update existing
-      setAvailabilities(availabilities.map(av => 
+      setAvailabilities(
+        availabilities.map((av) =>
         av.id === editingAvailability.id 
-          ? { ...formData, id: editingAvailability.id } as Availability
+            ? ({ ...formData, id: editingAvailability.id } as Availability)
           : av
-      ));
+        )
+      );
       toast.success({
         title: 'Success',
         message: 'Availability updated successfully',
@@ -213,7 +173,6 @@ export default function AvailabilitySettingsScreen() {
         date: formData.date,
         startHour: formData.startHour!,
         endHour: formData.endHour!,
-        currency: formData.currency!,
         pricePerMinute: formData.pricePerMinute!,
       };
       setAvailabilities([...availabilities, newAvailability]);
@@ -227,7 +186,7 @@ export default function AvailabilitySettingsScreen() {
   };
 
   const handleDelete = (id: string) => {
-    setAvailabilities(availabilities.filter(av => av.id !== id));
+    setAvailabilities(availabilities.filter((av) => av.id !== id));
     toast.success({
       title: 'Success',
       message: 'Availability deleted successfully',
@@ -241,11 +200,15 @@ export default function AvailabilitySettingsScreen() {
       style={[
         styles.availabilityCard, 
         { 
-          backgroundColor: theme.name === 'dark' ? '#000000' : theme.colors.card,
-          borderColor: theme.name === 'dark' ? 'rgba(255, 255, 255, 0.3)' : theme.colors.border,
+          backgroundColor:
+            theme.name === 'dark' ? '#000000' : theme.colors.card,
+          borderColor:
+            theme.name === 'dark'
+              ? 'rgba(255, 255, 255, 0.3)'
+              : theme.colors.border,
           borderWidth: 1.5,
           padding: 16,
-        }
+        },
       ]}
     >
       {/* Header Section */}
@@ -303,13 +266,19 @@ export default function AvailabilitySettingsScreen() {
         <View style={styles.cardActions}>
           <TouchableOpacity 
             onPress={() => openModal(item)}
-            style={[styles.actionButton, { backgroundColor: theme.colors.surface }]}
+            style={[
+              styles.actionButton,
+              { backgroundColor: theme.colors.surface },
+            ]}
           >
             <Edit2 size={16} color={theme.colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity 
             onPress={() => handleDelete(item.id)}
-            style={[styles.actionButton, { backgroundColor: theme.colors.surface }]}
+            style={[
+              styles.actionButton,
+              { backgroundColor: theme.colors.surface },
+            ]}
           >
             <Trash2 size={16} color="#ef4444" />
           </TouchableOpacity>
@@ -332,10 +301,7 @@ export default function AvailabilitySettingsScreen() {
                 ]}
               >
                 <Text
-                  style={[
-                    styles.dayTagText,
-                    { color: theme.colors.accent },
-                  ]}
+                  style={[styles.dayTagText, { color: theme.colors.accent }]}
                 >
                   {day.substring(0, 3)}
                 </Text>
@@ -375,10 +341,8 @@ export default function AvailabilitySettingsScreen() {
             ]}
           >
             <DollarSign size={16} color={theme.colors.success} />
-            <Text
-              style={[styles.priceText, { color: theme.colors.success }]}
-            >
-              {currencySymbols[item.currency]}{item.pricePerMinute}/min
+            <Text style={[styles.priceText, { color: theme.colors.success }]}>
+              ${item.pricePerMinute}/min
           </Text>
           </View>
         </View>
@@ -387,7 +351,9 @@ export default function AvailabilitySettingsScreen() {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <Header 
         showBack 
         backRoute="/(tabs)/profile"
@@ -396,7 +362,14 @@ export default function AvailabilitySettingsScreen() {
             onPress={() => openModal()}
             style={[
               styles.addButton,
-              { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
+              {
+                backgroundColor:
+                  theme.name === 'dark'
+                    ? theme.colors.surface
+                    : theme.name === 'light'
+                    ? theme.colors.brandPink
+                    : '#000000',
+              },
             ]}
           >
             <Plus size={20} color="#FFFFFF" />
@@ -410,12 +383,16 @@ export default function AvailabilitySettingsScreen() {
           style={[
             styles.urgentCallCard, 
             { 
-              backgroundColor: theme.name === 'dark' ? '#000000' : theme.colors.card,
-              borderColor: theme.name === 'dark' ? 'rgba(255, 255, 255, 0.3)' : theme.colors.border,
+              backgroundColor:
+                theme.name === 'dark' ? '#000000' : theme.colors.card,
+              borderColor:
+                theme.name === 'dark'
+                  ? 'rgba(255, 255, 255, 0.3)'
+                  : theme.colors.border,
               borderWidth: 1.5,
               padding: 16,
               marginBottom: 24,
-            }
+            },
           ]}
         >
           <View style={styles.urgentCallHeader}>
@@ -434,11 +411,19 @@ export default function AvailabilitySettingsScreen() {
                 <Zap size={20} color="#FFD60A" />
               </View>
               <View style={styles.urgentCallInfo}>
-                <Text style={[styles.urgentCallTitle, { color: theme.colors.text }]}>
+                <Text
+                  style={[styles.urgentCallTitle, { color: theme.colors.text }]}
+                >
                   Urgent Call
                 </Text>
-                <Text style={[styles.urgentCallDescription, { color: theme.colors.textMuted }]}>
-                  Allow users to call you even outside your scheduled availability
+                <Text
+                  style={[
+                    styles.urgentCallDescription,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  Allow users to call you even outside your scheduled
+                  availability
                 </Text>
               </View>
             </View>
@@ -448,8 +433,12 @@ export default function AvailabilitySettingsScreen() {
                 styles.toggleButton,
                 {
                   backgroundColor: urgentCallEnabled 
-                    ? (theme.name === 'dark' ? theme.colors.success : theme.colors.success + '40')
-                    : (theme.name === 'dark' ? theme.colors.surface : theme.colors.surface),
+                    ? theme.name === 'dark'
+                      ? theme.colors.success
+                      : theme.colors.success + '40'
+                    : theme.name === 'dark'
+                    ? theme.colors.surface
+                    : theme.colors.surface,
                   borderColor: urgentCallEnabled 
                     ? theme.colors.success 
                     : theme.colors.border,
@@ -460,7 +449,9 @@ export default function AvailabilitySettingsScreen() {
                 style={[
                   styles.toggleSwitch,
                   {
-                    backgroundColor: urgentCallEnabled ? '#FFFFFF' : theme.colors.textMuted,
+                    backgroundColor: urgentCallEnabled
+                      ? '#FFFFFF'
+                      : theme.colors.textMuted,
                     alignSelf: urgentCallEnabled ? 'flex-end' : 'flex-start',
                   },
                 ]}
@@ -470,39 +461,6 @@ export default function AvailabilitySettingsScreen() {
           
           {urgentCallEnabled && (
             <View style={styles.urgentCallForm}>
-              {/* Currency */}
-              <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: theme.colors.text }]}>
-                  Currency
-                </Text>
-                <View style={styles.optionsRow}>
-                  {currencyOptions.map(currency => (
-                    <TouchableOpacity
-                      key={currency}
-                      onPress={() => setUrgentCallCurrency(currency as any)}
-                      style={[
-                        styles.optionButton,
-                        { 
-                          backgroundColor: urgentCallCurrency === currency 
-                            ? theme.colors.primary + '20'
-                            : theme.colors.surface,
-                          borderColor: theme.colors.border,
-                        },
-                        urgentCallCurrency === currency && { borderColor: theme.colors.primary },
-                      ]}
-                    >
-                      <Text style={[
-                        styles.optionText,
-                        { color: theme.colors.text },
-                        urgentCallCurrency === currency && { color: theme.colors.primary, fontFamily: 'Inter-Bold' },
-                      ]}>
-                        {currencySymbols[currency]} {currency}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
               {/* Urgent Call Price */}
               <View style={styles.formGroup}>
                 <Text style={[styles.label, { color: theme.colors.text }]}>
@@ -520,13 +478,21 @@ export default function AvailabilitySettingsScreen() {
         </Card>
 
         {availabilities.length === 0 ? (
-          <Card style={[styles.emptyCard, { backgroundColor: theme.colors.card }]}>
+          <Card
+            style={[styles.emptyCard, { backgroundColor: theme.colors.card }]}
+          >
             <Calendar size={48} color={theme.colors.textMuted} />
             <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
               No Availability Set
             </Text>
-            <Text style={[styles.emptyDescription, { color: theme.colors.textMuted }]}>
-              Add your availability schedule to let users know when you're available for calls
+            <Text
+              style={[
+                styles.emptyDescription,
+                { color: theme.colors.textMuted },
+              ]}
+            >
+              Add your availability schedule to let users know when you're
+              available for calls
             </Text>
             <Button
               title="Add Availability"
@@ -550,7 +516,10 @@ export default function AvailabilitySettingsScreen() {
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={[styles.modalContainer, { backgroundColor: theme.colors.background }]}
+          style={[
+            styles.modalContainer,
+            { backgroundColor: theme.colors.background },
+          ]}
         >
           <SafeAreaView style={{ flex: 1 }}>
             <View style={[styles.modalHeader, { backgroundColor: '#000000' }]}>
@@ -559,39 +528,66 @@ export default function AvailabilitySettingsScreen() {
               </Text>
               <TouchableOpacity 
                 onPress={closeModal}
-                style={[styles.closeButton, { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? '#d60f83' : '#000000' }]}
+                style={[
+                  styles.closeButton,
+                  {
+                    backgroundColor:
+                      theme.name === 'dark'
+                        ? theme.colors.surface
+                        : theme.name === 'light'
+                        ? '#d60f83'
+                        : '#000000',
+                  },
+                ]}
               >
                 <X size={20} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.modalContent}
+              showsVerticalScrollIndicator={false}
+            >
               {/* Available At */}
               <View style={styles.formGroup}>
                 <Text style={[styles.label, { color: theme.colors.text }]}>
                   Available At
                 </Text>
                 <View style={styles.optionsRow}>
-                  {availableAtOptions.map(option => (
+                  {availableAtOptions.map((option) => (
                     <TouchableOpacity
                       key={option}
-                      onPress={() => setFormData({ ...formData, availableAt: option as any, days: option === 'specific' ? [] : formData.days })}
+                      onPress={() =>
+                        setFormData({
+                          ...formData,
+                          availableAt: option as any,
+                          days: option === 'specific' ? [] : formData.days,
+                        })
+                      }
                       style={[
                         styles.optionButton,
                         { 
-                          backgroundColor: formData.availableAt === option 
+                          backgroundColor:
+                            formData.availableAt === option
                             ? theme.colors.primary + '20'
                             : theme.colors.surface,
                           borderColor: theme.colors.border,
                         },
-                        formData.availableAt === option && { borderColor: theme.colors.primary },
+                        formData.availableAt === option && {
+                          borderColor: theme.colors.primary,
+                        },
                       ]}
                     >
-                      <Text style={[
+                      <Text
+                        style={[
                         styles.optionText,
                         { color: theme.colors.text },
-                        formData.availableAt === option && { color: theme.colors.primary, fontFamily: 'Inter-Bold' },
-                      ]}>
+                          formData.availableAt === option && {
+                            color: theme.colors.primary,
+                            fontFamily: 'Inter-Bold',
+                          },
+                        ]}
+                      >
                         {option.charAt(0).toUpperCase() + option.slice(1)}
                       </Text>
                     </TouchableOpacity>
@@ -606,7 +602,7 @@ export default function AvailabilitySettingsScreen() {
                     Select Days
                   </Text>
                   <View style={styles.daysGrid}>
-                    {daysOptions.map(day => (
+                    {daysOptions.map((day) => (
                       <TouchableOpacity
                         key={day}
                         onPress={() => toggleDay(day)}
@@ -618,14 +614,21 @@ export default function AvailabilitySettingsScreen() {
                               : theme.colors.surface,
                             borderColor: theme.colors.border,
                           },
-                          formData.days?.includes(day) && { borderColor: theme.colors.primary },
+                          formData.days?.includes(day) && {
+                            borderColor: theme.colors.primary,
+                          },
                         ]}
                       >
-                        <Text style={[
+                        <Text
+                          style={[
                           styles.dayText,
                           { color: theme.colors.text },
-                          formData.days?.includes(day) && { color: theme.colors.primary, fontFamily: 'Inter-Bold' },
-                        ]}>
+                            formData.days?.includes(day) && {
+                              color: theme.colors.primary,
+                              fontFamily: 'Inter-Bold',
+                            },
+                          ]}
+                        >
                           {day.substring(0, 3)}
                         </Text>
                       </TouchableOpacity>
@@ -642,7 +645,11 @@ export default function AvailabilitySettingsScreen() {
                   </Text>
                   {Platform.OS === 'web' ? (
                     <Input
-                      value={formData.date ? formData.date.toISOString().split('T')[0] : ''}
+                      value={
+                        formData.date
+                          ? formData.date.toISOString().split('T')[0]
+                          : ''
+                      }
                       onChangeText={(text) => {
                         if (text) {
                           const date = new Date(text);
@@ -656,10 +663,24 @@ export default function AvailabilitySettingsScreen() {
                   ) : (
                     <TouchableOpacity
                       onPress={() => setShowDatePicker(true)}
-                      style={[styles.datePickerButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+                      style={[
+                        styles.datePickerButton,
+                        {
+                          backgroundColor: theme.colors.surface,
+                          borderColor: theme.colors.border,
+                        },
+                      ]}
                     >
-                      <Text style={{ color: formData.date ? theme.colors.text : theme.colors.textMuted }}>
-                        {formData.date ? formData.date.toLocaleDateString() : 'Select date'}
+                      <Text
+                        style={{
+                          color: formData.date
+                            ? theme.colors.text
+                            : theme.colors.textMuted,
+                        }}
+                      >
+                        {formData.date
+                          ? formData.date.toLocaleDateString()
+                          : 'Select date'}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -672,7 +693,8 @@ export default function AvailabilitySettingsScreen() {
                       minimumDate={new Date()}
                       onChange={(event, selectedDate) => {
                         setShowDatePicker(false);
-                        if (selectedDate) setFormData({ ...formData, date: selectedDate });
+                        if (selectedDate)
+                          setFormData({ ...formData, date: selectedDate });
                       }}
                     />
                   )}
@@ -686,7 +708,9 @@ export default function AvailabilitySettingsScreen() {
                 </Text>
                 <Input
                   value={formData.startHour || ''}
-                  onChangeText={(text) => setFormData({ ...formData, startHour: text })}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, startHour: text })
+                  }
                   placeholder="09:00"
                 />
               </View>
@@ -698,42 +722,11 @@ export default function AvailabilitySettingsScreen() {
                 </Text>
                 <Input
                   value={formData.endHour || ''}
-                  onChangeText={(text) => setFormData({ ...formData, endHour: text })}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, endHour: text })
+                  }
                   placeholder="17:00"
                 />
-              </View>
-
-              {/* Currency */}
-              <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: theme.colors.text }]}>
-                  Currency
-                </Text>
-                <View style={styles.optionsRow}>
-                  {currencyOptions.map(currency => (
-                    <TouchableOpacity
-                      key={currency}
-                      onPress={() => setFormData({ ...formData, currency: currency as any })}
-                      style={[
-                        styles.optionButton,
-                        { 
-                          backgroundColor: formData.currency === currency 
-                            ? theme.colors.primary + '20'
-                            : theme.colors.surface,
-                          borderColor: theme.colors.border,
-                        },
-                        formData.currency === currency && { borderColor: theme.colors.primary },
-                      ]}
-                    >
-                      <Text style={[
-                        styles.optionText,
-                        { color: theme.colors.text },
-                        formData.currency === currency && { color: theme.colors.primary, fontFamily: 'Inter-Bold' },
-                      ]}>
-                        {currencySymbols[currency]} {currency}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
               </View>
 
               {/* Price Per Minute */}
@@ -743,16 +736,27 @@ export default function AvailabilitySettingsScreen() {
                 </Text>
                 <Input
                   value={formData.pricePerMinute || ''}
-                  onChangeText={(text) => setFormData({ ...formData, pricePerMinute: text })}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, pricePerMinute: text })
+                  }
                   placeholder="2.50"
                   keyboardType="numeric"
                 />
               </View>
             </ScrollView>
 
-            <View style={[styles.modalFooter, { borderTopColor: theme.colors.border }]}>
+            <View
+              style={[
+                styles.modalFooter,
+                { borderTopColor: theme.colors.border },
+              ]}
+            >
               <Button
-                title={editingAvailability ? 'Update Availability' : 'Create Availability'}
+                title={
+                  editingAvailability
+                    ? 'Update Availability'
+                    : 'Create Availability'
+                }
                 onPress={handleSave}
                 style={styles.saveButton}
               />
@@ -1034,4 +1038,3 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
   },
 });
-

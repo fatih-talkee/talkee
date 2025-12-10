@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   TextInput,
   Modal,
   Platform,
+  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import {
@@ -19,36 +20,158 @@ import {
   Trash2,
   ChevronRight,
   AlertTriangle,
+  ShieldCheck,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useProfile } from '@/hooks/useProfile';
+import { usersService } from '@/services/supabase';
+import { supabase } from '@/lib/supabase';
+import { useToast } from '@/lib/toastService';
+import { format } from 'date-fns';
+import MaskInput from 'react-native-mask-input';
+
+// Turkish phone mask: +90 XXX XXX XX XX
+const PHONE_MASK = [
+  '+',
+  '9',
+  '0',
+  ' ',
+  /\d/,
+  /\d/,
+  /\d/,
+  ' ',
+  /\d/,
+  /\d/,
+  /\d/,
+  ' ',
+  /\d/,
+  /\d/,
+  ' ',
+  /\d/,
+  /\d/,
+];
 
 export default function AccountSettingsScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const toast = useToast();
+  const { user, isLoading: profileLoading, refetch } = useProfile();
+
   const [formData, setFormData] = useState({
-    fullName: 'John Doe',
-    email: 'john.doe@example.com',
-    phone: '+1 (555) 123-4567',
+    fullName: '',
+    email: '',
+    phone: '',
   });
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [userStats, setUserStats] = useState({
+    totalCalls: 0,
+    totalSpent: 0,
+    totalMinutes: 0,
+  });
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
+
+  // Check if user has password (email provider means they registered with password)
+  const hasPassword = user?.oauth_providers?.includes('email') ?? true;
+
+  // Load user data
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        fullName: user.name || '',
+        email: user.primary_email || '',
+        phone: user.phone || '',
+      });
+      loadUserStats();
+    }
+  }, [user]);
+
+  const loadUserStats = async () => {
+    try {
+      const stats = await usersService.getUserStats();
+      setUserStats(stats);
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    }
+  };
 
   const handleSave = async () => {
+    if (!user) return;
+
+    // Validation
+    if (!formData.fullName.trim() || formData.fullName.trim().length < 2) {
+      toast.error({
+        title: 'Invalid Name',
+        message: 'Name must be at least 2 characters',
+      });
+      return;
+    }
+
+    if (!formData.email.trim() || !validateEmail(formData.email)) {
+      toast.error({
+        title: 'Invalid Email',
+        message: 'Please enter a valid email address',
+      });
+      return;
+    }
+
+    // Clean phone number (remove spaces from mask)
+    const cleanPhone = formData.phone.replace(/\s/g, '');
+
+    if (!cleanPhone || cleanPhone.length < 13) {
+      toast.error({
+        title: 'Invalid Phone',
+        message: 'Please enter a valid phone number',
+      });
+      return;
+    }
+
     setLoading(true);
-    // Mock save
-    setTimeout(() => {
-      setLoading(false);
+
+    try {
+      // Update profile in database
+      await usersService.updateProfile({
+        name: formData.fullName.trim(),
+        primary_email: formData.email.trim().toLowerCase(),
+        phone: cleanPhone,
+      });
+
+      // Refetch profile data
+      await refetch();
+
+      toast.success({
+        title: 'Profile Updated',
+        message: 'Your account information has been updated',
+      });
+
       setIsEditing(false);
-    }, 1000);
+    } catch (error: any) {
+      console.error('Error updating profile:', error);
+      toast.error({
+        title: 'Update Failed',
+        message: error.message || 'Failed to update profile',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
   };
 
   const handleChangePassword = () => {
     router.push('/settings/change-password');
+  };
+
+  const handleSetPassword = () => {
+    router.push('/settings/set-password');
   };
 
   const handleDeleteAccount = () => {
@@ -56,15 +179,80 @@ export default function AccountSettingsScreen() {
   };
 
   const confirmDeleteAccount = async () => {
+    if (!user) return;
+
     setDeleteLoading(true);
-    // Mock delete operation
-    setTimeout(() => {
+
+    try {
+      // ✅ Use usersService.deleteAccount()
+      const result = await usersService.deleteAccount();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to delete account');
+      }
+
+      // Success!
+      toast.success({
+        title: 'Account Deleted',
+        message: 'Your account has been permanently deleted',
+      });
+
+      // Close modal
+      setShowDeleteModal(false);
+
+      // ✅ Navigate to login after a delay
+      setTimeout(() => {
+        router.replace('/auth/login');
+      }, 1500);
+    } catch (error: any) {
+      console.error('Error deleting account:', error);
+      toast.error({
+        title: 'Deletion Failed',
+        message: error.message || 'Failed to delete account',
+      });
       setDeleteLoading(false);
       setShowDeleteModal(false);
-      // Navigate to login or home screen after deletion
-      router.replace('/auth/login');
-    }, 2000);
+    }
   };
+
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return 'N/A';
+    try {
+      return format(new Date(dateString), 'MMMM yyyy');
+    } catch {
+      return 'N/A';
+    }
+  };
+
+  if (profileLoading) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <Header showLogo showBack />
+        <View style={styles.loadingContainer}>
+          <Text style={[styles.loadingText, { color: theme.colors.text }]}>
+            Loading...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!user) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <Header showLogo showBack />
+        <View style={styles.loadingContainer}>
+          <Text style={[styles.loadingText, { color: theme.colors.text }]}>
+            User not found
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -76,7 +264,17 @@ export default function AccountSettingsScreen() {
         rightButtons={[
           <TouchableOpacity
             key="edit"
-            onPress={() => setIsEditing(!isEditing)}
+            onPress={() => {
+              if (isEditing) {
+                // Cancel - reset form data
+                setFormData({
+                  fullName: user.name || '',
+                  email: user.primary_email || '',
+                  phone: user.phone || '',
+                });
+              }
+              setIsEditing(!isEditing);
+            }}
             style={[
               styles.editButton,
               {
@@ -129,9 +327,10 @@ export default function AccountSettingsScreen() {
             style={[
               styles.inputGroup,
               {
-                borderColor: isEditing
-                  ? theme.colors.primary
-                  : theme.colors.border,
+                borderColor:
+                  focusedInput === 'fullName' && isEditing
+                    ? theme.colors.primary
+                    : theme.colors.border,
                 backgroundColor: theme.colors.surface,
               },
             ]}
@@ -150,6 +349,8 @@ export default function AccountSettingsScreen() {
               placeholderTextColor={theme.colors.textMuted}
               style={[styles.input, { color: theme.colors.text }]}
               editable={isEditing}
+              onFocus={() => setFocusedInput('fullName')}
+              onBlur={() => setFocusedInput(null)}
             />
           </View>
 
@@ -157,9 +358,10 @@ export default function AccountSettingsScreen() {
             style={[
               styles.inputGroup,
               {
-                borderColor: isEditing
-                  ? theme.colors.primary
-                  : theme.colors.border,
+                borderColor:
+                  focusedInput === 'email' && isEditing
+                    ? theme.colors.primary
+                    : theme.colors.border,
                 backgroundColor: theme.colors.surface,
               },
             ]}
@@ -178,6 +380,8 @@ export default function AccountSettingsScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               editable={isEditing}
+              onFocus={() => setFocusedInput('email')}
+              onBlur={() => setFocusedInput(null)}
             />
           </View>
 
@@ -185,9 +389,10 @@ export default function AccountSettingsScreen() {
             style={[
               styles.inputGroup,
               {
-                borderColor: isEditing
-                  ? theme.colors.primary
-                  : theme.colors.border,
+                borderColor:
+                  focusedInput === 'phone' && isEditing
+                    ? theme.colors.primary
+                    : theme.colors.border,
                 backgroundColor: theme.colors.surface,
               },
             ]}
@@ -197,14 +402,19 @@ export default function AccountSettingsScreen() {
               size={18}
               style={{ marginRight: 8 }}
             />
-            <TextInput
+            <MaskInput
               value={formData.phone}
-              onChangeText={(text) => setFormData({ ...formData, phone: text })}
-              placeholder="Phone Number"
+              onChangeText={(masked, unmasked) => {
+                setFormData({ ...formData, phone: masked });
+              }}
+              mask={PHONE_MASK}
+              placeholder="+90 555 123 45 67"
               placeholderTextColor={theme.colors.textMuted}
               style={[styles.input, { color: theme.colors.text }]}
               keyboardType="phone-pad"
               editable={isEditing}
+              onFocus={() => setFocusedInput('phone')}
+              onBlur={() => setFocusedInput(null)}
             />
           </View>
 
@@ -232,35 +442,126 @@ export default function AccountSettingsScreen() {
             Security
           </Text>
 
-          <TouchableOpacity
-            style={styles.settingItem}
-            onPress={handleChangePassword}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingLeft}>
-              <Lock size={20} color={theme.colors.primary} />
-              <View style={styles.settingInfo}>
-                <Text
-                  style={[styles.settingLabel, { color: theme.colors.primary }]}
-                >
-                  Change Password
-                </Text>
-                <Text
-                  style={[
-                    styles.settingDescription,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  Update your account password
-                </Text>
+          {/* Conditional: Change Password or Set Password */}
+          {hasPassword ? (
+            // User has password → Show "Change Password"
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={handleChangePassword}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingLeft}>
+                <Lock size={20} color={theme.colors.primary} />
+                <View style={styles.settingInfo}>
+                  <Text
+                    style={[
+                      styles.settingLabel,
+                      { color: theme.colors.primary },
+                    ]}
+                  >
+                    Change Password
+                  </Text>
+                  <Text
+                    style={[
+                      styles.settingDescription,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Update your account password
+                  </Text>
+                </View>
               </View>
-            </View>
-            <ChevronRight
-              size={20}
-              color={theme.name === 'dark' ? '#FFFFFF' : theme.colors.textMuted}
-            />
-          </TouchableOpacity>
+              <ChevronRight
+                size={20}
+                color={
+                  theme.name === 'dark' ? '#FFFFFF' : theme.colors.textMuted
+                }
+              />
+            </TouchableOpacity>
+          ) : (
+            // OAuth-only user → Show "Set Password"
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={handleSetPassword}
+              activeOpacity={0.7}
+            >
+              <View style={styles.settingLeft}>
+                <ShieldCheck
+                  size={20}
+                  color={theme.colors.success || '#10b981'}
+                />
+                <View style={styles.settingInfo}>
+                  <Text
+                    style={[
+                      styles.settingLabel,
+                      { color: theme.colors.success || '#10b981' },
+                    ]}
+                  >
+                    Set Password
+                  </Text>
+                  <Text
+                    style={[
+                      styles.settingDescription,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Add password login as backup option
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight
+                size={20}
+                color={
+                  theme.name === 'dark' ? '#FFFFFF' : theme.colors.textMuted
+                }
+              />
+            </TouchableOpacity>
+          )}
         </View>
+
+        {/* Connected Accounts */}
+        {user.oauth_providers && user.oauth_providers.length > 0 && (
+          <View
+            style={[
+              styles.section,
+              {
+                backgroundColor: theme.colors.card,
+                borderColor: theme.colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Connected Accounts
+            </Text>
+            <View style={styles.connectedAccountsList}>
+              {user.oauth_providers.map((provider) => (
+                <View key={provider} style={styles.connectedAccountItem}>
+                  <Text
+                    style={[styles.providerText, { color: theme.colors.text }]}
+                  >
+                    {provider === 'email'
+                      ? '🔑 Email & Password'
+                      : provider === 'google'
+                      ? '🔵 Google'
+                      : provider === 'facebook'
+                      ? '🔵 Facebook'
+                      : provider === 'linkedin'
+                      ? '🔵 LinkedIn'
+                      : provider}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.providerEmail,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    {user.oauth_emails?.[provider] || 'Connected'}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* Account Actions */}
         <View
@@ -330,7 +631,7 @@ export default function AccountSettingsScreen() {
                 Member Since
               </Text>
               <Text style={[styles.infoValue, { color: theme.colors.text }]}>
-                January 2024
+                {formatDate(user.created_at)}
               </Text>
             </View>
             <View style={styles.infoItem}>
@@ -343,7 +644,7 @@ export default function AccountSettingsScreen() {
                 Account Type
               </Text>
               <Text style={[styles.infoValue, { color: theme.colors.text }]}>
-                Standard
+                {user.role === 'professional' ? 'Professional' : 'Standard'}
               </Text>
             </View>
             <View style={styles.infoItem}>
@@ -356,7 +657,7 @@ export default function AccountSettingsScreen() {
                 Total Calls
               </Text>
               <Text style={[styles.infoValue, { color: theme.colors.text }]}>
-                23
+                {userStats.totalCalls}
               </Text>
             </View>
             <View style={styles.infoItem}>
@@ -369,13 +670,14 @@ export default function AccountSettingsScreen() {
                 Account ID
               </Text>
               <Text style={[styles.infoValue, { color: theme.colors.text }]}>
-                AC-7891234
+                {user.id.split('-')[0].toUpperCase()}
               </Text>
             </View>
           </View>
         </View>
       </ScrollView>
 
+      {/* Delete Modal */}
       <Modal
         visible={showDeleteModal}
         transparent={true}
@@ -485,6 +787,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+  },
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -528,6 +839,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontFamily: 'Inter-Regular',
+    ...(Platform.OS === 'web' && {
+      outlineStyle: 'none' as any,
+      outlineWidth: 0,
+      outlineColor: 'transparent',
+    }),
   },
   saveButton: {
     marginTop: 8,
@@ -558,6 +874,21 @@ const styles = StyleSheet.create({
   },
   dangerItem: {
     marginTop: 0,
+  },
+  connectedAccountsList: {
+    gap: 12,
+  },
+  connectedAccountItem: {
+    paddingVertical: 8,
+  },
+  providerText: {
+    fontSize: 15,
+    fontFamily: 'Inter-Medium',
+    marginBottom: 2,
+  },
+  providerEmail: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
   },
   infoGrid: {
     gap: 12,

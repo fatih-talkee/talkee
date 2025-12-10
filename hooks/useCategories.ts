@@ -1,54 +1,64 @@
-// hooks/useCategories.ts
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { categoriesService } from '@/services/supabase';
+/**
+ * Categories React Query Hooks
+ * Provides data fetching for categories
+ */
+
+import { useQuery, UseQueryResult } from '@tanstack/react-query';
+import { categoriesService } from '@/services/supabase/categories.service';
 import { Category } from '@/types/database.types';
 
+// Query Keys
+export const categoriesKeys = {
+  all: ['categories'] as const,
+  lists: () => [...categoriesKeys.all, 'list'] as const,
+  detail: (id: string) => [...categoriesKeys.all, 'detail', id] as const,
+};
+
 /**
- * Get all active categories
- * Cache: 10 minutes (categories rarely change)
+ * Hook: Get all categories
  */
-export function useCategories() {
-  return useQuery<Category[]>({
-    queryKey: ['categories'],
+export function useCategories(): UseQueryResult<Category[]> {
+  return useQuery({
+    queryKey: categoriesKeys.lists(),
     queryFn: () => categoriesService.getCategories(),
-    staleTime: 1000 * 60 * 10, // 10 minutes
-    gcTime: 1000 * 60 * 30, // 30 minutes (formerly cacheTime)
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 30 * 60 * 1000,
   });
 }
 
 /**
- * Get single category by ID
+ * Hook: Get categories grouped by category groups
  */
-export function useCategory(id: string) {
-  return useQuery<Category | null>({
-    queryKey: ['category', id],
-    queryFn: () => categoriesService.getCategoryById(id),
-    enabled: !!id,
-    staleTime: 1000 * 60 * 10,
-    gcTime: 1000 * 60 * 30,
+export function useCategoriesGrouped(): UseQueryResult<
+  Array<{
+    id: string;
+    name: string;
+    emoji: string | null;
+    slug: string;
+    sort_order: number;
+    categories: Category[];
+  }>
+> {
+  return useQuery({
+    queryKey: [...categoriesKeys.lists(), 'grouped'],
+    queryFn: () => categoriesService.getCategoriesGrouped(),
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 30 * 60 * 1000,
   });
 }
 
 /**
- * Get category by slug
+ * Hook: Get single category by ID
  */
-export function useCategoryBySlug(slug: string) {
-  return useQuery<Category | null>({
-    queryKey: ['category', 'slug', slug],
-    queryFn: () => categoriesService.getCategoryBySlug(slug),
-    enabled: !!slug,
-    staleTime: 1000 * 60 * 10,
-    gcTime: 1000 * 60 * 30,
+export function useCategory(
+  id: string | undefined,
+  enabled: boolean = true
+): UseQueryResult<Category | null> {
+  return useQuery({
+    queryKey: categoriesKeys.detail(id || ''),
+    queryFn: () => categoriesService.getCategoryById(id!),
+    enabled: !!id && enabled,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 30 * 60 * 1000,
   });
 }
-
-/**
- * Invalidate categories cache
- */
-export function useInvalidateCategories() {
-  const queryClient = useQueryClient();
-  return () => {
-    queryClient.invalidateQueries({ queryKey: ['categories'] });
-  };
-}
-

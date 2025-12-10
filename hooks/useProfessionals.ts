@@ -1,37 +1,59 @@
 // hooks/useProfessionals.ts
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { professionalsService } from '@/services/supabase';
 import {
-  ProfessionalFilters,
-  Professional,
+  professionalsService,
   ProfessionalWithRelations,
-} from '@/types/database.types';
+} from '@/services/supabase/professionals.service';
 
 /**
- * Get professionals with filters and pagination
+ * Get professionals list (optionally filtered by category)
  * Cache: 2 minutes (professionals list changes moderately)
  */
-export function useProfessionals(
-  filters?: ProfessionalFilters,
-  limit: number = 20,
-  offset: number = 0
-) {
+export function useProfessionals(categoryId?: string) {
   return useQuery<ProfessionalWithRelations[]>({
-    queryKey: ['professionals', filters, limit, offset],
-    queryFn: async () => {
-      const page = Math.floor(offset / limit) + 1;
-      const result = await professionalsService.getProfessionals(filters, {
-        page,
-        limit,
-      });
-      // Extract data array from paginated response
-      if ('data' in result) {
-        return result.data;
-      }
-      return result;
-    },
+    queryKey: ['professionals', categoryId],
+    queryFn: () => professionalsService.getProfessionals(categoryId),
     staleTime: 1000 * 60 * 2, // 2 minutes
     gcTime: 1000 * 60 * 10, // 10 minutes
+  });
+}
+
+/**
+ * Get available professionals (for immediate calls)
+ * Cache: 1 minute (availability changes frequently)
+ */
+export function useAvailableProfessionals(categoryId?: string) {
+  return useQuery<ProfessionalWithRelations[]>({
+    queryKey: ['professionals', 'available', categoryId],
+    queryFn: () => professionalsService.getAvailableProfessionals(categoryId),
+    staleTime: 1000 * 60, // 1 minute
+    gcTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
+/**
+ * Get featured professionals (high rating, verified, most popular)
+ * Cache: 5 minutes (featured list changes infrequently)
+ */
+export function useFeaturedProfessionals(limit: number = 10) {
+  return useQuery<ProfessionalWithRelations[]>({
+    queryKey: ['professionals', 'featured', limit],
+    queryFn: async () => {
+      // Get all active professionals
+      const professionals = await professionalsService.getProfessionals();
+
+      // Filter and sort for featured
+      return professionals
+        .filter((p) => p.rating >= 4.5) // High rating only
+        .sort((a, b) => {
+          // Sort by rating desc, then by total_calls desc
+          if (b.rating !== a.rating) return b.rating - a.rating;
+          return b.total_calls - a.total_calls;
+        })
+        .slice(0, limit);
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    gcTime: 1000 * 60 * 15, // 15 minutes
   });
 }
 
@@ -40,7 +62,7 @@ export function useProfessionals(
  * Cache: 5 minutes (individual profiles change infrequently)
  */
 export function useProfessional(id: string) {
-  return useQuery<Professional | null>({
+  return useQuery<ProfessionalWithRelations | null>({
     queryKey: ['professional', id],
     queryFn: () => professionalsService.getProfessional(id),
     enabled: !!id,
@@ -50,15 +72,16 @@ export function useProfessional(id: string) {
 }
 
 /**
- * Get featured professionals (verified, high rating)
- * Cache: 5 minutes (featured list changes infrequently)
+ * Search professionals by query string
+ * Cache: 1 minute (search results should be fresh)
  */
-export function useFeaturedProfessionals(limit: number = 10) {
-  return useQuery<Professional[]>({
-    queryKey: ['professionals', 'featured', limit],
-    queryFn: () => professionalsService.getFeaturedProfessionals(limit),
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 15, // 15 minutes
+export function useSearchProfessionals(query: string) {
+  return useQuery<ProfessionalWithRelations[]>({
+    queryKey: ['professionals', 'search', query],
+    queryFn: () => professionalsService.searchProfessionals(query),
+    enabled: query.length > 0,
+    staleTime: 1000 * 60, // 1 minute
+    gcTime: 1000 * 60 * 5, // 5 minutes
   });
 }
 

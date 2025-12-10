@@ -77,7 +77,6 @@ export default function ForgotPasswordScreen() {
       });
 
       if (error) {
-        console.error('Password reset error:', error);
         toast.error({
           title: 'Reset Failed',
           message: error.message || 'Failed to send verification code',
@@ -91,7 +90,6 @@ export default function ForgotPasswordScreen() {
         message: 'Check your phone for the verification code',
       });
     } catch (error: any) {
-      console.error('Unexpected reset error:', error);
       toast.error({
         title: 'Error',
         message: 'An unexpected error occurred. Please try again.',

@@ -64,22 +64,6 @@ export default function HomeScreen() {
                       : '#000000',
                 },
               ]}
-              onPress={() => router.push('/appointments-calendar')}
-            >
-              <Calendar size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.iconButton,
-                {
-                  backgroundColor:
-                    theme.name === 'dark'
-                      ? theme.colors.surface
-                      : theme.name === 'light'
-                      ? theme.colors.brandPink
-                      : '#000000',
-                },
-              ]}
               onPress={() => router.push('/notifications' as any)}
             >
               <Bell size={20} color="#FFFFFF" />

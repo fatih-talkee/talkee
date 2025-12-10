@@ -10,21 +10,19 @@ import {
   Platform,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Lock, Eye, EyeOff, Check, X } from 'lucide-react-native';
+import { Lock, Eye, EyeOff, Check, X, ShieldCheck } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/lib/toastService';
 
-export default function ChangePasswordScreen() {
+export default function SetPasswordScreen() {
   const { theme } = useTheme();
   const toast = useToast();
 
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -40,9 +38,9 @@ export default function ChangePasswordScreen() {
 
   const isPasswordValid = Object.values(passwordRequirements).every(Boolean);
 
-  const handleSave = async () => {
+  const handleSetPassword = async () => {
     // Validation
-    if (!currentPassword || !newPassword || !confirmPassword) {
+    if (!newPassword || !confirmPassword) {
       toast.error({
         title: 'Missing Fields',
         message: 'Please fill in all fields',
@@ -53,7 +51,7 @@ export default function ChangePasswordScreen() {
     if (newPassword !== confirmPassword) {
       toast.error({
         title: 'Password Mismatch',
-        message: 'New passwords do not match',
+        message: 'Passwords do not match',
       });
       return;
     }
@@ -69,48 +67,23 @@ export default function ChangePasswordScreen() {
     setLoading(true);
 
     try {
-      // 1. Verify current password by trying to sign in
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user || !user.email) {
-        throw new Error('User not found');
-      }
-
-      // Try to sign in with current password to verify it
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: currentPassword,
-      });
-
-      if (signInError) {
-        toast.error({
-          title: 'Incorrect Password',
-          message: 'Current password is incorrect',
-        });
-        setLoading(false);
-        return;
-      }
-
-      // 2. Update password
-      const { error: updateError } = await supabase.auth.updateUser({
+      // Set password for OAuth user
+      const { error } = await supabase.auth.updateUser({
         password: newPassword,
       });
 
-      if (updateError) {
-        console.error('Password update error:', updateError);
-        throw new Error(updateError.message);
+      if (error) {
+        console.error('Set password error:', error);
+        throw new Error(error.message);
       }
 
       // Success!
       toast.success({
-        title: 'Password Updated',
-        message: 'Your password has been changed successfully',
+        title: 'Password Set',
+        message: 'You can now login with email and password',
       });
 
       // Clear form
-      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
 
@@ -119,10 +92,10 @@ export default function ChangePasswordScreen() {
         router.back();
       }, 1500);
     } catch (error: any) {
-      console.error('Error changing password:', error);
+      console.error('Error setting password:', error);
       toast.error({
-        title: 'Update Failed',
-        message: error.message || 'Failed to update password',
+        title: 'Failed to Set Password',
+        message: error.message || 'An error occurred',
       });
     } finally {
       setLoading(false);
@@ -158,6 +131,29 @@ export default function ChangePasswordScreen() {
       <Header showLogo showBack />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Hero Section */}
+        <View style={styles.heroSection}>
+          <View
+            style={[
+              styles.heroIcon,
+              { backgroundColor: theme.colors.success + '20' || '#10b98120' },
+            ]}
+          >
+            <ShieldCheck size={40} color={theme.colors.success || '#10b981'} />
+          </View>
+          <Text style={[styles.heroTitle, { color: theme.colors.text }]}>
+            Set a Password
+          </Text>
+          <Text
+            style={[
+              styles.heroDescription,
+              { color: theme.colors.textSecondary },
+            ]}
+          >
+            Add password login as a backup option for your account
+          </Text>
+        </View>
+
         <View
           style={[
             styles.section,
@@ -167,60 +163,7 @@ export default function ChangePasswordScreen() {
             },
           ]}
         >
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            Update Your Password
-          </Text>
-          <Text
-            style={[
-              styles.sectionDescription,
-              { color: theme.colors.textSecondary },
-            ]}
-          >
-            Enter your current password and choose a new secure password
-          </Text>
-
           <View style={styles.form}>
-            {/* Current Password */}
-            <View
-              style={[
-                styles.inputContainer,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor:
-                    focusedInput === 'currentPassword'
-                      ? theme.colors.primary
-                      : theme.colors.border,
-                },
-              ]}
-            >
-              <Lock
-                size={18}
-                color={theme.colors.textMuted}
-                style={{ marginRight: 10 }}
-              />
-              <TextInput
-                placeholder="Current Password"
-                placeholderTextColor={theme.colors.textMuted}
-                style={[styles.input, { color: theme.colors.text }]}
-                value={currentPassword}
-                onChangeText={setCurrentPassword}
-                secureTextEntry={!showCurrentPassword}
-                autoCapitalize="none"
-                autoComplete="password"
-                onFocus={() => setFocusedInput('currentPassword')}
-                onBlur={() => setFocusedInput(null)}
-              />
-              <TouchableOpacity
-                onPress={() => setShowCurrentPassword(!showCurrentPassword)}
-              >
-                {showCurrentPassword ? (
-                  <EyeOff size={18} color={theme.colors.textMuted} />
-                ) : (
-                  <Eye size={18} color={theme.colors.textMuted} />
-                )}
-              </TouchableOpacity>
-            </View>
-
             {/* New Password */}
             <View
               style={[
@@ -289,7 +232,7 @@ export default function ChangePasswordScreen() {
                 style={{ marginRight: 10 }}
               />
               <TextInput
-                placeholder="Confirm New Password"
+                placeholder="Confirm Password"
                 placeholderTextColor={theme.colors.textMuted}
                 style={[styles.input, { color: theme.colors.text }]}
                 value={confirmPassword}
@@ -373,17 +316,17 @@ export default function ChangePasswordScreen() {
             )}
 
             <Button
-              title={loading ? 'Updating...' : 'Update Password'}
-              onPress={handleSave}
+              title={loading ? 'Setting Password...' : 'Set Password'}
+              onPress={handleSetPassword}
               disabled={
                 loading || !isPasswordValid || newPassword !== confirmPassword
               }
-              style={styles.saveButton}
+              style={styles.setButton}
             />
           </View>
         </View>
 
-        {/* Security Tips */}
+        {/* Benefits Section */}
         <View
           style={[
             styles.section,
@@ -394,29 +337,63 @@ export default function ChangePasswordScreen() {
           ]}
         >
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            Security Tips
+            Why Set a Password?
           </Text>
-          <View style={styles.tipsList}>
-            <Text
-              style={[styles.tipItem, { color: theme.colors.textSecondary }]}
-            >
-              • Use a unique password you don't use elsewhere
-            </Text>
-            <Text
-              style={[styles.tipItem, { color: theme.colors.textSecondary }]}
-            >
-              • Avoid common words or personal information
-            </Text>
-            <Text
-              style={[styles.tipItem, { color: theme.colors.textSecondary }]}
-            >
-              • Consider using a password manager
-            </Text>
-            <Text
-              style={[styles.tipItem, { color: theme.colors.textSecondary }]}
-            >
-              • Change your password regularly
-            </Text>
+          <View style={styles.benefitsList}>
+            <View style={styles.benefitItem}>
+              <Text style={styles.benefitIcon}>🔐</Text>
+              <View style={styles.benefitText}>
+                <Text
+                  style={[styles.benefitTitle, { color: theme.colors.text }]}
+                >
+                  Backup Login Method
+                </Text>
+                <Text
+                  style={[
+                    styles.benefitDescription,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Access your account even if OAuth provider is unavailable
+                </Text>
+              </View>
+            </View>
+            <View style={styles.benefitItem}>
+              <Text style={styles.benefitIcon}>🛡️</Text>
+              <View style={styles.benefitText}>
+                <Text
+                  style={[styles.benefitTitle, { color: theme.colors.text }]}
+                >
+                  Enhanced Security
+                </Text>
+                <Text
+                  style={[
+                    styles.benefitDescription,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Multiple login options provide better account protection
+                </Text>
+              </View>
+            </View>
+            <View style={styles.benefitItem}>
+              <Text style={styles.benefitIcon}>🔄</Text>
+              <View style={styles.benefitText}>
+                <Text
+                  style={[styles.benefitTitle, { color: theme.colors.text }]}
+                >
+                  Flexibility
+                </Text>
+                <Text
+                  style={[
+                    styles.benefitDescription,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Login with email/password or any connected social account
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -433,6 +410,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 24,
   },
+  heroSection: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  heroIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  heroTitle: {
+    fontSize: 24,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 8,
+  },
+  heroDescription: {
+    fontSize: 15,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
   section: {
     borderWidth: 1,
     borderRadius: 16,
@@ -442,13 +442,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontFamily: 'Inter-Bold',
-    marginBottom: 6,
-  },
-  sectionDescription: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    marginBottom: 20,
-    lineHeight: 20,
+    marginBottom: 16,
   },
   form: {
     gap: 16,
@@ -502,15 +496,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter-Medium',
   },
-  saveButton: {
+  setButton: {
     marginTop: 12,
   },
-  tipsList: {
-    gap: 8,
+  benefitsList: {
+    gap: 16,
   },
-  tipItem: {
+  benefitItem: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  benefitIcon: {
+    fontSize: 24,
+  },
+  benefitText: {
+    flex: 1,
+  },
+  benefitTitle: {
+    fontSize: 15,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 4,
+  },
+  benefitDescription: {
     fontSize: 13,
     fontFamily: 'Inter-Regular',
-    lineHeight: 20,
+    lineHeight: 18,
   },
 });

@@ -24,6 +24,12 @@ export default function ProfessionalSettings() {
 
   const menuItems = [
     {
+      id: 'edit',
+      title: 'Edit Professional Profile',
+      icon: User,
+      route: '/become-professional?mode=edit',
+    },
+    {
       id: 'basic',
       title: 'Basic Information',
       icon: User,

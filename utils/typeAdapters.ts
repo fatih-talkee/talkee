@@ -1,18 +1,18 @@
 /**
- * Type Adapters - Convert API types to UI-compatible types
- * Adapts database snake_case to component camelCase
+ * TYPE ADAPTERS - Database to UI conversions
+ * ✅ UPDATED: Removed rating field completely
+ * ✅ Uses corrected Professional type with title, specialties
  */
 
-import {
-  Professional as DBProfessional,
-  Category as DBCategory,
+import type {
+  Professional,
   ProfessionalWithRelations,
+  Category,
 } from '@/types/database.types';
 
-// ============================================================================
-// UI TYPES (Component-compatible format with camelCase)
-// ============================================================================
-
+/**
+ * UI-friendly professional type for components
+ */
 export interface UIProfessional {
   id: string;
   name: string;
@@ -21,7 +21,6 @@ export interface UIProfessional {
   ratePerMinute: number;
   avatar: string;
   bio: string;
-  rating: number;
   totalCalls: number;
   isOnline: boolean;
   isVerified: boolean;
@@ -29,201 +28,132 @@ export interface UIProfessional {
   languages: string[];
   responseTime: string;
   badges: string[];
-  isBlocked?: boolean;
+  isBlocked: boolean;
 }
-
-export interface UICategory {
-  id: string;
-  name: string;
-  icon: string;
-  color: string;
-  professionalCount: number;
-}
-
-export interface UIPromotion {
-  id: string;
-  title: string;
-  subtitle: string;
-  image: string;
-  ctaText: string;
-  gradient: string[];
-}
-
-// ============================================================================
-// ADAPTER FUNCTIONS (API → UI)
-// ============================================================================
 
 /**
- * Convert API Professional to UI format
- * Handles both Professional and ProfessionalWithRelations
+ * Adapt Professional from database to UI format
  */
 export function adaptProfessional(
-  dbProf: DBProfessional | ProfessionalWithRelations
+  prof: Professional | ProfessionalWithRelations
 ): UIProfessional {
-  // Check if it has relations (ProfessionalWithRelations)
-  const hasRelations = 'users' in dbProf || 'categories' in dbProf;
+  const hasRelations = 'users' in prof || 'categories' in prof;
 
   if (hasRelations) {
-    const prof = dbProf as ProfessionalWithRelations;
+    const professional = prof as ProfessionalWithRelations;
+
     return {
-      id: prof.id,
-      name: prof.users?.name || 'Professional',
-      title: prof.categories?.name || 'Expert',
-      category: prof.categories?.name || 'General',
-      ratePerMinute: prof.rate_per_minute || 0,
-      avatar: prof.users?.avatar_url || 'https://via.placeholder.com/400',
-      bio: prof.bio || '',
-      rating: prof.average_rating || 0,
-      totalCalls: prof.total_calls || 0,
-      isOnline: prof.is_available || false,
-      isVerified: prof.is_verified || false,
-      specialties: prof.expertise_tags || [],
-      languages: prof.languages || ['English'],
-      responseTime: calculateResponseTime(prof.average_rating),
-      badges: generateBadges(prof),
+      id: professional.id,
+      name: professional.users?.name || 'Professional',
+      title: professional.title || professional.categories?.name || 'Expert',
+      category: professional.categories?.name || 'General',
+      ratePerMinute: professional.rate_per_minute || 0,
+      avatar:
+        professional.users?.avatar_url || 'https://via.placeholder.com/400',
+      bio: professional.bio || '',
+      totalCalls: professional.total_calls || 0,
+      isOnline: professional.is_available || false,
+      isVerified: professional.users?.is_verified || false,
+      specialties: professional.expertise_tags || [],
+      languages: professional.languages || ['English'],
+      responseTime: calculateResponseTime(professional.total_calls),
+      badges: generateBadges(professional),
       isBlocked: false,
     };
   }
 
   // Plain Professional (no relations)
+  const professional = prof as Professional;
+
   return {
-    id: dbProf.id,
+    id: professional.id,
     name: 'Professional',
-    title: 'Expert',
+    title: professional.title || 'Expert',
     category: 'General',
-    ratePerMinute: dbProf.rate_per_minute || 0,
+    ratePerMinute: professional.rate_per_minute || 0,
     avatar: 'https://via.placeholder.com/400',
-    bio: dbProf.bio || '',
-    rating: dbProf.average_rating || 0,
-    totalCalls: dbProf.total_calls || 0,
-    isOnline: dbProf.is_available || false,
-    isVerified: dbProf.is_verified || false,
-    specialties: dbProf.expertise_tags || [],
-    languages: dbProf.languages || ['English'],
-    responseTime: calculateResponseTime(dbProf.average_rating),
-    badges: generateBadges(dbProf),
+    bio: professional.bio || '',
+    totalCalls: professional.total_calls || 0,
+    isOnline: professional.is_available || false,
+    isVerified: professional.is_verified || false,
+    specialties: professional.expertise_tags || [],
+    languages: professional.languages || ['English'],
+    responseTime: calculateResponseTime(professional.total_calls),
+    badges: generateBadges(professional),
     isBlocked: false,
   };
 }
 
 /**
- * Convert API Category to UI format
- */
-export function adaptCategory(dbCat: DBCategory): UICategory {
-  return {
-    id: dbCat.id,
-    name: dbCat.name || 'Category',
-    icon: dbCat.icon_name || 'briefcase',
-    color: generateColorFromName(dbCat.name),
-    professionalCount: 0, // Fetched separately if needed
-  };
-}
-
-/**
- * Convert API Promotion to UI format
- * Promotions come from service already adapted, but this ensures consistency
- */
-export function adaptPromotion(apiPromo: any): UIPromotion {
-  return {
-    id: apiPromo.id,
-    title: apiPromo.title,
-    subtitle: apiPromo.subtitle,
-    image: apiPromo.image || apiPromo.image_url || '',
-    ctaText: apiPromo.ctaText || apiPromo.cta_text || 'Learn More',
-    gradient: apiPromo.gradient || [
-      apiPromo.gradient_start || '#667eea',
-      apiPromo.gradient_end || '#764ba2',
-    ],
-  };
-}
-
-/**
- * Batch convert professionals
+ * Batch adapt multiple professionals
  */
 export function adaptProfessionals(
-  dbProfs: (DBProfessional | ProfessionalWithRelations)[]
+  professionals: (Professional | ProfessionalWithRelations)[]
 ): UIProfessional[] {
-  return dbProfs.map(adaptProfessional);
+  return professionals.map(adaptProfessional);
 }
 
 /**
- * Batch convert categories
+ * Adapt single category
  */
-export function adaptCategories(dbCats: DBCategory[]): UICategory[] {
-  return dbCats.map(adaptCategory);
+export function adaptCategory(category: Category) {
+  return {
+    id: category.id,
+    name: category.name,
+    slug: category.slug,
+    icon: category.icon_name,
+    description: category.description || '',
+    isActive: category.is_active,
+  };
 }
 
 /**
- * Batch convert promotions
+ * Batch adapt categories
  */
-export function adaptPromotions(apiPromos: any[]): UIPromotion[] {
-  return apiPromos.map(adaptPromotion);
+export function adaptCategories(categories: Category[]) {
+  return categories.map(adaptCategory);
 }
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
 /**
- * Calculate response time based on rating
+ * Calculate response time based on total calls (experience)
  */
-function calculateResponseTime(rating: number): string {
-  if (rating >= 4.8) return '< 1 min';
-  if (rating >= 4.5) return '< 2 min';
-  if (rating >= 4.0) return '< 5 min';
-  if (rating >= 3.5) return '< 10 min';
+function calculateResponseTime(totalCalls: number): string {
+  if (totalCalls >= 1000) return '< 1 min';
+  if (totalCalls >= 500) return '< 2 min';
+  if (totalCalls >= 100) return '< 5 min';
+  if (totalCalls >= 50) return '< 10 min';
   return '< 15 min';
 }
 
 /**
- * Generate badges based on professional attributes
+ * Generate badges based on professional stats
  */
 function generateBadges(
-  prof: DBProfessional | ProfessionalWithRelations
+  prof: Professional | ProfessionalWithRelations
 ): string[] {
   const badges: string[] = [];
 
-  if (prof.is_verified) {
+  // Check if user is verified (from users table if available)
+  const isVerified =
+    ('users' in prof && prof.users?.is_verified) || prof.is_verified;
+
+  if (isVerified) {
     badges.push('Verified');
   }
 
-  if (prof.average_rating >= 4.9) {
-    badges.push('Top Rated');
-  }
-
+  // Experience-based badges
   if (prof.total_calls >= 1000) {
     badges.push('Expert');
+  } else if (prof.total_calls >= 500) {
+    badges.push('Experienced');
+  } else if (prof.total_calls >= 100) {
+    badges.push('Professional');
   }
 
-  if (prof.average_rating >= 4.8) {
+  // Quick response badge (based on experience)
+  if (prof.total_calls >= 500) {
     badges.push('Quick Response');
   }
 
   return badges;
-}
-
-/**
- * Generate vibrant, consistent color based on category name
- * ✅ UPDATED: Vibrant colors matching old UI
- */
-function generateColorFromName(name: string): string {
-  const colors = [
-    '#0EA5E9', // Bright Sky Blue (Business)
-    '#A855F7', // Bright Purple (Technology)
-    '#22C55E', // Bright Green (Health)
-    '#FBBF24', // Bright Yellow/Amber (Finance)
-    '#F97316', // Bright Orange (Lifestyle)
-    '#06B6D4', // Bright Cyan (Education)
-    '#C026D3', // Bright Fuchsia (Design)
-    '#EC4899', // Bright Pink (Entertainment)
-    '#EF4444', // Bright Red (Legal)
-    '#10B981', // Bright Emerald (Sports)
-    '#8B5CF6', // Bright Violet (Arts)
-    '#14B8A6', // Bright Teal (Consulting)
-  ];
-
-  const hash = name
-    .split('')
-    .reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return colors[hash % colors.length];
 }

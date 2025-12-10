@@ -80,6 +80,12 @@ export default function RootLayout() {
       'i18nReady:',
       i18nReady
     );
+    
+    if (fontError) {
+      console.error('[App] Font loading error:', fontError);
+      console.warn('[App] App will continue with system fonts');
+    }
+    
     if ((fontsLoaded || fontError) && i18nReady) {
       console.log('[App] All initialization complete, hiding splash screen');
       SplashScreen.hideAsync().catch((error) => {
@@ -99,7 +105,6 @@ export default function RootLayout() {
           <Stack.Screen name="auth" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="become-professional" />
-          <Stack.Screen name="appointments-calendar" />
           <Stack.Screen name="call-review/[id]" />
           <Stack.Screen name="credit-selection" />
           <Stack.Screen name="purchase" />

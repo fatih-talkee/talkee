@@ -1,61 +1,56 @@
-/**
- * Promotions React Query Hooks
- * Provides data fetching for promotional content
- */
-
-import { useQuery, UseQueryResult } from '@tanstack/react-query';
+// hooks/usePromotions.ts
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   promotionsService,
   Promotion,
 } from '@/services/supabase/promotions.service';
 
-// Query Keys
-export const promotionsKeys = {
-  all: ['promotions'] as const,
-  active: () => [...promotionsKeys.all, 'active'] as const,
-  featured: (limit: number) =>
-    [...promotionsKeys.all, 'featured', limit] as const,
-  detail: (id: string) => [...promotionsKeys.all, 'detail', id] as const,
-};
-
 /**
- * Hook: Get all active promotions
+ * Get all active promotions
+ * Cache: 5 minutes (promotions change infrequently)
  */
-export function usePromotions(): UseQueryResult<Promotion[]> {
-  return useQuery({
-    queryKey: promotionsKeys.active(),
+export function usePromotions() {
+  return useQuery<Promotion[]>({
+    queryKey: ['promotions'],
     queryFn: () => promotionsService.getActivePromotions(),
-    staleTime: 15 * 60 * 1000, // 15 minutes
-    gcTime: 30 * 60 * 1000,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    gcTime: 1000 * 60 * 15, // 15 minutes
   });
 }
 
 /**
- * Hook: Get promotion by ID
+ * Get featured promotions (top priority)
+ * Cache: 5 minutes
  */
-export function usePromotion(
-  id: string | undefined,
-  enabled: boolean = true
-): UseQueryResult<Promotion | null> {
-  return useQuery({
-    queryKey: promotionsKeys.detail(id || ''),
-    queryFn: () => promotionsService.getPromotionById(id!),
-    enabled: !!id && enabled,
-    staleTime: 15 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-  });
-}
-
-/**
- * Hook: Get featured promotions
- */
-export function useFeaturedPromotions(
-  limit: number = 5
-): UseQueryResult<Promotion[]> {
-  return useQuery({
-    queryKey: promotionsKeys.featured(limit),
+export function useFeaturedPromotions(limit: number = 5) {
+  return useQuery<Promotion[]>({
+    queryKey: ['promotions', 'featured', limit],
     queryFn: () => promotionsService.getFeaturedPromotions(limit),
-    staleTime: 15 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    gcTime: 1000 * 60 * 15, // 15 minutes
   });
+}
+
+/**
+ * Get single promotion by ID
+ * Cache: 10 minutes (individual promotions rarely change)
+ */
+export function usePromotion(id: string) {
+  return useQuery<Promotion | null>({
+    queryKey: ['promotion', id],
+    queryFn: () => promotionsService.getPromotionById(id),
+    enabled: !!id,
+    staleTime: 1000 * 60 * 10, // 10 minutes
+    gcTime: 1000 * 60 * 20, // 20 minutes
+  });
+}
+
+/**
+ * Invalidate promotions cache
+ */
+export function useInvalidatePromotions() {
+  const queryClient = useQueryClient();
+  return () => {
+    queryClient.invalidateQueries({ queryKey: ['promotions'] });
+  };
 }

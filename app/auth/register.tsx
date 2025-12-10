@@ -1,6 +1,7 @@
 /**
  * Register Screen - WITH EMAIL (FINAL VERSION)
  * Email + Phone + Password registration with SMS OTP
+ * + Smart theme and language defaults
  */
 
 import React, { useState } from 'react';
@@ -24,6 +25,7 @@ import { Button } from '@/components/ui/Button';
 import { useToast } from '@/lib/toastService';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/lib/supabase';
+import { UserPreferencesService } from '@/services/supabase/userPreferences.service';
 
 // Turkish phone mask: +90 XXX XXX XX XX
 const PHONE_MASK = [
@@ -134,8 +136,6 @@ export default function RegisterScreen() {
       });
 
       if (authError) {
-        console.error('Registration error:', authError);
-
         if (authError.message.includes('already registered')) {
           toast.error({
             title: 'Already Registered',
@@ -160,15 +160,16 @@ export default function RegisterScreen() {
           message: 'Check your phone for the 6-digit code',
         });
 
-        // Navigate to OTP with phone and name
+        // Navigate to OTP with phone, name, and email for profile creation
         router.push(
           `/auth/otp?phone=${encodeURIComponent(
             cleanPhone
-          )}&name=${encodeURIComponent(name.trim())}&context=register`
+          )}&name=${encodeURIComponent(name.trim())}&email=${encodeURIComponent(
+            cleanEmail
+          )}&context=register`
         );
       }
     } catch (error: any) {
-      console.error('Unexpected registration error:', error);
       toast.error({
         title: 'Error',
         message: 'An unexpected error occurred. Please try again.',
@@ -197,14 +198,12 @@ export default function RegisterScreen() {
       });
 
       if (error) {
-        console.error(`${provider} registration error:`, error);
         toast.error({
           title: 'Registration Failed',
           message: error.message || `Failed to register with ${provider}`,
         });
       }
     } catch (error: any) {
-      console.error(`Unexpected ${provider} error:`, error);
       toast.error({
         title: 'Error',
         message: 'An unexpected error occurred. Please try again.',

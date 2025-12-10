@@ -111,8 +111,6 @@ export default function LoginScreen() {
       });
 
       if (error) {
-        console.error('Login error:', error);
-
         // Check if phone not confirmed
         if (
           error.message.includes('not confirmed') ||
@@ -146,7 +144,6 @@ export default function LoginScreen() {
         router.replace('/(tabs)');
       }
     } catch (error: any) {
-      console.error('Unexpected login error:', error);
       toast.error({
         title: 'Error',
         message: 'An unexpected error occurred. Please try again.',
@@ -176,7 +173,6 @@ export default function LoginScreen() {
       });
 
       if (error) {
-        console.error('Resend error:', error);
         toast.error({
           title: 'Resend Failed',
           message: error.message || 'Failed to resend code',
@@ -193,7 +189,6 @@ export default function LoginScreen() {
         );
       }
     } catch (error: any) {
-      console.error('Unexpected resend error:', error);
       toast.error({
         title: 'Error',
         message: 'Failed to resend code',
@@ -222,14 +217,12 @@ export default function LoginScreen() {
       });
 
       if (error) {
-        console.error(`${provider} login error:`, error);
         toast.error({
           title: 'Login Failed',
           message: error.message || `Failed to login with ${provider}`,
         });
       }
     } catch (error: any) {
-      console.error(`Unexpected ${provider} error:`, error);
       toast.error({
         title: 'Error',
         message: 'An unexpected error occurred. Please try again.',

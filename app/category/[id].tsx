@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,15 +6,23 @@ import {
   SafeAreaView,
   TouchableOpacity,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Search, Filter } from 'lucide-react-native';
+import { Filter } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
 import { FilterModal } from '@/components/filters/FilterModal';
-import { mockProfessionals, mockCategories } from '@/mockData/professionals';
 import { useTheme } from '@/contexts/ThemeContext';
+
+// ✅ API HOOKS
+import { useProfessionals } from '@/hooks/useProfessionals';
+import { useCategory } from '@/hooks/useCategories';
+
+// ✅ TYPE ADAPTERS
+import { adaptProfessionals, UIProfessional } from '@/utils/typeAdapters';
+import { ProfessionalWithRelations } from '@/types/database.types';
 
 export default function CategoryScreen() {
   const { id, name } = useLocalSearchParams();
@@ -28,37 +36,57 @@ export default function CategoryScreen() {
     categories: [] as string[],
   });
 
-  // Find the category details
-  const category = mockCategories.find((cat) => cat.id === id);
-  const categoryName = (name as string) || category?.name || 'Category';
+  // ✅ Fetch category details
+  const { data: categoryData } = useCategory(id as string);
+  const categoryName = (name as string) || categoryData?.name || 'Category';
 
-  // Filter professionals by category
-  const categoryProfessionals = mockProfessionals.filter(
-    (professional) => professional.category === categoryName
+  // ✅ Fetch all professionals (will filter by category)
+  const {
+    data: professionalsData = [],
+    isLoading: professionalsLoading,
+    error: professionalsError,
+  } = useProfessionals(id as string);
+
+  // ✅ Convert to UI format
+  const professionals = useMemo(
+    () =>
+      adaptProfessionals(
+        professionalsData as unknown as ProfessionalWithRelations[]
+      ),
+    [professionalsData]
   );
 
-  // Apply additional filters
-  const filteredProfessionals = categoryProfessionals.filter((professional) => {
-    const matchesSearch =
-      professional.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      professional.title.toLowerCase().includes(searchQuery.toLowerCase());
+  // ✅ Apply client-side filters (search, price, rating, availability)
+  const filteredProfessionals = useMemo(() => {
+    return professionals.filter((professional: UIProfessional) => {
+      // Search filter
+      const matchesSearch =
+        professional.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        professional.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        professional.specialties.some((s) =>
+          s.toLowerCase().includes(searchQuery.toLowerCase())
+        );
 
-    const matchesPrice =
-      professional.ratePerMinute >= filters.priceRange[0] &&
-      professional.ratePerMinute <= filters.priceRange[1];
+      // Price filter
+      const matchesPrice =
+        professional.ratePerMinute >= filters.priceRange[0] &&
+        professional.ratePerMinute <= filters.priceRange[1];
 
-    const matchesRating = professional.rating >= filters.rating;
+      // Rating filter
+      const matchesRating = professional.rating >= filters.rating;
 
-    const matchesAvailability =
-      filters.availability === 'all' ||
-      (filters.availability === 'online' && professional.isOnline) ||
-      (filters.availability === 'quick-response' &&
-        professional.responseTime.includes('< 5'));
+      // Availability filter
+      const matchesAvailability =
+        filters.availability === 'all' ||
+        (filters.availability === 'online' && professional.isOnline) ||
+        (filters.availability === 'quick-response' &&
+          professional.responseTime.includes('< 5'));
 
-    return (
-      matchesSearch && matchesPrice && matchesRating && matchesAvailability
-    );
-  });
+      return (
+        matchesSearch && matchesPrice && matchesRating && matchesAvailability
+      );
+    });
+  }, [professionals, searchQuery, filters]);
 
   return (
     <SafeAreaView
@@ -67,12 +95,18 @@ export default function CategoryScreen() {
       <Header
         showLogo
         showBack
-        
         rightButtons={
           <TouchableOpacity
             style={[
               styles.headerIconButton,
-              { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
+              {
+                backgroundColor:
+                  theme.name === 'dark'
+                    ? theme.colors.surface
+                    : theme.name === 'light'
+                    ? theme.colors.brandPink
+                    : '#000000',
+              },
             ]}
             onPress={() => setFilterVisible(true)}
           >
@@ -82,32 +116,59 @@ export default function CategoryScreen() {
       />
 
       <SearchBar
-            value={searchQuery}
-            onChangeText={setSearchQuery}
+        value={searchQuery}
+        onChangeText={setSearchQuery}
         placeholder="Search professionals..."
         showResultsCount={true}
         resultsCount={filteredProfessionals.length}
-        resultsCountLabel={`${filteredProfessionals.length} ${categoryName.toLowerCase()} professionals`}
+        resultsCountLabel={`${
+          filteredProfessionals.length
+        } ${categoryName.toLowerCase()} professionals`}
       />
 
-      <FlatList
-        data={filteredProfessionals}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <ProfessionalCard professional={item} />}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
-              No professionals found
-            </Text>
-            <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
-              Try adjusting your search or filters to find more{' '}
-              {categoryName.toLowerCase()} professionals
-            </Text>
-          </View>
-        }
-      />
+      {professionalsLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
+            Loading professionals...
+          </Text>
+        </View>
+      ) : professionalsError ? (
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: theme.colors.error }]}>
+            Error loading professionals
+          </Text>
+          <Text
+            style={[styles.errorSubtext, { color: theme.colors.textMuted }]}
+          >
+            Please try again later
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredProfessionals}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <ProfessionalCard professional={item} />}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+                No professionals found
+              </Text>
+              <Text
+                style={[styles.emptyText, { color: theme.colors.textMuted }]}
+              >
+                {searchQuery ||
+                filters.rating > 0 ||
+                filters.availability !== 'all'
+                  ? `Try adjusting your search or filters to find more ${categoryName.toLowerCase()} professionals`
+                  : `No ${categoryName.toLowerCase()} professionals available yet`}
+              </Text>
+            </View>
+          }
+        />
+      )}
 
       <FilterModal
         visible={filterVisible}
@@ -123,7 +184,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-
   headerIconButton: {
     width: 40,
     height: 40,
@@ -131,9 +191,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  resultsCount: {
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
+    marginTop: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  errorText: {
+    fontSize: 18,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
   },
   listContent: {
     padding: 24,

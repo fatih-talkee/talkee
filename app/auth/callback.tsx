@@ -1,6 +1,7 @@
 /**
  * OAuth Callback Handler - WITH ACCOUNT LINKING (FINAL VERSION)
  * Handles OAuth redirects with multi-provider account linking support
+ * + Smart theme and language defaults
  */
 
 import { useEffect, useRef } from 'react';
@@ -8,6 +9,7 @@ import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/lib/toastService';
+import { UserPreferencesService } from '@/services/supabase/userPreferences.service';
 
 export default function AuthCallbackScreen() {
   const toast = useToast();
@@ -35,7 +37,6 @@ export default function AuthCallbackScreen() {
       } = await supabase.auth.getSession();
 
       if (error) {
-        console.error('OAuth callback error:', error);
         toast.error({
           title: 'Authentication Failed',
           message: error.message || 'Failed to complete sign in',
@@ -48,12 +49,6 @@ export default function AuthCallbackScreen() {
         const provider = session.user.app_metadata.provider || 'oauth';
         const oauthEmail = session.user.email;
         const oauthPhone = session.user.phone;
-
-        console.log('OAuth callback:', {
-          provider,
-          email: oauthEmail,
-          auth_id: session.user.id,
-        });
 
         // Check if user profile exists
         const { data: existingUser } = await supabase
@@ -97,7 +92,6 @@ export default function AuthCallbackScreen() {
             try {
               router.replace('/(tabs)');
             } catch (error) {
-              console.error('Navigation error:', error);
               // Fallback: try again after a short delay
               setTimeout(() => {
                 router.replace('/(tabs)');
@@ -105,8 +99,10 @@ export default function AuthCallbackScreen() {
             }
           }, 200);
         } else {
-          // ✅ New OAuth user - Create profile
-          console.log('Creating new profile for OAuth user...');
+          // ✅ New OAuth user - Create profile with smart defaults
+          // 🎨 Get smart defaults from device
+          const defaultTheme = UserPreferencesService.getDefaultTheme();
+          const defaultLanguage = UserPreferencesService.getDefaultLanguage();
 
           const { data: newUser, error: profileError } = await supabase
             .from('users')
@@ -125,20 +121,17 @@ export default function AuthCallbackScreen() {
                 null,
               oauth_providers: [provider],
               oauth_emails: { [provider]: oauthEmail },
+
+              // 🎨 Smart defaults based on device settings
+              theme_preference: defaultTheme,
+              language_preference: defaultLanguage,
+
               role: 'user',
             })
             .select()
             .single();
 
           if (profileError) {
-            console.error('Error creating profile:', profileError);
-            console.error('Profile error details:', {
-              code: profileError.code,
-              message: profileError.message,
-              details: profileError.details,
-              hint: profileError.hint,
-            });
-
             // Check for RLS policy violation (42501)
             if (
               profileError.code === '42501' ||
@@ -148,14 +141,6 @@ export default function AuthCallbackScreen() {
                 title: 'Permission Error',
                 message:
                   'Database security policy error. Please contact support.',
-              });
-
-              // Log for debugging
-              console.error('RLS POLICY ERROR:', {
-                user_id: session.user.id,
-                email: oauthEmail,
-                provider,
-                error_code: profileError.code,
               });
 
               router.replace('/auth/login');
@@ -186,8 +171,6 @@ export default function AuthCallbackScreen() {
             return;
           }
 
-          console.log('Profile created successfully:', newUser);
-
           toast.success({
             title: 'Welcome!',
             message: 'Your account has been created',
@@ -198,7 +181,6 @@ export default function AuthCallbackScreen() {
             try {
               router.replace('/(tabs)');
             } catch (error) {
-              console.error('Navigation error:', error);
               // Fallback: try again after a short delay
               setTimeout(() => {
                 router.replace('/(tabs)');
@@ -215,7 +197,6 @@ export default function AuthCallbackScreen() {
         router.replace('/auth/login');
       }
     } catch (error: any) {
-      console.error('Unexpected callback error:', error);
       toast.error({
         title: 'Error',
         message: 'An unexpected error occurred',

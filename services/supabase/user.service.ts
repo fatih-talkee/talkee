@@ -89,6 +89,98 @@ class UsersService {
   }
 
   /**
+   * Update user theme preference
+   * @param theme - 'light' | 'dark' | 'system' | 'green' | 'blue'
+   */
+  async updateTheme(theme: string): Promise<boolean> {
+    try {
+      const currentUser = await this.getCurrentUser();
+
+      if (!currentUser) {
+        console.error('Not authenticated');
+        return false;
+      }
+
+      const { error } = await supabase
+        .from('users')
+        .update({
+          theme_preference: theme,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', currentUser.id);
+
+      if (error) {
+        console.error('Error updating theme:', error);
+        return false;
+      }
+
+      console.log(`✅ Theme updated to: ${theme}`);
+      return true;
+    } catch (error) {
+      console.error('Error in updateTheme:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Update user language preference
+   * @param language - 'tr' | 'en' | 'de' | 'es' | 'fr'
+   */
+  async updateLanguage(language: string): Promise<boolean> {
+    try {
+      const currentUser = await this.getCurrentUser();
+
+      if (!currentUser) {
+        console.error('Not authenticated');
+        return false;
+      }
+
+      const { error } = await supabase
+        .from('users')
+        .update({
+          language_preference: language,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', currentUser.id);
+
+      if (error) {
+        console.error('Error updating language:', error);
+        return false;
+      }
+
+      console.log(`✅ Language updated to: ${language}`);
+      return true;
+    } catch (error) {
+      console.error('Error in updateLanguage:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get user preferences (theme + language)
+   */
+  async getUserPreferences(): Promise<{
+    theme: string;
+    language: string;
+  } | null> {
+    try {
+      const currentUser = await this.getCurrentUser();
+
+      if (!currentUser) {
+        return null;
+      }
+
+      return {
+        theme: currentUser.theme_preference || 'system',
+        language: currentUser.language_preference || 'tr',
+      };
+    } catch (error) {
+      console.error('Error in getUserPreferences:', error);
+      return null;
+    }
+  }
+
+  /**
    * Upload and update avatar
    */
   async updateAvatar(fileUri: string): Promise<string> {
@@ -281,6 +373,99 @@ class UsersService {
     } catch (error) {
       console.error('Error in checkUserExists:', error);
       return false;
+    }
+  }
+
+  /**
+   * Delete current user account (soft delete or hard delete)
+   * This will:
+   * 1. Delete user data from database
+   * 2. Sign out the user
+   * 3. Optionally delete auth user (requires admin access)
+   */
+  async deleteAccount(): Promise<{ success: boolean; error?: string }> {
+    try {
+      const currentUser = await this.getCurrentUser();
+
+      if (!currentUser) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      console.log('🗑️  Starting account deletion for user:', currentUser.id);
+
+      // 1. Delete related data first (CASCADE should handle this, but being explicit)
+      // Delete favorites
+      const { error: favoritesError } = await supabase
+        .from('favorites')
+        .delete()
+        .eq('user_id', currentUser.id);
+
+      if (favoritesError) {
+        console.warn('Error deleting favorites:', favoritesError);
+        // Continue anyway
+      }
+
+      // Delete blocked users
+      const { error: blockedError } = await supabase
+        .from('blocked_users')
+        .delete()
+        .or(
+          `user_id.eq.${currentUser.id},blocked_user_id.eq.${currentUser.id}`
+        );
+
+      if (blockedError) {
+        console.warn('Error deleting blocked users:', blockedError);
+        // Continue anyway
+      }
+
+      // Delete notifications
+      const { error: notificationsError } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('user_id', currentUser.id);
+
+      if (notificationsError) {
+        console.warn('Error deleting notifications:', notificationsError);
+        // Continue anyway
+      }
+
+      // 2. Delete user profile from database
+      const { error: dbError } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', currentUser.id);
+
+      if (dbError) {
+        console.error('Error deleting user from database:', dbError);
+        return {
+          success: false,
+          error: `Failed to delete user data: ${dbError.message}`,
+        };
+      }
+
+      console.log('✅ User data deleted successfully');
+
+      // 3. Sign out (this will clear the session)
+      const { error: signOutError } = await supabase.auth.signOut();
+
+      if (signOutError) {
+        console.error('Error signing out:', signOutError);
+        // Don't fail the deletion, just log it
+      }
+
+      console.log('✅ User signed out successfully');
+
+      // Note: We can't delete the auth user without admin/service role key
+      // The auth user will remain, but with no profile data
+      // In production, you might want to use a server-side function for this
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error in deleteAccount:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to delete account',
+      };
     }
   }
 

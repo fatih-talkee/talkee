@@ -1,24 +1,58 @@
-// hooks/useFavorites.ts
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { favoritesService } from '@/services/supabase';
-import { Professional } from '@/types/database.types';
+/**
+ * Favorites React Query Hooks
+ * Provides data fetching and mutations for favorites
+ */
+
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  UseQueryResult,
+} from '@tanstack/react-query';
+import { favoritesService } from '@/services/supabase/favorites.service';
+import {
+  FavoriteWithProfessional,
+  ProfessionalWithRelations,
+} from '@/types/database.types';
+
+// Query Keys
+export const favoritesKeys = {
+  all: ['favorites'] as const,
+  lists: () => [...favoritesKeys.all, 'list'] as const,
+  check: (professionalId: string) =>
+    [...favoritesKeys.all, 'check', professionalId] as const,
+};
 
 /**
- * Get user's favorite professionals
- * Cache: 2 minutes (user-specific, changes more frequently)
+ * Hook: Get user's favorite professionals
  */
-export function useFavorites() {
-  return useQuery({
-    queryKey: ['favorites'],
-    queryFn: () => favoritesService.getFavorites(),
-    staleTime: 1000 * 60 * 2, // 2 minutes
-    gcTime: 1000 * 60 * 10, // 10 minutes
+export function useFavorites(): UseQueryResult<ProfessionalWithRelations[]> {
+  return useQuery<ProfessionalWithRelations[]>({
+    queryKey: favoritesKeys.lists(),
+    queryFn: async (): Promise<ProfessionalWithRelations[]> => {
+      const favorites = await favoritesService.getFavorites();
+      return favorites as unknown as ProfessionalWithRelations[];
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 10 * 60 * 1000,
   });
 }
 
 /**
- * Add professional to favorites
- * Optimistic update: immediately update UI, rollback on error
+ * Hook: Check if professional is favorited
+ */
+export function useIsFavorite(professionalId: string) {
+  return useQuery({
+    queryKey: favoritesKeys.check(professionalId),
+    queryFn: () => favoritesService.isFavorite(professionalId),
+    enabled: !!professionalId,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook: Add to favorites
  */
 export function useAddFavorite() {
   const queryClient = useQueryClient();
@@ -26,37 +60,17 @@ export function useAddFavorite() {
   return useMutation({
     mutationFn: (professionalId: string) =>
       favoritesService.addFavorite(professionalId),
-    onMutate: async (professionalId) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['favorites'] });
-
-      // Snapshot previous value
-      const previousFavorites = queryClient.getQueryData(['favorites']);
-
-      // Optimistically update
-      queryClient.setQueryData(['favorites'], (old: any) => {
-        // This will be updated when the real data comes back
-        return old;
-      });
-
-      return { previousFavorites };
-    },
-    onError: (err, professionalId, context) => {
-      // Rollback on error
-      if (context?.previousFavorites) {
-        queryClient.setQueryData(['favorites'], context.previousFavorites);
-      }
-    },
-    onSettled: () => {
-      // Refetch to ensure consistency
-      queryClient.invalidateQueries({ queryKey: ['favorites'] });
+    onSuccess: (_, professionalId) => {
+      // Invalidate favorites list
+      queryClient.invalidateQueries({ queryKey: favoritesKeys.lists() });
+      // Update specific favorite check
+      queryClient.setQueryData(favoritesKeys.check(professionalId), true);
     },
   });
 }
 
 /**
- * Remove professional from favorites
- * Optimistic update: immediately remove from UI, rollback on error
+ * Hook: Remove from favorites
  */
 export function useRemoveFavorite() {
   const queryClient = useQueryClient();
@@ -64,42 +78,30 @@ export function useRemoveFavorite() {
   return useMutation({
     mutationFn: (professionalId: string) =>
       favoritesService.removeFavorite(professionalId),
-    onMutate: async (professionalId) => {
-      await queryClient.cancelQueries({ queryKey: ['favorites'] });
-
-      const previousFavorites = queryClient.getQueryData(['favorites']);
-
-      // Optimistically remove
-      queryClient.setQueryData(['favorites'], (old: any) => {
-        if (!old) return old;
-        return old.filter(
-          (fav: any) => fav.professional_id !== professionalId
-        );
-      });
-
-      return { previousFavorites };
-    },
-    onError: (err, professionalId, context) => {
-      if (context?.previousFavorites) {
-        queryClient.setQueryData(['favorites'], context.previousFavorites);
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['favorites'] });
+    onSuccess: (_, professionalId) => {
+      // Invalidate favorites list
+      queryClient.invalidateQueries({ queryKey: favoritesKeys.lists() });
+      // Update specific favorite check
+      queryClient.setQueryData(favoritesKeys.check(professionalId), false);
     },
   });
 }
 
 /**
- * Check if a professional is in favorites
+ * Hook: Toggle favorite
  */
-export function useIsFavorite(professionalId: string) {
-  const { data: favorites = [] } = useFavorites();
+export function useToggleFavorite() {
+  const queryClient = useQueryClient();
 
-  return {
-    data: favorites.some((fav: any) => fav.professional_id === professionalId),
-    isLoading: false,
-    isError: false,
-  };
+  return useMutation({
+    mutationFn: (professionalId: string) =>
+      favoritesService.toggleFavorite(professionalId),
+    onSuccess: (_, professionalId) => {
+      // Invalidate both favorites list and specific check
+      queryClient.invalidateQueries({ queryKey: favoritesKeys.lists() });
+      queryClient.invalidateQueries({
+        queryKey: favoritesKeys.check(professionalId),
+      });
+    },
+  });
 }
-

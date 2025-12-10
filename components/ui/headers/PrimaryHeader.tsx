@@ -24,6 +24,7 @@ interface PrimaryHeaderProps {
   onLogoPress?: () => void;
   showBack?: boolean;
   backRoute?: string;
+  onBackPress?: () => void;
 }
 
 export function PrimaryHeader({
@@ -33,6 +34,7 @@ export function PrimaryHeader({
   onLogoPress,
   showBack = false,
   backRoute,
+  onBackPress,
 }: PrimaryHeaderProps) {
   const { theme } = useTheme();
   const router = useRouter();
@@ -47,6 +49,10 @@ export function PrimaryHeader({
     : [];
 
   const handleBack = () => {
+    if (onBackPress) {
+      onBackPress();
+      return;
+    }
     if (backRoute) {
       router.push(backRoute as any);
       return;

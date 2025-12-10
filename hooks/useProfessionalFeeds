@@ -1,0 +1,189 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type {
+  FeedQueryParams,
+  CreateFeedRequest,
+  UpdateFeedRequest,
+} from '@/types/database.types';
+import { professionalFeedsService } from '@/services/supabase/professionalFeeds.service';
+
+// ============================================
+// QUERY KEYS
+// ============================================
+
+export const feedsKeys = {
+  all: ['feeds'] as const,
+  lists: () => [...feedsKeys.all, 'list'] as const,
+  list: (params?: FeedQueryParams) => [...feedsKeys.lists(), params] as const,
+  details: () => [...feedsKeys.all, 'detail'] as const,
+  detail: (id: string) => [...feedsKeys.details(), id] as const,
+  trending: () => [...feedsKeys.all, 'trending'] as const,
+  byProfessional: (professionalId: string) =>
+    [...feedsKeys.all, 'professional', professionalId] as const,
+};
+
+// ============================================
+// FEED QUERIES
+// ============================================
+
+/**
+ * Hook to fetch all feeds (for home page)
+ * @example
+ * const { data, isLoading } = useFeeds({ limit: 20 });
+ */
+export function useFeeds(params?: FeedQueryParams) {
+  return useQuery({
+    queryKey: feedsKeys.list(params),
+    queryFn: () => professionalFeedsService.getFeeds(params),
+    staleTime: 30 * 1000, // 30 seconds
+  });
+}
+
+/**
+ * Hook to fetch a single feed by ID
+ * @example
+ * const { data, isLoading } = useFeed('feed-uuid');
+ */
+export function useFeed(feedId: string) {
+  return useQuery({
+    queryKey: feedsKeys.detail(feedId),
+    queryFn: () => professionalFeedsService.getFeedById(feedId),
+    enabled: !!feedId,
+    staleTime: 1 * 60 * 1000, // 1 minute
+  });
+}
+
+/**
+ * Hook to fetch feeds by professional
+ * @example
+ * const { data, isLoading } = useProfessionalFeeds('professional-uuid');
+ */
+export function useProfessionalFeeds(
+  professionalId: string,
+  limit: number = 20
+) {
+  return useQuery({
+    queryKey: feedsKeys.byProfessional(professionalId),
+    queryFn: () =>
+      professionalFeedsService.getFeeds({
+        professional_id: professionalId,
+        limit,
+      }),
+    enabled: !!professionalId,
+    staleTime: 30 * 1000, // 30 seconds
+  });
+}
+
+/**
+ * Hook to fetch trending feeds
+ * @example
+ * const { data, isLoading } = useTrendingFeeds(10);
+ */
+export function useTrendingFeeds(limit: number = 10) {
+  return useQuery({
+    queryKey: feedsKeys.trending(),
+    queryFn: () => professionalFeedsService.getTrendingFeeds(limit),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+/**
+ * Hook to get feed count for a professional
+ * @example
+ * const { data: count } = useFeedCount('professional-uuid');
+ */
+export function useFeedCount(professionalId: string) {
+  return useQuery({
+    queryKey: [...feedsKeys.byProfessional(professionalId), 'count'],
+    queryFn: () => professionalFeedsService.getFeedCount(professionalId),
+    enabled: !!professionalId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+// ============================================
+// FEED MUTATIONS
+// ============================================
+
+/**
+ * Hook to create a new feed post
+ * @example
+ * const { mutate: createFeed } = useCreateFeed();
+ * createFeed({ professionalId: 'uuid', content: 'Hello!' });
+ */
+export function useCreateFeed() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      professionalId,
+      data,
+    }: {
+      professionalId: string;
+      data: CreateFeedRequest;
+    }) => professionalFeedsService.createFeed(professionalId, data),
+    onSuccess: (result, variables) => {
+      // Invalidate all feed lists
+      queryClient.invalidateQueries({ queryKey: feedsKeys.lists() });
+      // Invalidate professional's feeds
+      queryClient.invalidateQueries({
+        queryKey: feedsKeys.byProfessional(variables.professionalId),
+      });
+      // Invalidate trending feeds
+      queryClient.invalidateQueries({ queryKey: feedsKeys.trending() });
+    },
+  });
+}
+
+/**
+ * Hook to update a feed post
+ * @example
+ * const { mutate: updateFeed } = useUpdateFeed();
+ * updateFeed({ feedId: 'uuid', data: { content: 'Updated!' } });
+ */
+export function useUpdateFeed() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      feedId,
+      data,
+    }: {
+      feedId: string;
+      data: UpdateFeedRequest;
+    }) => professionalFeedsService.updateFeed(feedId, data),
+    onSuccess: (result, variables) => {
+      // Invalidate specific feed
+      queryClient.invalidateQueries({
+        queryKey: feedsKeys.detail(variables.feedId),
+      });
+      // Invalidate all feed lists
+      queryClient.invalidateQueries({ queryKey: feedsKeys.lists() });
+      // Invalidate trending if pinned status changed
+      if (variables.data.is_pinned !== undefined) {
+        queryClient.invalidateQueries({ queryKey: feedsKeys.trending() });
+      }
+    },
+  });
+}
+
+/**
+ * Hook to delete a feed post
+ * @example
+ * const { mutate: deleteFeed } = useDeleteFeed();
+ * deleteFeed('feed-uuid');
+ */
+export function useDeleteFeed() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (feedId: string) => professionalFeedsService.deleteFeed(feedId),
+    onSuccess: (result, feedId) => {
+      // Remove from cache
+      queryClient.removeQueries({ queryKey: feedsKeys.detail(feedId) });
+      // Invalidate all feed lists
+      queryClient.invalidateQueries({ queryKey: feedsKeys.lists() });
+      // Invalidate trending feeds
+      queryClient.invalidateQueries({ queryKey: feedsKeys.trending() });
+    },
+  });
+}

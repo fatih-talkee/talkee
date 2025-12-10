@@ -68,7 +68,14 @@
           }
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Talkee to access your photos to update your profile picture.",
+          "cameraPermission": "Allow Talkee to use your camera to take profile pictures."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

@@ -14,14 +14,52 @@ import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { setLanguage } from '@/lib/i18n';
 import { ChevronLeft, Languages, Check } from 'lucide-react-native';
+import { usersService } from '@/services/supabase';
+import { useToast } from '@/lib/toastService';
 
 export default function LanguageSettings() {
   const { t, i18n } = useTranslation();
   const { theme } = useTheme();
+  const toast = useToast();
+
+  const handleLanguageChange = async (languageCode: string) => {
+    try {
+      // 1. Update UI immediately (optimistic update)
+      await setLanguage(languageCode);
+
+      // 2. Update database in background
+      const success = await usersService.updateLanguage(languageCode);
+
+      if (success) {
+        toast.success({
+          title: 'Language Updated',
+          message: 'Your language preference has been saved',
+        });
+      } else {
+        // Revert on failure (optional - UI already changed)
+        toast.error({
+          title: 'Update Failed',
+          message: 'Failed to save language preference',
+        });
+      }
+    } catch (error) {
+      console.error('Error updating language:', error);
+      toast.error({
+        title: 'Error',
+        message: 'Failed to update language',
+      });
+    }
+  };
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.name === 'dark' ? '#000000' : theme.colors.surface }]}
+      style={[
+        styles.container,
+        {
+          backgroundColor:
+            theme.name === 'dark' ? '#000000' : theme.colors.surface,
+        },
+      ]}
     >
       <Header showLogo showBack backRoute="/(tabs)/profile" />
 
@@ -33,7 +71,7 @@ export default function LanguageSettings() {
           <View style={styles.sectionHeader}>
             <Languages size={20} color={theme.colors.accent} />
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              {t('language.choose_title')}
+              Choose Language
             </Text>
           </View>
           <Text
@@ -42,7 +80,7 @@ export default function LanguageSettings() {
               { color: theme.colors.textMuted },
             ]}
           >
-            {t('language.choose_description')}
+            Select your preferred language for the app interface
           </Text>
         </View>
         <Card style={styles.sectionCard}>
@@ -52,17 +90,19 @@ export default function LanguageSettings() {
             {(() => {
               const resources = (i18n.options?.resources as any) || {};
               const codes = Object.keys(resources);
-              const labels =
-                (t('language.names', { returnObjects: true }) as Record<
-                  string,
-                  string
-                >) || {};
+              const labels: Record<string, string> = {
+                en: 'English',
+                tr: 'Türkçe',
+                es: 'Español',
+                de: 'Deutsch',
+                fr: 'Français',
+              };
               return codes.map((code, idx) => {
                 const selected = i18n.language.startsWith(code);
                 return (
                   <TouchableOpacity
                     key={code}
-                    onPress={() => setLanguage(code)}
+                    onPress={() => handleLanguageChange(code)}
                     style={[
                       styles.langRow,
                       idx < codes.length - 1 && {
@@ -100,6 +140,19 @@ export default function LanguageSettings() {
             })()}
           </View>
         </Card>
+
+        <Card style={[styles.infoCard, { backgroundColor: theme.colors.card }]}>
+          <View style={styles.infoHeader}>
+            <Text style={[styles.infoTitle, { color: theme.colors.text }]}>
+              Language Information
+            </Text>
+          </View>
+          <Text style={[styles.infoText, { color: theme.colors.textMuted }]}>
+            • Language preference is saved to your account{'\n'}• Changes apply
+            immediately to all text{'\n'}• Your preference syncs across all
+            devices{'\n'}• App restart not required
+          </Text>
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
@@ -123,6 +176,7 @@ const styles = StyleSheet.create({
   },
   sectionCard: {
     borderRadius: 16,
+    marginBottom: 24,
   },
   section: {
     marginBottom: 24,
@@ -174,6 +228,21 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  infoCard: {
+    marginBottom: 40,
+  },
+  infoHeader: {
+    marginBottom: 12,
+  },
+  infoTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+  },
+  infoText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    lineHeight: 20,
   },
   preview: {
     marginTop: 16,

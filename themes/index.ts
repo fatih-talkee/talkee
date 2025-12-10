@@ -137,91 +137,9 @@ export const darkTheme: Theme = {
   },
 };
 
-export const greenTheme: Theme = {
-  name: 'green',
-  displayName: 'Nature Green',
-  colors: {
-    background: '#f0fdf4',
-    surface: '#dcfce7',
-    card: '#ffffff',
-
-    creditColor: '#ffffff',
-
-    text: '#14532d',
-    textSecondary: '#166534',
-    textMuted: '#4ade80',
-
-    primary: '#16a34a',
-    primaryLight: '#22c55e',
-    primaryDark: '#15803d',
-
-    accent: '#eab308',
-    accentLight: '#fef3c7',
-
-    success: '#10b981',
-    warning: '#f59e0b',
-    error: '#ef4444',
-    info: '#3b82f6',
-
-    border: '#bbf7d0',
-    divider: '#f0fdf4',
-
-    overlay: 'rgba(0, 0, 0, 0.5)',
-    disabled: '#9ca3af',
-
-    tabBarBackground: '#ffffff',
-    tabBarBorder: '#bbf7d0',
-    tabBarActive: '#16a34a',
-    tabBarInactive: '#4ade80',
-
-    brandPink: '#d60f83',
-  },
-};
-
-export const blueTheme: Theme = {
-  name: 'blue',
-  displayName: 'Ocean Blue',
-  colors: {
-    background: '#f0f9ff',
-    surface: '#e0f2fe',
-    card: '#ffffff',
-
-    text: '#0c4a6e',
-    textSecondary: '#075985',
-    textMuted: '#0284c7',
-
-    primary: '#0284c7',
-    primaryLight: '#0ea5e9',
-    primaryDark: '#0369a1',
-
-    accent: '#f59e0b',
-    accentLight: '#fef3c7',
-
-    success: '#10b981',
-    warning: '#f59e0b',
-    error: '#ef4444',
-    info: '#3b82f6',
-
-    border: '#bae6fd',
-    divider: '#f0f9ff',
-
-    overlay: 'rgba(0, 0, 0, 0.5)',
-    disabled: '#9ca3af',
-
-    tabBarBackground: '#ffffff',
-    tabBarBorder: '#bae6fd',
-    tabBarActive: '#0284c7',
-    tabBarInactive: '#0284c7',
-
-    brandPink: '#d60f83',
-  },
-};
-
 export const themes = {
   light: lightTheme,
   dark: darkTheme,
-  green: greenTheme,
-  blue: blueTheme,
 };
 
 export type ThemeName = keyof typeof themes;

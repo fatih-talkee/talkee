@@ -1,73 +1,158 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView } from 'react-native';
-import { router } from 'expo-router';
-import { ArrowLeft, Check, Palette } from 'lucide-react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  ScrollView,
+} from 'react-native';
+import { Check, Palette } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { useTheme } from '@/contexts/ThemeContext';
+import { usersService } from '@/services/supabase';
+import { useToast } from '@/lib/toastService';
 
 export default function ThemeSettingsScreen() {
   const { theme, themeName, setTheme, availableThemes } = useTheme();
+  const toast = useToast();
 
   const getThemePreview = (name: string) => {
     const themeColors = {
       light: ['#ffffff', '#f8fafc', '#007AFF'],
       dark: ['#1C1C1E', '#2C2C2E', '#007AFF'],
-      green: ['#f0fdf4', '#dcfce7', '#16a34a'],
-      blue: ['#f0f9ff', '#e0f2fe', '#0284c7'],
     };
     return themeColors[name as keyof typeof themeColors] || themeColors.dark;
   };
 
+  const handleThemeChange = async (themeNameStr: string) => {
+    try {
+      // Type assertion for setTheme (it expects literal types)
+      const themeName = themeNameStr as 'dark' | 'light';
+
+      // 1. Update UI immediately (optimistic update)
+      setTheme(themeName);
+
+      // 2. Update database in background
+      const success = await usersService.updateTheme(themeName);
+
+      if (success) {
+        toast.success({
+          title: 'Theme Updated',
+          message: `Theme changed to ${themeName}`,
+        });
+      } else {
+        // Revert on failure (optional - UI already changed)
+        toast.error({
+          title: 'Update Failed',
+          message: 'Failed to save theme preference',
+        });
+      }
+    } catch (error) {
+      console.error('Error updating theme:', error);
+      toast.error({
+        title: 'Error',
+        message: 'Failed to update theme',
+      });
+    }
+  };
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.name === 'dark' ? '#000000' : theme.colors.surface }]}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          backgroundColor:
+            theme.name === 'dark' ? '#000000' : theme.colors.surface,
+        },
+      ]}
+    >
       <Header showLogo showBack backRoute="/(tabs)/profile" />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Palette size={20} color={theme.colors.accent} />
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Choose Theme</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Choose Theme
+            </Text>
           </View>
-          <Text style={[styles.sectionDescription, { color: theme.colors.textMuted }]}>
-            Select your preferred color scheme. Your choice will be saved and applied across the entire app.
+          <Text
+            style={[
+              styles.sectionDescription,
+              { color: theme.colors.textMuted },
+            ]}
+          >
+            Select your preferred color scheme. Your choice will be saved and
+            applied across the entire app.
           </Text>
         </View>
 
-        <Card style={[styles.themesCard, { backgroundColor: theme.colors.card }]}>
+        <Card
+          style={[styles.themesCard, { backgroundColor: theme.colors.card }]}
+        >
           {availableThemes.map((themeOption, index) => {
             const isSelected = themeName === themeOption.name;
             const previewColors = getThemePreview(themeOption.name);
-            
+
             return (
               <TouchableOpacity
                 key={themeOption.name}
                 style={[
                   styles.themeOption,
-                  index === availableThemes.length - 1 && styles.lastThemeOption,
-                  { borderBottomColor: theme.colors.divider }
+                  index === availableThemes.length - 1 &&
+                    styles.lastThemeOption,
+                  { borderBottomColor: theme.colors.divider },
                 ]}
-                onPress={() => setTheme(themeOption.name)}
+                onPress={() => handleThemeChange(themeOption.name)}
               >
                 <View style={styles.themeLeft}>
                   <View style={styles.themePreview}>
-                    <View style={[styles.previewColor, { backgroundColor: previewColors[0] }]} />
-                    <View style={[styles.previewColor, { backgroundColor: previewColors[1] }]} />
-                    <View style={[styles.previewColor, { backgroundColor: previewColors[2] }]} />
+                    <View
+                      style={[
+                        styles.previewColor,
+                        { backgroundColor: previewColors[0] },
+                      ]}
+                    />
+                    <View
+                      style={[
+                        styles.previewColor,
+                        { backgroundColor: previewColors[1] },
+                      ]}
+                    />
+                    <View
+                      style={[
+                        styles.previewColor,
+                        { backgroundColor: previewColors[2] },
+                      ]}
+                    />
                   </View>
                   <View style={styles.themeInfo}>
-                    <Text style={[styles.themeName, { color: theme.colors.text }]}>
+                    <Text
+                      style={[styles.themeName, { color: theme.colors.text }]}
+                    >
                       {themeOption.displayName}
                     </Text>
-                    <Text style={[styles.themeDescription, { color: theme.colors.textMuted }]}>
+                    <Text
+                      style={[
+                        styles.themeDescription,
+                        { color: theme.colors.textMuted },
+                      ]}
+                    >
                       {getThemeDescription(themeOption.name)}
                     </Text>
                   </View>
                 </View>
-                
+
                 <View style={styles.themeRight}>
                   {isSelected && (
-                    <View style={[styles.selectedIndicator, { backgroundColor: theme.colors.primary }]}>
+                    <View
+                      style={[
+                        styles.selectedIndicator,
+                        { backgroundColor: theme.colors.primary },
+                      ]}
+                    >
                       <Check size={16} color="#ffffff" />
                     </View>
                   )}
@@ -79,13 +164,15 @@ export default function ThemeSettingsScreen() {
 
         <Card style={[styles.infoCard, { backgroundColor: theme.colors.card }]}>
           <View style={styles.infoHeader}>
-            <Text style={[styles.infoTitle, { color: theme.colors.text }]}>Theme Information</Text>
+            <Text style={[styles.infoTitle, { color: theme.colors.text }]}>
+              Theme Information
+            </Text>
           </View>
           <Text style={[styles.infoText, { color: theme.colors.textMuted }]}>
-            • Themes are automatically saved to your device{'\n'}
-            • Changes apply instantly across all screens{'\n'}
-            • Your preference syncs when you reinstall the app{'\n'}
-            • Some themes may affect readability in different lighting conditions
+            • Themes are automatically saved to your account{'\n'}• Changes
+            apply instantly across all screens{'\n'}• Your preference syncs
+            across all devices{'\n'}• Some themes may affect readability in
+            different lighting conditions
           </Text>
         </Card>
       </ScrollView>
@@ -97,10 +184,11 @@ function getThemeDescription(themeName: string): string {
   const descriptions = {
     light: 'Clean and bright interface',
     dark: 'Easy on the eyes in low light',
-    green: 'Nature-inspired calming colors',
-    blue: 'Professional ocean-inspired palette',
   };
-  return descriptions[themeName as keyof typeof descriptions] || 'Custom color scheme';
+  return (
+    descriptions[themeName as keyof typeof descriptions] ||
+    'Custom color scheme'
+  );
 }
 
 const styles = StyleSheet.create({
