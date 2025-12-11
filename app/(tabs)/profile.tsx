@@ -62,7 +62,7 @@ export default function ProfileScreen() {
   const toast = useToast();
 
   // ✅ Use real profile data
-  const { user, stats, isProfessional, isLoading } = useProfile();
+  const { user, stats, isProfessional, professional, isLoading, profileData } = useProfile();
 
   // ✅ Format date helper
   const formatMemberSince = (date: string) => {
@@ -601,8 +601,23 @@ export default function ProfileScreen() {
       <ShareProfileModal
         visible={shareModalVisible}
         onClose={() => setShareModalVisible(false)}
-        username="milavictoria"
-        userId="123"
+        userId={user.id}
+        username={user.name}
+        professionalData={
+          isProfessional && professional
+            ? {
+                id: professional.id,
+                name: user.name,
+                title: professional.title || user.name,
+                avatar: user.avatar_url || '',
+                rating: 0, // Rating will be calculated from reviews if needed
+                totalCalls: professional.total_calls || 0,
+                isVerified: professional.is_verified || false,
+                ratePerMinute: Number(professional.rate_per_minute) || 0,
+                specialties: professional.specialties || [],
+              }
+            : undefined
+        }
       />
 
       <AvatarUploadModal

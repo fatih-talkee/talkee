@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ import {
   Briefcase,
   GraduationCap,
   Award,
+  Pin,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { TabButtons } from '@/components/ui/TabButtons';
@@ -36,9 +37,15 @@ import { ShareProfileModal } from '@/components/profile/ShareProfileModal';
 // ✅ API HOOKS
 import { useProfessional } from '@/hooks/useProfessionals';
 import { useIsFavorite, useToggleFavorite } from '@/hooks/useFavorites';
+import {
+  useFeedCount,
+  useProfessionalFeeds,
+} from '@/hooks/useProfessionalFeeds';
+import { professionalsService } from '@/services/supabase/professionals.service';
+import { useQuery } from '@tanstack/react-query';
+import type { Availability } from '@/types/database.types';
 
-// ✅ TYPE ADAPTERS
-import { adaptProfessional, UIProfessional } from '@/utils/typeAdapters';
+// ✅ TYPE ADAPTERS (not needed here, we use ProfessionalWithRelations directly)
 import { ProfessionalWithRelations } from '@/types/database.types';
 
 type TabType = 'feed' | 'about' | 'availability' | 'cv';
@@ -56,18 +63,205 @@ export default function ProfessionalProfileScreen() {
     error,
   } = useProfessional(id as string);
 
+  // ✅ Fetch feed count
+  const { data: feedCountData = 0 } = useFeedCount(id as string);
+
+  // ✅ Fetch feeds
+  const { data: feedsResponse, isLoading: feedsLoading } = useProfessionalFeeds(
+    id as string,
+    20
+  );
+  const feedsData = feedsResponse?.feeds || [];
+
+  // ✅ Fetch availabilities
+  const { data: availabilitiesData = [] } = useQuery<Availability[]>({
+    queryKey: ['professionals', id, 'availabilities'],
+    queryFn: () =>
+      professionalsService.getProfessionalAvailabilities(id as string),
+    enabled: !!id,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+  // Group availabilities by type and days (moved outside renderTabContent to fix hooks order)
+  const groupedAvailabilities = useMemo(() => {
+    const groups: {
+      [key: string]: Availability[];
+    } = {};
+
+    availabilitiesData.forEach((avail) => {
+      if (avail.available_at === 'every' && avail.days) {
+        // Group by days and time
+        const daysKey = [...avail.days].sort().join(',');
+        const timeKey = `${avail.start_hour}-${avail.end_hour}`;
+        const priceKey = avail.price_per_minute.toString();
+        const groupKey = `${daysKey}|${timeKey}|${priceKey}`;
+
+        if (!groups[groupKey]) {
+          groups[groupKey] = [];
+        }
+        groups[groupKey].push(avail);
+      } else if (avail.available_at === 'specific') {
+        // Specific dates as individual groups
+        const groupKey = `specific-${avail.id}`;
+        groups[groupKey] = [avail];
+      }
+    });
+
+    return Object.values(groups);
+  }, [availabilitiesData]);
+
   // ✅ Check if favorited
   const { data: isFavorite = false } = useIsFavorite(id as string);
+
+  // Check for currently active availability
+  const currentAvailability = useMemo(() => {
+    if (availabilitiesData.length === 0) return null;
+
+    const now = new Date();
+    const currentDay = now.toLocaleDateString('en-US', { weekday: 'long' });
+    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now
+      .getMinutes()
+      .toString()
+      .padStart(2, '0')}`;
+    const currentDate = now.toISOString().split('T')[0];
+
+    // Helper function to compare times (HH:MM format)
+    const compareTimes = (time1: string, time2: string): number => {
+      const [h1, m1] = time1.split(':').map(Number);
+      const [h2, m2] = time2.split(':').map(Number);
+      const minutes1 = h1 * 60 + m1;
+      const minutes2 = h2 * 60 + m2;
+      return minutes1 - minutes2;
+    };
+
+    for (const avail of availabilitiesData) {
+      if (
+        avail.available_at === 'every' &&
+        avail.days &&
+        avail.days.length > 0
+      ) {
+        // Check if current day is in the days array
+        const dayMatch = avail.days.some(
+          (day) => day.toLowerCase() === currentDay.toLowerCase()
+        );
+
+        if (dayMatch) {
+          // Check if current time is within the availability window
+          const timeComparisonStart = compareTimes(
+            currentTime,
+            avail.start_hour
+          );
+          const timeComparisonEnd = compareTimes(currentTime, avail.end_hour);
+
+          if (timeComparisonStart >= 0 && timeComparisonEnd < 0) {
+            // Calculate remaining minutes
+            const [endHour, endMin] = avail.end_hour.split(':').map(Number);
+            const [currentHour, currentMin] = currentTime
+              .split(':')
+              .map(Number);
+            const endMinutes = endHour * 60 + endMin;
+            const currentMinutes = currentHour * 60 + currentMin;
+            const remainingMinutes = endMinutes - currentMinutes;
+
+            return {
+              availability: avail,
+              remainingMinutes,
+              isActive: true,
+            };
+          }
+        }
+      } else if (avail.available_at === 'specific' && avail.date) {
+        if (avail.date === currentDate) {
+          // Check if current time is within the availability window
+          const timeComparisonStart = compareTimes(
+            currentTime,
+            avail.start_hour
+          );
+          const timeComparisonEnd = compareTimes(currentTime, avail.end_hour);
+
+          if (timeComparisonStart >= 0 && timeComparisonEnd < 0) {
+            // Calculate remaining minutes
+            const [endHour, endMin] = avail.end_hour.split(':').map(Number);
+            const [currentHour, currentMin] = currentTime
+              .split(':')
+              .map(Number);
+            const endMinutes = endHour * 60 + endMin;
+            const currentMinutes = currentHour * 60 + currentMin;
+            const remainingMinutes = endMinutes - currentMinutes;
+
+            return {
+              availability: avail,
+              remainingMinutes,
+              isActive: true,
+            };
+          }
+        }
+      }
+    }
+    return null;
+  }, [availabilitiesData]);
+
+  const [remainingTime, setRemainingTime] = useState<number | null>(
+    currentAvailability?.remainingMinutes || null
+  );
+
+  // Update remaining time when currentAvailability changes
+  useEffect(() => {
+    if (currentAvailability) {
+      setRemainingTime(currentAvailability.remainingMinutes);
+    } else {
+      setRemainingTime(null);
+    }
+  }, [currentAvailability]);
+
+  // Update remaining time every minute
+  useEffect(() => {
+    if (!currentAvailability) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const now = new Date();
+      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now
+        .getMinutes()
+        .toString()
+        .padStart(2, '0')}`;
+      const [endHour, endMin] = currentAvailability.availability.end_hour
+        .split(':')
+        .map(Number);
+      const [currentHour, currentMin] = currentTime.split(':').map(Number);
+      const endMinutes = endHour * 60 + endMin;
+      const currentMinutes = currentHour * 60 + currentMin;
+      const remaining = endMinutes - currentMinutes;
+
+      if (remaining > 0) {
+        setRemainingTime(remaining);
+      } else {
+        setRemainingTime(null);
+      }
+    }, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, [currentAvailability]);
+
+  // Helper function to format remaining time
+  const formatRemainingTime = (minutes: number) => {
+    if (minutes < 60) {
+      return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} left`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (mins === 0) {
+      return `${hours} ${hours === 1 ? 'hour' : 'hours'} left`;
+    }
+    return `${hours}h ${mins}m left`;
+  };
 
   // ✅ Toggle favorite mutation
   const toggleFavoriteMutation = useToggleFavorite();
 
-  // ✅ Convert to UI format
-  const professional = professionalData
-    ? adaptProfessional(
-        professionalData as unknown as ProfessionalWithRelations
-      )
-    : null;
+  // ✅ Use professional data directly (no need to adapt)
+  const professional = professionalData || null;
 
   const handleToggleFavorite = async () => {
     try {
@@ -124,107 +318,563 @@ export default function ProfessionalProfileScreen() {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'feed':
+        if (feedsLoading) {
+          return (
+            <View style={styles.feedContainer}>
+              <View style={styles.emptyState}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text
+                  style={[
+                    styles.emptyStateText,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  Loading posts...
+                </Text>
+              </View>
+            </View>
+          );
+        }
+
+        if (feedsData.length === 0) {
+          return (
+            <View style={styles.feedContainer}>
+              <View style={styles.emptyState}>
+                <MessageCircle
+                  size={48}
+                  color={theme.colors.textMuted}
+                  strokeWidth={1.5}
+                />
+                <Text
+                  style={[
+                    styles.emptyStateText,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  No posts yet
+                </Text>
+                <Text
+                  style={[
+                    styles.emptyStateSubtext,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  This professional hasn't shared any posts yet.
+                </Text>
+              </View>
+            </View>
+          );
+        }
+
         return (
           <View style={styles.feedContainer}>
-            <View style={styles.emptyState}>
-              <MessageCircle
-                size={48}
-                color={theme.colors.textMuted}
-                strokeWidth={1.5}
-              />
-              <Text
-                style={[
-                  styles.emptyStateText,
-                  { color: theme.colors.textMuted },
-                ]}
-              >
-                Feed feature coming soon
-              </Text>
-            </View>
+            {feedsData.map((feed: any) => {
+              // Calculate time ago
+              const now = new Date();
+              const feedDate = new Date(feed.created_at);
+              const diffInMs = now.getTime() - feedDate.getTime();
+              const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+              const diffInDays = Math.floor(diffInHours / 24);
+
+              let timeAgo = '';
+              if (diffInHours < 1) {
+                const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+                timeAgo =
+                  diffInMinutes <= 1
+                    ? 'Just now'
+                    : `${diffInMinutes} minutes ago`;
+              } else if (diffInHours < 24) {
+                timeAgo = `${diffInHours} ${
+                  diffInHours === 1 ? 'hour' : 'hours'
+                } ago`;
+              } else if (diffInDays < 7) {
+                timeAgo = `${diffInDays} ${
+                  diffInDays === 1 ? 'day' : 'days'
+                } ago`;
+              } else {
+                timeAgo = feedDate.toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                });
+              }
+
+              return (
+                <Card
+                  key={feed.id}
+                  style={[
+                    styles.feedCard,
+                    feed.is_pinned && {
+                      borderLeftWidth: 3,
+                      borderLeftColor: theme.colors.accent,
+                    },
+                  ]}
+                >
+                  <View style={styles.feedHeader}>
+                    <View style={styles.feedAuthorRow}>
+                      <Image
+                        source={{
+                          uri:
+                            feed.professional_avatar ||
+                            professional.users?.avatar_url ||
+                            'https://via.placeholder.com/150',
+                        }}
+                        style={styles.feedAvatar}
+                      />
+                      <View style={styles.feedAuthorInfo}>
+                        <View style={styles.feedAuthorNameRow}>
+                          <Text
+                            style={[
+                              styles.feedAuthorName,
+                              { color: theme.colors.primary },
+                            ]}
+                          >
+                            {feed.professional_name ||
+                              professional.users?.name ||
+                              'Unknown'}
+                          </Text>
+                          {professional.is_verified && (
+                            <ShieldCheck
+                              size={16}
+                              color={theme.colors.primary}
+                              strokeWidth={2.5}
+                            />
+                          )}
+                          {feed.is_pinned && (
+                            <View
+                              style={[
+                                styles.pinnedBadge,
+                                {
+                                  backgroundColor: theme.colors.accent + '20',
+                                },
+                              ]}
+                            >
+                              <Pin
+                                size={14}
+                                color={theme.colors.accent}
+                                fill={theme.colors.accent}
+                              />
+                            </View>
+                          )}
+                        </View>
+                        <Text
+                          style={[
+                            styles.feedTimestamp,
+                            { color: theme.colors.textMuted },
+                          ]}
+                        >
+                          {timeAgo}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  <Text
+                    style={[styles.feedContent, { color: theme.colors.text }]}
+                  >
+                    {feed.content}
+                  </Text>
+                </Card>
+              );
+            })}
           </View>
         );
 
       case 'about':
         return (
           <View style={styles.aboutContainer}>
-            <Card style={styles.sectionCard}>
-              <Text
-                style={[styles.sectionTitle, { color: theme.colors.primary }]}
-              >
-                About Me
-              </Text>
+            {/* About Me Card */}
+            <Card
+              style={[
+                styles.sectionCard,
+                styles.aboutMeCard,
+                {
+                  backgroundColor: theme.colors.card,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <View style={styles.sectionHeader}>
+                <View
+                  style={[
+                    styles.sectionIconContainer,
+                    { backgroundColor: theme.colors.primary + '20' },
+                  ]}
+                >
+                  <MessageCircle
+                    size={20}
+                    color={theme.colors.primary}
+                    strokeWidth={2}
+                  />
+                </View>
+                <Text
+                  style={[styles.sectionTitle, { color: theme.colors.text }]}
+                >
+                  About Me
+                </Text>
+              </View>
               <Text style={[styles.bio, { color: theme.colors.textSecondary }]}>
-                {professional.bio}
+                {professional.bio || 'No bio available'}
               </Text>
             </Card>
 
-            <Card style={styles.sectionCard}>
-              <Text
-                style={[styles.sectionTitle, { color: theme.colors.primary }]}
-              >
-                Specialties
-              </Text>
+            {/* Specialties Card */}
+            <Card
+              style={[
+                styles.sectionCard,
+                styles.specialtiesCard,
+                {
+                  backgroundColor: theme.colors.card,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <View style={styles.sectionHeader}>
+                <View
+                  style={[
+                    styles.sectionIconContainer,
+                    { backgroundColor: theme.colors.accent + '20' },
+                  ]}
+                >
+                  <Award
+                    size={20}
+                    color={theme.colors.accent}
+                    strokeWidth={2}
+                  />
+                </View>
+                <Text
+                  style={[styles.sectionTitle, { color: theme.colors.text }]}
+                >
+                  Specialties
+                </Text>
+              </View>
               <View style={styles.specialties}>
-                {professional.specialties.map((specialty, index) => (
-                  <View
-                    key={index}
+                {(professional.specialties || []).length > 0 ? (
+                  (professional.specialties || []).map((specialty, index) => {
+                    // Clean up specialty string (remove quotes if present)
+                    const cleanSpecialty =
+                      typeof specialty === 'string'
+                        ? specialty.replace(/^["']|["']$/g, '')
+                        : String(specialty);
+
+                    return (
+                      <View
+                        key={index}
+                        style={[
+                          styles.specialtyTag,
+                          {
+                            backgroundColor: theme.colors.surface,
+                            borderColor: theme.colors.accent,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.specialtyText,
+                            { color: theme.colors.accent },
+                          ]}
+                        >
+                          {cleanSpecialty}
+                        </Text>
+                      </View>
+                    );
+                  })
+                ) : (
+                  <Text
                     style={[
-                      styles.specialtyTag,
-                      {
-                        backgroundColor: theme.colors.surface,
-                        borderColor: theme.colors.primary,
-                      },
+                      styles.emptyText,
+                      { color: theme.colors.textMuted },
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.specialtyText,
-                        { color: theme.colors.primary },
-                      ]}
-                    >
-                      {specialty}
-                    </Text>
-                  </View>
-                ))}
+                    No specialties specified
+                  </Text>
+                )}
               </View>
             </Card>
 
-            <Card style={styles.sectionCard}>
-              <Text
-                style={[styles.sectionTitle, { color: theme.colors.primary }]}
-              >
-                Languages
-              </Text>
+            {/* Languages Card */}
+            <Card
+              style={[
+                styles.sectionCard,
+                styles.languagesCard,
+                {
+                  backgroundColor: theme.colors.card,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <View style={styles.sectionHeader}>
+                <View
+                  style={[
+                    styles.sectionIconContainer,
+                    { backgroundColor: '#10B981' + '20' },
+                  ]}
+                >
+                  <MessageCircle size={20} color="#10B981" strokeWidth={2} />
+                </View>
+                <Text
+                  style={[styles.sectionTitle, { color: theme.colors.text }]}
+                >
+                  Languages
+                </Text>
+              </View>
               <Text
                 style={[
                   styles.languagesText,
                   { color: theme.colors.textSecondary },
                 ]}
               >
-                {professional.languages.join(', ')}
+                {(professional.languages || []).length > 0
+                  ? (professional.languages || [])
+                      .map((lang) => {
+                        // Clean up language string (remove quotes if present)
+                        return typeof lang === 'string'
+                          ? lang.replace(/^["']|["']$/g, '')
+                          : String(lang);
+                      })
+                      .join(', ')
+                  : 'No languages specified'}
               </Text>
             </Card>
           </View>
         );
 
       case 'availability':
+        if (availabilitiesData.length === 0) {
+          return (
+            <View style={styles.availabilityContainer}>
+              <View style={styles.emptyState}>
+                <Calendar
+                  size={48}
+                  color={theme.colors.textMuted}
+                  strokeWidth={1.5}
+                />
+                <Text
+                  style={[
+                    styles.emptyStateText,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  No availability set
+                </Text>
+                <Text
+                  style={[
+                    styles.emptyStateSubtext,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  This professional hasn't set their availability yet.
+                </Text>
+              </View>
+            </View>
+          );
+        }
+
+        // Helper function to get day abbreviation
+        const getDayAbbr = (day: string) => {
+          const dayMap: { [key: string]: string } = {
+            Monday: 'Mon',
+            Tuesday: 'Tue',
+            Wednesday: 'Wed',
+            Thursday: 'Thu',
+            Friday: 'Fri',
+            Saturday: 'Sat',
+            Sunday: 'Sun',
+          };
+          return dayMap[day] || day.substring(0, 3);
+        };
+
+        // Helper function to format date
+        const formatDate = (dateString: string) => {
+          const date = new Date(dateString);
+          return date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          });
+        };
+
         return (
           <View style={styles.availabilityContainer}>
-            <View style={styles.emptyState}>
-              <Calendar
-                size={48}
-                color={theme.colors.textMuted}
-                strokeWidth={1.5}
-              />
-              <Text
+            {/* Current Availability Banner - Shows at the top of Availability tab */}
+            {currentAvailability &&
+            remainingTime !== null &&
+            remainingTime > 0 ? (
+              <Card
                 style={[
-                  styles.emptyStateText,
-                  { color: theme.colors.textMuted },
+                  styles.currentAvailabilityBanner,
+                  {
+                    backgroundColor: '#10B981' + '15',
+                    borderColor: '#10B981' + '40',
+                  },
                 ]}
               >
-                Availability feature coming soon
-              </Text>
-            </View>
+                <View style={styles.currentAvailabilityContent}>
+                  <View
+                    style={[
+                      styles.currentAvailabilityIconContainer,
+                      { backgroundColor: '#10B981' + '20' },
+                    ]}
+                  >
+                    <Clock size={20} color="#10B981" strokeWidth={2.5} />
+                  </View>
+                  <View style={styles.currentAvailabilityTextContainer}>
+                    <Text
+                      style={[
+                        styles.currentAvailabilityTitle,
+                        { color: '#10B981' },
+                      ]}
+                    >
+                      Available Now
+                    </Text>
+                    <Text
+                      style={[
+                        styles.currentAvailabilitySubtitle,
+                        { color: theme.colors.textSecondary },
+                      ]}
+                    >
+                      {formatRemainingTime(remainingTime)}
+                    </Text>
+                  </View>
+                  <View style={styles.currentAvailabilityPriceContainer}>
+                    <DollarSign size={18} color="#10B981" strokeWidth={2.5} />
+                    <Text
+                      style={[
+                        styles.currentAvailabilityPrice,
+                        { color: '#10B981' },
+                      ]}
+                    >
+                      {currentAvailability.availability.price_per_minute.toFixed(
+                        2
+                      )}
+                      /min
+                    </Text>
+                  </View>
+                </View>
+              </Card>
+            ) : null}
+
+            {groupedAvailabilities.map((group, groupIndex) => {
+              const firstAvail = group[0];
+              const isWeekly = firstAvail.available_at === 'every';
+              const days = isWeekly ? (firstAvail.days || []).sort() : null;
+              const date = isWeekly ? null : firstAvail.date;
+
+              return (
+                <Card
+                  key={groupIndex}
+                  style={[
+                    styles.availabilityCard,
+                    {
+                      backgroundColor: theme.colors.card,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                >
+                  <View style={styles.availabilityHeader}>
+                    <View
+                      style={[
+                        styles.availabilityIconContainer,
+                        { backgroundColor: '#3B82F6' + '15' },
+                      ]}
+                    >
+                      <Calendar size={22} color="#3B82F6" strokeWidth={2.5} />
+                    </View>
+                    <View style={styles.availabilityHeaderText}>
+                      <Text
+                        style={[
+                          styles.availabilityTypeText,
+                          { color: theme.colors.text },
+                        ]}
+                      >
+                        {isWeekly ? 'Weekly Schedule' : 'Specific Date'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {isWeekly && days && days.length > 0 && (
+                    <View style={styles.daysRow}>
+                      {days.map((day, index) => {
+                        // Different colors for different days
+                        const dayColors: { [key: string]: string } = {
+                          Monday: '#8B5CF6', // Purple
+                          Tuesday: '#EC4899', // Pink
+                          Wednesday: '#F59E0B', // Amber
+                          Thursday: '#10B981', // Green
+                          Friday: '#3B82F6', // Blue
+                          Saturday: '#EF4444', // Red
+                          Sunday: '#F97316', // Orange
+                        };
+                        const dayColor = dayColors[day] || '#6B7280';
+
+                        return (
+                          <View
+                            key={index}
+                            style={[
+                              styles.dayBadge,
+                              {
+                                backgroundColor: dayColor + '20',
+                                borderColor: dayColor,
+                                borderWidth: 1.5,
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.dayText, { color: dayColor }]}>
+                              {getDayAbbr(day)}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+
+                  {!isWeekly && date && (
+                    <View style={styles.dateRow}>
+                      <View
+                        style={[
+                          styles.dateIconContainer,
+                          { backgroundColor: '#3B82F6' + '15' },
+                        ]}
+                      >
+                        <Calendar size={16} color="#3B82F6" strokeWidth={2} />
+                      </View>
+                      <Text
+                        style={[styles.dateText, { color: theme.colors.text }]}
+                      >
+                        {formatDate(date)}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={styles.availabilityFooter}>
+                    <View style={styles.timeRow}>
+                      <View
+                        style={[
+                          styles.timeIconContainer,
+                          { backgroundColor: '#10B981' + '15' },
+                        ]}
+                      >
+                        <Clock size={18} color="#10B981" strokeWidth={2.5} />
+                      </View>
+                      <Text
+                        style={[styles.timeText, { color: theme.colors.text }]}
+                      >
+                        {firstAvail.start_hour} - {firstAvail.end_hour}
+                      </Text>
+                    </View>
+                    <View style={styles.priceContainer}>
+                      <DollarSign size={16} color="#10B981" strokeWidth={2.5} />
+                      <Text
+                        style={[
+                          styles.availabilityPriceText,
+                          { color: '#10B981' },
+                        ]}
+                      >
+                        {firstAvail.price_per_minute.toFixed(2)}/min
+                      </Text>
+                    </View>
+                  </View>
+                </Card>
+              );
+            })}
           </View>
         );
 
@@ -320,13 +970,38 @@ export default function ProfessionalProfileScreen() {
             },
           ]}
         >
-          <Image source={{ uri: professional.avatar }} style={styles.avatar} />
+          <View style={styles.avatarContainer}>
+            <Image
+              source={{
+                uri:
+                  professional.users?.avatar_url ||
+                  'https://via.placeholder.com/150',
+              }}
+              style={styles.avatar}
+            />
+            {isFavorite && (
+              <View
+                style={[
+                  styles.favoriteIndicator,
+                  {
+                    backgroundColor: theme.colors.error,
+                    borderColor: theme.colors.card,
+                  },
+                ]}
+              >
+                <Heart size={12} color="#FFFFFF" fill="#FFFFFF" />
+              </View>
+            )}
+            {professional.is_available && (
+              <View style={styles.onlineIndicator} />
+            )}
+          </View>
           <View style={styles.nameContainer}>
             <View style={styles.nameRow}>
               <Text style={[styles.name, { color: theme.colors.text }]}>
-                {professional.name}
+                {professional.users?.name || 'Unknown Professional'}
               </Text>
-              {professional.isVerified && (
+              {professional.is_verified && (
                 <ShieldCheck
                   size={24}
                   color={theme.colors.primary}
@@ -334,46 +1009,53 @@ export default function ProfessionalProfileScreen() {
                 />
               )}
             </View>
-            <Text style={[styles.title, { color: theme.colors.textMuted }]}>
-              {professional.title}
-            </Text>
+            <View style={styles.titleRow}>
+              <Text style={[styles.title, { color: theme.colors.textMuted }]}>
+                {professional.title ||
+                  professional.profession ||
+                  'Professional'}
+              </Text>
+              {professional.is_featured && (
+                <View
+                  style={[
+                    styles.featuredBadge,
+                    { backgroundColor: theme.colors.accent + '20' },
+                  ]}
+                >
+                  <Star
+                    size={14}
+                    color={theme.colors.accent}
+                    fill={theme.colors.accent}
+                  />
+                  <Text
+                    style={[
+                      styles.featuredText,
+                      { color: theme.colors.accent },
+                    ]}
+                  >
+                    Featured
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
 
           {/* Stats Row */}
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <View style={styles.statIconRow}>
-                <Star size={16} color="#FFD60A" fill="#FFD60A" />
-                <Text style={[styles.statValue, { color: theme.colors.text }]}>
-                  {professional.rating.toFixed(1)}
-                </Text>
-              </View>
-              <Text
-                style={[styles.statLabel, { color: theme.colors.textMuted }]}
-              >
-                Rating
-              </Text>
-            </View>
-
-            <View
-              style={[
-                styles.statDivider,
-                { backgroundColor: theme.colors.border },
-              ]}
-            />
-
-            <View style={styles.statItem}>
-              <View style={styles.statIconRow}>
                 <Phone size={16} color={theme.colors.primary} />
+              </View>
+              <View style={styles.statValueRow}>
                 <Text style={[styles.statValue, { color: theme.colors.text }]}>
-                  {professional.totalCalls}
+                  {professional.total_calls || 0}
+                </Text>
+                <Text
+                  style={[styles.statLabel, { color: theme.colors.textMuted }]}
+                >
+                  calls
                 </Text>
               </View>
-              <Text
-                style={[styles.statLabel, { color: theme.colors.textMuted }]}
-              >
-                Calls
-              </Text>
             </View>
 
             <View
@@ -386,27 +1068,98 @@ export default function ProfessionalProfileScreen() {
             <View style={styles.statItem}>
               <View style={styles.statIconRow}>
                 <Clock size={16} color={theme.colors.primary} />
+              </View>
+              <View style={styles.durationContainer}>
+                {(() => {
+                  const totalMinutes = professional.total_minutes || 0;
+                  if (totalMinutes < 60) {
+                    return (
+                      <Text
+                        style={[
+                          styles.durationValue,
+                          { color: theme.colors.text },
+                        ]}
+                      >
+                        {totalMinutes}
+                        <Text
+                          style={[
+                            styles.durationUnit,
+                            { color: theme.colors.textMuted },
+                          ]}
+                        >
+                          m
+                        </Text>
+                      </Text>
+                    );
+                  }
+                  const hours = Math.floor(totalMinutes / 60);
+                  const minutes = totalMinutes % 60;
+                  return (
+                    <>
+                      <Text
+                        style={[
+                          styles.durationValue,
+                          { color: theme.colors.text },
+                        ]}
+                      >
+                        {hours}
+                        <Text
+                          style={[
+                            styles.durationUnit,
+                            { color: theme.colors.textMuted },
+                          ]}
+                        >
+                          h
+                        </Text>
+                      </Text>
+                      {minutes > 0 && (
+                        <Text
+                          style={[
+                            styles.durationValue,
+                            { color: theme.colors.text },
+                          ]}
+                        >
+                          {' '}
+                          {minutes}
+                          <Text
+                            style={[
+                              styles.durationUnit,
+                              { color: theme.colors.textMuted },
+                            ]}
+                          >
+                            m
+                          </Text>
+                        </Text>
+                      )}
+                    </>
+                  );
+                })()}
+              </View>
+            </View>
+
+            <View
+              style={[
+                styles.statDivider,
+                { backgroundColor: theme.colors.border },
+              ]}
+            />
+
+            <View style={styles.statItem}>
+              <View style={styles.statIconRow}>
+                <MessageCircle size={16} color={theme.colors.primary} />
+              </View>
+              <View style={styles.statValueRow}>
                 <Text style={[styles.statValue, { color: theme.colors.text }]}>
-                  {professional.responseTime}
+                  {feedCountData || 0}
+                </Text>
+                <Text
+                  style={[styles.statLabel, { color: theme.colors.textMuted }]}
+                >
+                  {feedCountData === 1 ? 'post' : 'posts'}
                 </Text>
               </View>
-              <Text
-                style={[styles.statLabel, { color: theme.colors.textMuted }]}
-              >
-                Response
-              </Text>
             </View>
           </View>
-
-          {/* Online Status */}
-          {professional.isOnline && (
-            <View style={styles.onlineStatusContainer}>
-              <View style={styles.onlineDot} />
-              <Text style={[styles.onlineText, { color: '#10B981' }]}>
-                Available Now
-              </Text>
-            </View>
-          )}
         </View>
 
         {/* Tabs */}
@@ -438,10 +1191,152 @@ export default function ProfessionalProfileScreen() {
           style={[styles.callActions, { borderTopColor: theme.colors.border }]}
         >
           <View style={styles.priceRow}>
-            <DollarSign size={20} color={theme.colors.primary} />
-            <Text style={[styles.priceText, { color: theme.colors.text }]}>
-              ${professional.ratePerMinute}/min
-            </Text>
+            {currentAvailability &&
+            remainingTime !== null &&
+            remainingTime > 0 ? (
+              <>
+                <View style={styles.footerAvailabilityBadge}>
+                  <Clock size={14} color="#10B981" strokeWidth={2.5} />
+                  <Text
+                    style={[
+                      styles.footerAvailabilityText,
+                      { color: '#10B981' },
+                    ]}
+                  >
+                    Available Now
+                  </Text>
+                </View>
+                <DollarSign size={18} color="#10B981" />
+                <Text style={[styles.priceText, { color: '#10B981' }]}>
+                  {currentAvailability.availability.price_per_minute.toFixed(2)}
+                </Text>
+                <Text
+                  style={[styles.priceUnit, { color: theme.colors.textMuted }]}
+                >
+                  /min
+                </Text>
+                <Text
+                  style={[
+                    styles.footerRemainingTime,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  • {formatRemainingTime(remainingTime)}
+                </Text>
+              </>
+            ) : (
+              <>
+                <DollarSign size={18} color="#10B981" />
+                <Text style={[styles.priceText, { color: '#10B981' }]}>
+                  {(() => {
+                    if (availabilitiesData.length === 0) {
+                      return (professional.rate_per_minute || 0).toFixed(2);
+                    }
+
+                    const now = new Date();
+                    const currentDay = now.toLocaleDateString('en-US', {
+                      weekday: 'long',
+                    });
+                    const currentTime = `${now
+                      .getHours()
+                      .toString()
+                      .padStart(2, '0')}:${now
+                      .getMinutes()
+                      .toString()
+                      .padStart(2, '0')}`;
+                    const currentDate = now.toISOString().split('T')[0];
+
+                    // First, try to find currently active availability
+                    for (const avail of availabilitiesData) {
+                      if (avail.available_at === 'every' && avail.days) {
+                        if (avail.days.includes(currentDay)) {
+                          if (
+                            currentTime >= avail.start_hour &&
+                            currentTime <= avail.end_hour
+                          ) {
+                            return avail.price_per_minute.toFixed(2);
+                          }
+                        }
+                      } else if (
+                        avail.available_at === 'specific' &&
+                        avail.date
+                      ) {
+                        if (avail.date === currentDate) {
+                          if (
+                            currentTime >= avail.start_hour &&
+                            currentTime <= avail.end_hour
+                          ) {
+                            return avail.price_per_minute.toFixed(2);
+                          }
+                        }
+                      }
+                    }
+
+                    // If no current availability, find next available (future)
+                    let nextAvailability: Availability | null = null;
+                    let minDateDiff = Infinity;
+
+                    for (const avail of availabilitiesData) {
+                      if (avail.available_at === 'every' && avail.days) {
+                        // For recurring, if today is in list but time passed, or if future day
+                        if (
+                          avail.days.includes(currentDay) &&
+                          currentTime < avail.end_hour
+                        ) {
+                          // Still available later today
+                          if (!nextAvailability) {
+                            nextAvailability = avail;
+                          }
+                        } else {
+                          // Check for next occurrence in the week
+                          const dayOrder = [
+                            'Sunday',
+                            'Monday',
+                            'Tuesday',
+                            'Wednesday',
+                            'Thursday',
+                            'Friday',
+                            'Saturday',
+                          ];
+                          const currentDayIndex = dayOrder.indexOf(currentDay);
+                          const nextDay = avail.days.find((day) => {
+                            const dayIndex = dayOrder.indexOf(day);
+                            return (
+                              dayIndex > currentDayIndex ||
+                              (dayIndex === 0 && currentDayIndex !== 0)
+                            );
+                          });
+                          if (nextDay && !nextAvailability) {
+                            nextAvailability = avail;
+                          }
+                        }
+                      } else if (
+                        avail.available_at === 'specific' &&
+                        avail.date
+                      ) {
+                        if (avail.date >= currentDate) {
+                          const dateDiff =
+                            new Date(avail.date).getTime() - now.getTime();
+                          if (dateDiff < minDateDiff) {
+                            minDateDiff = dateDiff;
+                            nextAvailability = avail;
+                          }
+                        }
+                      }
+                    }
+
+                    return nextAvailability
+                      ? nextAvailability.price_per_minute.toFixed(2)
+                      : (professional.rate_per_minute || 0).toFixed(2);
+                  })()}
+                </Text>
+                <Text
+                  style={[styles.priceUnit, { color: theme.colors.textMuted }]}
+                >
+                  /min
+                </Text>
+              </>
+            )}
           </View>
           <View style={styles.callButtonsRow}>
             <TouchableOpacity
@@ -481,7 +1376,32 @@ export default function ProfessionalProfileScreen() {
       <ShareProfileModal
         visible={shareModalVisible}
         onClose={() => setShareModalVisible(false)}
-        professionalData={professional as unknown as UIProfessional}
+        userId={professional.users?.id}
+        username={professional.users?.name}
+        professionalData={
+          professional
+            ? {
+                id: professional.id,
+                name: professional.users?.name || 'Unknown Professional',
+                title:
+                  professional.title ||
+                  professional.profession ||
+                  'Professional',
+                avatar: professional.users?.avatar_url || '',
+                rating:
+                  professional.reviews && professional.reviews.length > 0
+                    ? professional.reviews.reduce(
+                        (sum, r) => sum + (r.rating || 0),
+                        0
+                      ) / professional.reviews.length
+                    : 0,
+                totalCalls: professional.total_calls || 0,
+                isVerified: professional.is_verified || false,
+                ratePerMinute: Number(professional.rate_per_minute) || 0,
+                specialties: professional.specialties || [],
+              }
+            : undefined
+        }
       />
     </SafeAreaView>
   );
@@ -523,14 +1443,46 @@ const styles = StyleSheet.create({
   },
   profileHeader: {
     padding: 24,
+    paddingBottom: 8,
     borderBottomWidth: 1,
+  },
+  avatarContainer: {
+    position: 'relative',
+    alignSelf: 'center',
+    marginBottom: 16,
+    width: 100,
+    height: 100,
   },
   avatar: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    marginBottom: 16,
-    alignSelf: 'center',
+  },
+  favoriteIndicator: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#EF4444',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#10B981',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    zIndex: 1,
   },
   nameContainer: {
     alignItems: 'center',
@@ -546,9 +1498,28 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: 'Inter-Bold',
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
   title: {
     fontSize: 16,
     fontFamily: 'Inter-Regular',
+  },
+  featuredBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  featuredText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Medium',
   },
   statsRow: {
     flexDirection: 'row',
@@ -565,33 +1536,40 @@ const styles = StyleSheet.create({
     gap: 4,
     marginBottom: 4,
   },
+  statValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+    justifyContent: 'center',
+    flexWrap: 'nowrap',
+  },
   statValue: {
     fontSize: 18,
     fontFamily: 'Inter-Bold',
   },
   statLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: 'Inter-Regular',
+  },
+  durationContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  durationValue: {
+    fontSize: 18,
+    fontFamily: 'Inter-Bold',
+    lineHeight: 22,
+  },
+  durationUnit: {
+    fontSize: 12,
+    fontFamily: 'Inter-Medium',
+    marginLeft: 2,
   },
   statDivider: {
     width: 1,
     height: 40,
-  },
-  onlineStatusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  onlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10B981',
-  },
-  onlineText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
   },
   tabsContainer: {
     paddingHorizontal: 16,
@@ -605,28 +1583,46 @@ const styles = StyleSheet.create({
   },
   sectionCard: {
     marginBottom: 16,
-    padding: 16,
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  aboutMeCard: {},
+  specialtiesCard: {},
+  languagesCard: {},
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
   sectionTitle: {
     fontSize: 18,
     fontFamily: 'Inter-Bold',
-    marginBottom: 12,
+    flex: 1,
   },
   bio: {
     fontSize: 15,
     fontFamily: 'Inter-Regular',
-    lineHeight: 22,
+    lineHeight: 24,
   },
   specialties: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
   },
   specialtyTag: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
   },
   specialtyText: {
     fontSize: 14,
@@ -635,9 +1631,171 @@ const styles = StyleSheet.create({
   languagesText: {
     fontSize: 15,
     fontFamily: 'Inter-Regular',
+    lineHeight: 24,
+  },
+  emptyText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    fontStyle: 'italic',
   },
   availabilityContainer: {
     padding: 16,
+  },
+  availabilityCard: {
+    marginBottom: 20,
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  availabilityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  availabilityIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  availabilityHeaderText: {
+    flex: 1,
+  },
+  availabilityTypeText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+  },
+  daysRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 18,
+  },
+  dayBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 12,
+    minWidth: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayText: {
+    fontSize: 13,
+    fontFamily: 'Inter-Medium',
+    letterSpacing: 0.2,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+  },
+  dateIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateText: {
+    fontSize: 15,
+    fontFamily: 'Inter-Medium',
+    flex: 1,
+  },
+  availabilityFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 16,
+    marginTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  timeIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeText: {
+    fontSize: 15,
+    fontFamily: 'Inter-Medium',
+  },
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#10B981' + '12',
+    borderWidth: 1,
+    borderColor: '#10B981' + '30',
+  },
+  availabilityPriceText: {
+    fontSize: 15,
+    fontFamily: 'Inter-Bold',
+  },
+  currentAvailabilityBanner: {
+    marginBottom: 20,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1.5,
+  },
+  currentAvailabilityContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  currentAvailabilityIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  currentAvailabilityTextContainer: {
+    flex: 1,
+  },
+  currentAvailabilityTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 2,
+  },
+  currentAvailabilitySubtitle: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+  },
+  currentAvailabilityPriceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: '#10B981' + '20',
+  },
+  currentAvailabilityPrice: {
+    fontSize: 15,
+    fontFamily: 'Inter-Bold',
   },
   cvContainer: {
     padding: 16,
@@ -650,6 +1808,61 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter-Medium',
     marginTop: 16,
+    textAlign: 'center',
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    marginTop: 8,
+    textAlign: 'center',
+    paddingHorizontal: 32,
+  },
+  feedCard: {
+    marginBottom: 16,
+    padding: 16,
+  },
+  feedHeader: {
+    marginBottom: 12,
+  },
+  feedAuthorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  feedAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  feedAuthorInfo: {
+    flex: 1,
+  },
+  feedAuthorNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  feedAuthorName: {
+    fontSize: 15,
+    fontFamily: 'Inter-Bold',
+  },
+  pinnedBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+  },
+  feedTimestamp: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+  },
+  feedContent: {
+    fontSize: 15,
+    fontFamily: 'Inter-Regular',
+    lineHeight: 22,
   },
   callActionsWrapper: {
     position: 'absolute',
@@ -667,12 +1880,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 6,
     marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  priceLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    marginRight: 4,
   },
   priceText: {
-    fontSize: 18,
+    fontSize: 20,
     fontFamily: 'Inter-Bold',
+    lineHeight: 24,
+  },
+  priceUnit: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    marginLeft: 2,
+  },
+  footerAvailabilityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: '#10B981' + '15',
+  },
+  footerAvailabilityText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Medium',
+  },
+  footerRemainingTime: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    marginLeft: 4,
   },
   callButtonsRow: {
     flexDirection: 'row',

@@ -13,10 +13,10 @@ import {
 import * as SplashScreen from 'expo-splash-screen';
 import { initI18n } from '../lib/i18n';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useAutoAvailability } from '../hooks/useAutoAvailability';
+import { useProfile } from '../hooks/useProfile';
 
 SplashScreen.preventAutoHideAsync();
-
-// Toast stack component is now handled by ToastStack component
 
 // Create a QueryClient instance
 const queryClient = new QueryClient({
@@ -27,6 +27,22 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Auto Availability Wrapper Component
+function AutoAvailabilityWrapper({ children }: { children: React.ReactNode }) {
+  const { isProfessional } = useProfile();
+
+  // 🟢 AUTO ONLINE/OFFLINE
+  // Automatically manages professional availability based on app state
+  useAutoAvailability({
+    enabled: isProfessional,
+    setOnlineOnForeground: true,
+    setOfflineOnBackground: true,
+    backgroundDelay: 30000, // 30 seconds delay before going offline
+  });
+
+  return <>{children}</>;
+}
 
 export default function RootLayout() {
   useFrameworkReady();
@@ -80,12 +96,12 @@ export default function RootLayout() {
       'i18nReady:',
       i18nReady
     );
-    
+
     if (fontError) {
       console.error('[App] Font loading error:', fontError);
       console.warn('[App] App will continue with system fonts');
     }
-    
+
     if ((fontsLoaded || fontError) && i18nReady) {
       console.log('[App] All initialization complete, hiding splash screen');
       SplashScreen.hideAsync().catch((error) => {
@@ -101,31 +117,33 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="auth" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="become-professional" />
-          <Stack.Screen name="call-review/[id]" />
-          <Stack.Screen name="credit-selection" />
-          <Stack.Screen name="purchase" />
-          <Stack.Screen name="notifications" />
-          <Stack.Screen name="wallet-history" />
-          <Stack.Screen name="blocked-users" />
-          <Stack.Screen name="how-it-works" />
-          <Stack.Screen name="help" />
-          <Stack.Screen name="settings/theme" />
-          <Stack.Screen name="settings/language" />
-          <Stack.Screen name="settings/notifications" />
-          <Stack.Screen name="settings/change-password" />
-          <Stack.Screen name="settings/availability" />
-          <Stack.Screen name="+not-found" />
-          <Stack.Screen name="profile/professional-settings" />
-          <Stack.Screen name="profile/privacy-security" />
-          <Stack.Screen name="profile/devices" />
-          <Stack.Screen name="schedule-call/[id]" />
-        </Stack>
-        <StatusBar style="auto" translucent={false} />
-        <ToastStack />
+        <AutoAvailabilityWrapper>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="auth" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="become-professional" />
+            <Stack.Screen name="call-review/[id]" />
+            <Stack.Screen name="credit-selection" />
+            <Stack.Screen name="purchase" />
+            <Stack.Screen name="notifications" />
+            <Stack.Screen name="wallet-history" />
+            <Stack.Screen name="blocked-users" />
+            <Stack.Screen name="how-it-works" />
+            <Stack.Screen name="help" />
+            <Stack.Screen name="settings/theme" />
+            <Stack.Screen name="settings/language" />
+            <Stack.Screen name="settings/notifications" />
+            <Stack.Screen name="settings/change-password" />
+            <Stack.Screen name="settings/availability" />
+            <Stack.Screen name="+not-found" />
+            <Stack.Screen name="profile/professional-settings" />
+            <Stack.Screen name="profile/privacy-security" />
+            <Stack.Screen name="profile/devices" />
+            <Stack.Screen name="schedule-call/[id]" />
+          </Stack>
+          <StatusBar style="auto" translucent={false} />
+          <ToastStack />
+        </AutoAvailabilityWrapper>
       </ThemeProvider>
     </QueryClientProvider>
   );

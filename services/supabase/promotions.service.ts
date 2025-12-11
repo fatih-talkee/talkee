@@ -36,9 +36,24 @@ export interface Promotion {
 }
 
 /**
- * Convert database promotion to UI format
+ * Predefined gradient colors for promotions (in order: blue, yellow, green, purple)
  */
-function adaptPromotion(dbPromo: DBPromotion): Promotion {
+const PROMOTION_GRADIENTS = [
+  ['#3B82F6', '#2563EB'], // Blue
+  ['#FBBF24', '#F59E0B'], // Yellow
+  ['#10B981', '#059669'], // Green
+  ['#8B5CF6', '#7C3AED'], // Purple
+];
+
+/**
+ * Convert database promotion to UI format
+ * ✅ Gradient colors assigned by index (blue, yellow, green, purple)
+ */
+function adaptPromotion(dbPromo: DBPromotion, index: number = 0): Promotion {
+  // Use predefined gradients based on index (cycles through colors)
+  const gradientIndex = index % PROMOTION_GRADIENTS.length;
+  const defaultGradient = PROMOTION_GRADIENTS[gradientIndex];
+  
   return {
     id: dbPromo.id,
     title: dbPromo.title,
@@ -47,8 +62,8 @@ function adaptPromotion(dbPromo: DBPromotion): Promotion {
     ctaText: dbPromo.cta_text,
     ctaLink: dbPromo.cta_link || undefined, // ✅ Pass cta_link
     gradient: [
-      dbPromo.gradient_start || '#667eea',
-      dbPromo.gradient_end || '#764ba2',
+      dbPromo.gradient_start || defaultGradient[0],
+      dbPromo.gradient_end || defaultGradient[1],
     ],
   };
 }
@@ -74,7 +89,7 @@ class PromotionsService {
         return [];
       }
 
-      return (data || []).map(adaptPromotion);
+      return (data || []).map((promo, index) => adaptPromotion(promo, index));
     } catch (error) {
       console.error('Error in getActivePromotions:', error);
       return [];
@@ -97,7 +112,7 @@ class PromotionsService {
         return null;
       }
 
-      return data ? adaptPromotion(data) : null;
+      return data ? adaptPromotion(data, 0) : null;
     } catch (error) {
       console.error('Error in getPromotionById:', error);
       return null;

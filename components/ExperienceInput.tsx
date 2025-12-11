@@ -398,6 +398,7 @@ function ExperienceFormModal({
 
           <ScrollView
             style={modalStyles.modalBody}
+            contentContainerStyle={modalStyles.modalBodyContent}
             showsVerticalScrollIndicator={false}
           >
             {error && (
@@ -504,7 +505,7 @@ function ExperienceFormModal({
             </View>
 
             {/* Currently working checkbox */}
-            <View style={[modalStyles.inputWrapper, { marginTop: 8, marginBottom: 8 }]}>
+            <View style={[modalStyles.checkboxWrapper]}>
               <TouchableOpacity
                 style={modalStyles.checkboxRow}
                 onPress={() => setIsCurrent(!isCurrent)}
@@ -613,8 +614,10 @@ const modalStyles = StyleSheet.create({
   },
   modalBody: {
     flex: 1,
-    padding: 20,
-    gap: 16,
+  },
+  modalBodyContent: {
+    padding: 24,
+    paddingBottom: 8,
   },
   modalFooter: {
     flexDirection: 'row',
@@ -625,11 +628,12 @@ const modalStyles = StyleSheet.create({
     zIndex: 10,
   },
   inputWrapper: {
-    gap: 8,
+    marginBottom: 20,
   },
   inputLabel: {
     fontSize: 14,
     fontFamily: 'Inter-Medium',
+    marginBottom: 8,
   },
   textInput: {
     padding: 12,
@@ -642,6 +646,9 @@ const modalStyles = StyleSheet.create({
       outlineWidth: 0,
       outlineColor: 'transparent',
     }),
+  },
+  checkboxWrapper: {
+    marginBottom: 20,
   },
   checkboxRow: {
     flexDirection: 'row',
@@ -669,7 +676,7 @@ const modalStyles = StyleSheet.create({
   errorMessageContainer: {
     padding: 12,
     borderRadius: 8,
-    marginBottom: 16,
+    marginBottom: 20,
   },
   errorMessageText: {
     fontSize: 13,

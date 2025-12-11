@@ -5,17 +5,13 @@ import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
 
 interface Step6FinishProps {
-  loading: boolean;
   onTermsPress: () => void;
   onPrivacyPress: () => void;
-  onComplete: () => void;
 }
 
 export function Step6Finish({
-  loading,
   onTermsPress,
   onPrivacyPress,
-  onComplete,
 }: Step6FinishProps) {
   const { theme } = useTheme();
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -70,16 +66,6 @@ export function Step6Finish({
           </TouchableOpacity>
         </Text>
       </View>
-
-      <Button
-        title={loading ? 'Setting up...' : 'Save & Become Professional'}
-        onPress={onComplete}
-        disabled={loading}
-        style={[
-          styles.completeButton,
-          { backgroundColor: theme.colors.primary },
-        ]}
-      />
 
       {/* Terms of Service Modal */}
       <Modal
@@ -285,9 +271,6 @@ const styles = StyleSheet.create({
   },
   termsLink: {
     fontFamily: 'Inter-Bold',
-  },
-  completeButton: {
-    width: '100%',
   },
   modalOverlay: {
     flex: 1,

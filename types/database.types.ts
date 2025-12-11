@@ -113,6 +113,10 @@ export interface User {
   theme_preference: 'light' | 'dark' | 'system';
   language_preference: 'en' | 'tr' | 'fr' | 'es' | 'de';
 
+  // Soft delete
+  is_deleted: boolean;
+  deleted_at: string | null;
+
   created_at: string;
   updated_at: string;
 }
@@ -202,6 +206,7 @@ export interface Professional {
   is_active: boolean;
   is_public: boolean;
   is_verified: boolean;
+  is_featured: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -216,6 +221,7 @@ export interface ProfessionalInsert
     | 'updated_at'
     | 'is_available'
     | 'is_verified'
+    | 'is_featured'
     | 'is_active'
   > {
   id?: string;
@@ -223,6 +229,7 @@ export interface ProfessionalInsert
   is_verified?: boolean;
   is_active?: boolean;
   total_calls?: number;
+  is_featured?: boolean;
   total_minutes?: number;
 }
 

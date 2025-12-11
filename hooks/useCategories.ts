@@ -27,6 +27,18 @@ export function useCategories(): UseQueryResult<Category[]> {
 }
 
 /**
+ * Hook: Get popular categories (most professionals, fallback to sort_order)
+ */
+export function usePopularCategories(limit: number = 8): UseQueryResult<Category[]> {
+  return useQuery({
+    queryKey: [...categoriesKeys.lists(), 'popular', limit],
+    queryFn: () => categoriesService.getPopularCategories(limit),
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 30 * 60 * 1000,
+  });
+}
+
+/**
  * Hook: Get categories grouped by category groups
  */
 export function useCategoriesGrouped(): UseQueryResult<

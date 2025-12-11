@@ -6,10 +6,10 @@ import {
   ScrollView,
   SafeAreaView,
   TouchableOpacity,
-  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { Link } from 'expo-router';
-import { Bell, Calendar } from 'lucide-react-native';
+import { Bell } from 'lucide-react-native';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
 import { CategoryGrid } from '@/components/listings/CategoryGrid';
 import { PromotionCarousel } from '@/components/carousel/PromotionCarousel';
@@ -17,31 +17,34 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { router } from 'expo-router';
 import { Header } from '@/components/ui/Header';
 
-// ✅ API HOOKS ONLY - No mock data imports
+// ✅ API HOOKS
 import { useFeaturedProfessionals } from '@/hooks/useProfessionals';
-import { useCategories } from '@/hooks/useCategories';
+import { usePopularCategories } from '@/hooks/useCategories';
 import { useFeaturedPromotions } from '@/hooks/usePromotions';
+import { ProfessionalWithRelations } from '@/types/database.types';
 
-// ✅ TYPE ADAPTERS - Convert API types to UI types
-import {
-  adaptProfessionals,
-  adaptCategories,
-  UIProfessional,
-} from '@/utils/typeAdapters';
-
-const { width } = Dimensions.get('window');
+// ✅ TYPE ADAPTERS (not needed here, ProfessionalCard uses ProfessionalWithRelations directly)
 
 export default function HomeScreen() {
   const { theme } = useTheme();
 
-  // ✅ PURE API CALLS - No mock data fallback
-  const { data: professionalsData = [] } = useFeaturedProfessionals(4);
-  const { data: categoriesData = [] } = useCategories();
+  // ✅ Fetch featured professionals (is_featured = true from database)
+  const {
+    data: professionalsData = [],
+    isLoading: professionalsLoading,
+    error: professionalsError,
+  } = useFeaturedProfessionals(4);
+
+  // ✅ Fetch popular categories (top 8 by professional count, fallback to sort_order)
+  const { data: categoriesData = [], isLoading: categoriesLoading } =
+    usePopularCategories(8);
+
+  // ✅ Fetch promotions
   const { data: promotionsData = [] } = useFeaturedPromotions(5);
 
-  // ✅ Convert API types to UI types
-  const professionals = adaptProfessionals(professionalsData);
-  const categories = adaptCategories(categoriesData);
+  // ✅ Use professionals data directly (no need to adapt, ProfessionalCard uses ProfessionalWithRelations)
+  const professionals = professionalsData;
+  const categories = categoriesData;
   const promotions = promotionsData;
 
   return (
@@ -81,11 +84,15 @@ export default function HomeScreen() {
         )}
 
         {/* Browse by Category */}
-        {categories.length > 0 && (
-          <View style={styles.section}>
-            <CategoryGrid categories={categories} />
+        {categoriesLoading ? (
+          <View style={styles.loadingSection}>
+            <ActivityIndicator size="small" color={theme.colors.primary} />
           </View>
-        )}
+        ) : categories.length > 0 ? (
+          <View style={styles.section}>
+            <CategoryGrid categories={categories as unknown as any[]} />
+          </View>
+        ) : null}
 
         {/* Featured Professionals */}
         <View style={styles.section}>
@@ -104,25 +111,38 @@ export default function HomeScreen() {
             </Link>
           </View>
 
-          {professionals.length > 0 ? (
+          {professionalsLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+              <Text
+                style={[styles.loadingText, { color: theme.colors.textMuted }]}
+              >
+                Loading featured professionals...
+              </Text>
+            </View>
+          ) : professionalsError ? (
+            <View style={styles.errorContainer}>
+              <Text
+                style={[styles.errorText, { color: theme.colors.textMuted }]}
+              >
+                Unable to load featured professionals
+              </Text>
+            </View>
+          ) : professionals.length > 0 ? (
             <View style={styles.professionalsGrid}>
-              {professionals.map(
-                (
-                  professional: ReturnType<typeof adaptProfessionals>[number]
-                ) => (
-                  <ProfessionalCard
-                    key={professional.id}
-                    professional={professional}
-                  />
-                )
-              )}
+              {professionals.map((professional: ProfessionalWithRelations) => (
+                <ProfessionalCard
+                  key={professional.id}
+                  professional={professional}
+                />
+              ))}
             </View>
           ) : (
             <View style={styles.emptyState}>
               <Text
                 style={[styles.emptyText, { color: theme.colors.textMuted }]}
               >
-                No professionals available yet
+                No featured professionals available yet
               </Text>
             </View>
           )}
@@ -173,6 +193,30 @@ const styles = StyleSheet.create({
   },
   professionalsGrid: {
     paddingHorizontal: 20,
+  },
+  loadingSection: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    marginTop: 12,
+  },
+  errorContainer: {
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
   },
   emptyState: {
     paddingVertical: 40,

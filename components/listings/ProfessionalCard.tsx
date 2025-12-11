@@ -8,16 +8,37 @@ import {
   Platform,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Star, ShieldCheck, Clock } from 'lucide-react-native';
-import { Professional } from '@/mockData/professionals';
+import { Star, ShieldCheck, Heart } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useIsFavorite } from '@/hooks/useFavorites';
+import type { ProfessionalWithRelations } from '@/types/database.types';
 
 interface ProfessionalCardProps {
-  professional: Professional;
+  professional: ProfessionalWithRelations;
 }
 
 export function ProfessionalCard({ professional }: ProfessionalCardProps) {
   const { theme } = useTheme();
+
+  // Check if favorited
+  const { data: isFavorite = false } = useIsFavorite(professional.id);
+
+  // Calculate online status
+  const isOnline = professional.is_active && professional.is_available;
+
+  // Get user data
+  const userName = professional.users?.name || 'Unknown';
+  const userAvatar =
+    professional.users?.avatar_url || 'https://via.placeholder.com/150';
+  const isVerified =
+    professional.users?.is_verified || professional.is_verified;
+
+  // Get category data
+  const categoryName = professional.categories?.name || professional.title;
+
+  // Check if featured
+  const isFeatured = professional.is_featured || false;
+  const totalCalls = professional.total_calls || 0;
 
   const handlePress = () => {
     router.push(`/professional/${professional.id}`);
@@ -41,27 +62,32 @@ export function ProfessionalCard({ professional }: ProfessionalCardProps) {
             ? styles.cardShadowWeb
             : styles.cardShadowNative,
           {
-            // theme.colors.card → card background
             backgroundColor: theme.colors.card,
-            // theme.colors.border → card border
             borderColor: theme.colors.border,
-            // theme.colors.text → shadow color (reduced opacity)
             shadowColor: theme.colors.text,
           },
         ]}
       >
         <View style={styles.header}>
           <View style={styles.avatarContainer}>
-            <Image
-              source={{ uri: professional.avatar }}
-              style={styles.avatar}
-            />
-            {professional.isOnline && (
+            <Image source={{ uri: userAvatar }} style={styles.avatar} />
+            {isFavorite && (
+              <View
+                style={[
+                  styles.favoriteIndicator,
+                  {
+                    backgroundColor: theme.colors.error,
+                  },
+                ]}
+              >
+                <Heart size={10} color="#FFFFFF" fill="#FFFFFF" />
+              </View>
+            )}
+            {isOnline && (
               <View
                 style={[
                   styles.onlineIndicator,
                   {
-                    // theme.colors.success → online status
                     backgroundColor: theme.colors.success,
                   },
                 ]}
@@ -74,58 +100,49 @@ export function ProfessionalCard({ professional }: ProfessionalCardProps) {
                 style={[
                   styles.name,
                   {
-                    // theme.colors.text → main title
                     color: theme.colors.text,
                   },
                 ]}
                 numberOfLines={1}
               >
-                {professional.name}
+                {userName}
               </Text>
-              {professional.isVerified && (
-                <ShieldCheck size={20} color={theme.colors.primary} strokeWidth={2.5} />
+              {isVerified && (
+                <ShieldCheck
+                  size={20}
+                  color={theme.colors.primary}
+                  strokeWidth={2.5}
+                />
               )}
             </View>
             <Text
               style={[
                 styles.title,
                 {
-                  // theme.colors.textSecondary → subtitle
                   color: theme.colors.textSecondary,
                 },
               ]}
               numberOfLines={1}
             >
-              {professional.title}
+              {professional.profession || categoryName}
             </Text>
             <View style={styles.ratingRow}>
-              {/* theme.colors.accent → star color */}
-              <Star
-                size={12}
-                color={theme.colors.accent}
-                fill={theme.colors.accent}
-              />
-              <Text
-                style={[
-                  styles.rating,
-                  {
-                    // theme.colors.text → rating number
-                    color: theme.colors.text,
-                  },
-                ]}
-              >
-                {professional.rating}
-              </Text>
+              {isFeatured && (
+                <Star
+                  size={12}
+                  color={theme.colors.accent}
+                  fill={theme.colors.accent}
+                />
+              )}
               <Text
                 style={[
                   styles.callCount,
                   {
-                    // theme.colors.textMuted → call count
                     color: theme.colors.textMuted,
                   },
                 ]}
               >
-                ({professional.totalCalls})
+                ({totalCalls} calls)
               </Text>
             </View>
           </View>
@@ -137,18 +154,16 @@ export function ProfessionalCard({ professional }: ProfessionalCardProps) {
               style={[
                 styles.price,
                 {
-                  // theme.colors.pinkTwo → price highlight
                   color: theme.colors.primary,
                 },
               ]}
             >
-              {'$' + professional.ratePerMinute.toFixed(2)}
+              ${(professional.rate_per_minute || 0).toFixed(2)}
             </Text>
             <Text
               style={[
                 styles.priceUnit,
                 {
-                  // theme.colors.textMuted → price unit
                   color: theme.colors.textMuted,
                 },
               ]}
@@ -160,12 +175,10 @@ export function ProfessionalCard({ professional }: ProfessionalCardProps) {
             style={[
               styles.profileButton,
               {
-                // theme.colors.surface → bg (Light) / theme.colors.primaryLight → bg (Dark)
                 backgroundColor:
                   theme.name === 'light'
                     ? theme.colors.surface
                     : theme.colors.primaryLight,
-                // theme.colors.primary → border (Light only)
                 borderColor:
                   theme.name === 'light' ? theme.colors.primary : 'transparent',
                 borderWidth: theme.name === 'light' ? 1 : 0,
@@ -177,7 +190,6 @@ export function ProfessionalCard({ professional }: ProfessionalCardProps) {
               style={[
                 styles.profileButtonText,
                 {
-                  // theme.colors.primary → text (Light) / theme.colors.surface → text (Dark)
                   color:
                     theme.name === 'light'
                       ? theme.colors.primary
@@ -219,21 +231,36 @@ const styles = StyleSheet.create({
   avatarContainer: {
     position: 'relative',
     marginRight: 12,
+    width: 50,
+    height: 50,
   },
   avatar: {
     width: 50,
     height: 50,
     borderRadius: 25,
   },
+  favoriteIndicator: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
   onlineIndicator: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
   },
   headerInfo: {
     flex: 1,
@@ -257,12 +284,7 @@ const styles = StyleSheet.create({
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  rating: {
-    fontSize: 13,
-    fontFamily: 'Inter-Medium',
-    marginLeft: 4,
-    marginRight: 4,
+    gap: 4,
   },
   callCount: {
     fontSize: 11,
@@ -284,15 +306,6 @@ const styles = StyleSheet.create({
   priceUnit: {
     fontSize: 13,
     fontFamily: 'Inter-Regular',
-  },
-  statusSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  responseTime: {
-    fontSize: 11,
-    fontFamily: 'Inter-Regular',
-    marginLeft: 4,
   },
   profileButton: {
     paddingHorizontal: 16,

@@ -42,10 +42,10 @@ export function PromotionCarousel({ promotions }: PromotionCarouselProps) {
 
   const renderPromotion = ({ item }: { item: Promotion }) => {
     // ✅ Convert hex colors to rgba for transparency
+    // Using 50% opacity (80 in hex) to allow background images to show through better
     const gradientColors = item.gradient.map(color => {
-      // Add 80% opacity to gradient colors
       if (color.startsWith('#')) {
-        return `${color}CC`; // Adds CC (80% opacity) to hex color
+        return `${color}80`; // Adds 80 (50% opacity) to hex color for lighter overlay
       }
       return color;
     });

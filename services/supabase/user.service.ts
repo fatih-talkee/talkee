@@ -21,6 +21,7 @@ class UsersService {
         .from('users')
         .select('*')
         .eq('auth_id', authUser.id)
+        .eq('is_deleted', false)
         .single();
 
       if (error) {
@@ -377,11 +378,13 @@ class UsersService {
   }
 
   /**
-   * Delete current user account (soft delete or hard delete)
+   * Delete current user account (SOFT DELETE + ANONYMIZATION)
    * This will:
-   * 1. Delete user data from database
-   * 2. Sign out the user
-   * 3. Optionally delete auth user (requires admin access)
+   * 1. Anonymize user's personal data (GDPR compliant)
+   * 2. Mark user as deleted (soft delete)
+   * 3. Deactivate professional profile (if exists)
+   * 4. Delete auth user (prevents login)
+   * 5. Keep transactional data (calls, reviews, invoices) for audit trail
    */
   async deleteAccount(): Promise<{ success: boolean; error?: string }> {
     try {
@@ -391,73 +394,178 @@ class UsersService {
         return { success: false, error: 'Not authenticated' };
       }
 
-      console.log('🗑️  Starting account deletion for user:', currentUser.id);
+      const userId = currentUser.id;
+      const authId = currentUser.auth_id;
 
-      // 1. Delete related data first (CASCADE should handle this, but being explicit)
-      // Delete favorites
-      const { error: favoritesError } = await supabase
-        .from('favorites')
-        .delete()
-        .eq('user_id', currentUser.id);
+      console.log('🗑️  Starting SOFT DELETE (anonymization) for user:', userId, 'auth_id:', authId);
 
-      if (favoritesError) {
-        console.warn('Error deleting favorites:', favoritesError);
-        // Continue anyway
+      // ========================================================================
+      // STEP 1: Get professional ID if user is a professional
+      // ========================================================================
+      const { data: professional, error: profFetchError } = await supabase
+        .from('professionals')
+        .select('id')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (profFetchError && profFetchError.code !== 'PGRST116') {
+        // PGRST116 = no rows returned, which is fine
+        console.warn('Error fetching professional:', profFetchError);
       }
 
-      // Delete blocked users
-      const { error: blockedError } = await supabase
-        .from('blocked_users')
-        .delete()
-        .or(
-          `user_id.eq.${currentUser.id},blocked_user_id.eq.${currentUser.id}`
+      const professionalId = professional?.id;
+
+      // ========================================================================
+      // STEP 2: Use SQL function for soft delete (anonymization)
+      // ========================================================================
+      console.log('🗑️  Starting soft delete (anonymization)...');
+      const serviceRoleKey = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+      let adminClient: any = null;
+      
+      if (serviceRoleKey) {
+        // Use admin client to bypass RLS
+        try {
+          const { createClient } = await import('@supabase/supabase-js');
+          const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+          adminClient = createClient(supabaseUrl, serviceRoleKey, {
+            auth: {
+              autoRefreshToken: false,
+              persistSession: false,
+            },
+          });
+
+          // Try soft delete SQL function first (if it exists)
+          const { data: softDeleteResult, error: rpcError } = await adminClient.rpc(
+            'soft_delete_user_account',
+            {
+              user_id_to_delete: userId,
+            }
+          );
+
+          if (rpcError) {
+            // Function might not exist, do manual soft delete
+            console.log('SQL function not found, using manual soft delete');
+            
+            // Deactivate professional if exists
+            if (professionalId) {
+              const { error: profError } = await adminClient
+                .from('professionals')
+                .update({
+                  is_available: false,
+                  is_active: false,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', professionalId);
+
+              if (profError) {
+                console.warn('Error deactivating professional:', profError);
+              }
+            }
+
+            // Anonymize user data
+            const { error: anonymizeError } = await adminClient
+              .from('users')
+              .update({
+                name: 'Deleted User',
+                email: null,
+                primary_email: null,
+                phone: null,
+                avatar_url: null,
+                bio: null,
+                oauth_emails: {},
+                oauth_providers: [],
+                linked_accounts: [],
+                is_deleted: true,
+                deleted_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', userId);
+
+            if (anonymizeError) {
+              console.error('Error anonymizing user:', anonymizeError);
+              return {
+                success: false,
+                error: `Failed to anonymize user: ${anonymizeError.message}. Please run the SQL migration: docs/sql/soft_delete_user_account.sql`,
+              };
+            }
+          } else if (softDeleteResult && !softDeleteResult.success) {
+            console.error('SQL function returned error:', softDeleteResult);
+            return {
+              success: false,
+              error: softDeleteResult.error || 'Failed to soft delete user account',
+            };
+          } else {
+            console.log('✅ User anonymized via SQL function');
+          }
+        } catch (adminError) {
+          console.error('Error creating admin client:', adminError);
+          return {
+            success: false,
+            error: `Failed to soft delete user: ${adminError.message}. Please run the SQL migration: docs/sql/soft_delete_user_account.sql`,
+          };
+        }
+      } else {
+        // No service role key, try SQL function with regular client
+        const { data: softDeleteResult, error: dbError } = await supabase.rpc(
+          'soft_delete_user_account',
+          {
+            user_id_to_delete: userId,
+          }
         );
 
-      if (blockedError) {
-        console.warn('Error deleting blocked users:', blockedError);
-        // Continue anyway
+        if (dbError) {
+          console.error('Error soft deleting user via SQL function:', dbError);
+          return {
+            success: false,
+            error: `Failed to soft delete user: ${dbError.message}. Please run the SQL migration: docs/sql/soft_delete_user_account.sql and ensure you have service role key configured.`,
+          };
+        } else if (softDeleteResult && !softDeleteResult.success) {
+          console.error('SQL function returned error:', softDeleteResult);
+          return {
+            success: false,
+            error: softDeleteResult.error || 'Failed to soft delete user account',
+          };
+        }
       }
 
-      // Delete notifications
-      const { error: notificationsError } = await supabase
-        .from('notifications')
-        .delete()
-        .eq('user_id', currentUser.id);
+      console.log('✅ User anonymized and soft deleted');
 
-      if (notificationsError) {
-        console.warn('Error deleting notifications:', notificationsError);
-        // Continue anyway
+      // ========================================================================
+      // STEP 6: Delete auth user (requires service role key)
+      // ========================================================================
+      // Reuse serviceRoleKey from step 5
+      
+      if (serviceRoleKey && adminClient) {
+        try {
+          const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(authId);
+
+          if (authDeleteError) {
+            console.warn('Error deleting auth user:', authDeleteError);
+            // Continue anyway - user data is already deleted
+          } else {
+            console.log('✅ Auth user deleted');
+          }
+        } catch (authError) {
+          console.warn('Error creating admin client for auth deletion:', authError);
+          // Continue anyway
+        }
+      } else {
+        console.warn('⚠️  Service role key not found. Auth user will remain but user data is deleted.');
       }
 
-      // 2. Delete user profile from database
-      const { error: dbError } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', currentUser.id);
-
-      if (dbError) {
-        console.error('Error deleting user from database:', dbError);
-        return {
-          success: false,
-          error: `Failed to delete user data: ${dbError.message}`,
-        };
-      }
-
-      console.log('✅ User data deleted successfully');
-
-      // 3. Sign out (this will clear the session)
+      // ========================================================================
+      // STEP 7: Sign out current session
+      // ========================================================================
       const { error: signOutError } = await supabase.auth.signOut();
 
       if (signOutError) {
         console.error('Error signing out:', signOutError);
         // Don't fail the deletion, just log it
+      } else {
+        console.log('✅ User signed out');
       }
 
-      console.log('✅ User signed out successfully');
-
-      // Note: We can't delete the auth user without admin/service role key
-      // The auth user will remain, but with no profile data
-      // In production, you might want to use a server-side function for this
+      console.log('✅ SOFT DELETE (anonymization) completed successfully');
 
       return { success: true };
     } catch (error: any) {

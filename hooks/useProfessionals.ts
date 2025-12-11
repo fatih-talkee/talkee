@@ -1,13 +1,12 @@
 // hooks/useProfessionals.ts
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  professionalsService,
-  ProfessionalWithRelations,
-} from '@/services/supabase/professionals.service';
+import { professionalsService } from '@/services/supabase/professionals.service';
+import { ProfessionalWithRelations } from '@/types/database.types';
 
 /**
  * Get professionals list (optionally filtered by category)
  * Cache: 2 minutes (professionals list changes moderately)
+ * ✅ Already orders by is_featured DESC in service
  */
 export function useProfessionals(categoryId?: string) {
   return useQuery<ProfessionalWithRelations[]>({
@@ -21,6 +20,7 @@ export function useProfessionals(categoryId?: string) {
 /**
  * Get available professionals (for immediate calls)
  * Cache: 1 minute (availability changes frequently)
+ * ✅ Already orders by is_featured DESC in service
  */
 export function useAvailableProfessionals(categoryId?: string) {
   return useQuery<ProfessionalWithRelations[]>({
@@ -32,26 +32,18 @@ export function useAvailableProfessionals(categoryId?: string) {
 }
 
 /**
- * Get featured professionals (high rating, verified, most popular)
+ * Get featured professionals from database
  * Cache: 5 minutes (featured list changes infrequently)
+ * ✅ UPDATED: Now uses database is_featured flag instead of client-side filtering
  */
-export function useFeaturedProfessionals(limit: number = 10) {
+export function useFeaturedProfessionals(
+  limit: number = 10,
+  categoryId?: string
+) {
   return useQuery<ProfessionalWithRelations[]>({
-    queryKey: ['professionals', 'featured', limit],
-    queryFn: async () => {
-      // Get all active professionals
-      const professionals = await professionalsService.getProfessionals();
-
-      // Filter and sort for featured
-      return professionals
-        .filter((p) => p.rating >= 4.5) // High rating only
-        .sort((a, b) => {
-          // Sort by rating desc, then by total_calls desc
-          if (b.rating !== a.rating) return b.rating - a.rating;
-          return b.total_calls - a.total_calls;
-        })
-        .slice(0, limit);
-    },
+    queryKey: ['professionals', 'featured', limit, categoryId],
+    queryFn: () =>
+      professionalsService.getFeaturedProfessionals(limit, categoryId),
     staleTime: 1000 * 60 * 5, // 5 minutes
     gcTime: 1000 * 60 * 15, // 15 minutes
   });
@@ -74,6 +66,7 @@ export function useProfessional(id: string) {
 /**
  * Search professionals by query string
  * Cache: 1 minute (search results should be fresh)
+ * ✅ Already orders by is_featured DESC in service
  */
 export function useSearchProfessionals(query: string) {
   return useQuery<ProfessionalWithRelations[]>({

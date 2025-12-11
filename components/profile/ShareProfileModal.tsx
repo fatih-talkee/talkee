@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,14 +8,16 @@ import {
   Alert,
   Share,
   Dimensions,
-  Image,
   ScrollView,
   Platform,
   Pressable,
 } from 'react-native';
-import { X, Copy, Share2, Star, ShieldCheck, QrCode } from 'lucide-react-native';
+import { X, Copy, Share2, Download } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import QRCode from 'react-native-qrcode-svg';
+import * as Sharing from 'expo-sharing';
+import * as Clipboard from 'expo-clipboard';
+import ViewShot from 'react-native-view-shot';
 
 interface ShareProfileModalProps {
   visible: boolean;
@@ -44,42 +46,111 @@ export function ShareProfileModal({
 }: ShareProfileModalProps) {
   const { theme } = useTheme();
   const [copied, setCopied] = useState(false);
+  const [sharingQr, setSharingQr] = useState(false);
+  const [message, setMessage] = useState<{
+    type: 'success' | 'error' | 'warning';
+    text: string;
+  } | null>(null);
+  const qrCodeRef = useRef<any>(null);
 
+  // Deep link for app (opens app directly)
+  const appDeepLink = professionalData
+    ? `talkee://professional/${professionalData.id}`
+    : userId
+    ? `talkee://user/${userId}`
+    : 'talkee://';
+
+  // Web URL (fallback for web users or if app not installed)
   const profileUrl = professionalData
     ? `https://talkee.app/professional/${professionalData.id}`
     : userId
     ? `https://talkee.app/user/${userId}`
     : 'https://talkee.app';
 
+  // Combined link (app deep link + web URL for universal compatibility)
+  const universalLink = `${appDeepLink}\n\nOr visit: ${profileUrl}`;
+
   const handleCopyLink = async () => {
     try {
-      if (Platform.OS === 'web') {
-        await navigator.clipboard.writeText(profileUrl);
-      } else {
-        Alert.alert('Link Copied', profileUrl);
-      }
+      const linkToCopy = Platform.OS === 'web' ? profileUrl : universalLink;
+
+      // Use Expo Clipboard for both web and mobile
+      await Clipboard.setStringAsync(linkToCopy);
+
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setMessage({ type: 'success', text: 'Profile link copied to clipboard' });
+      setTimeout(() => {
+        setCopied(false);
+        setMessage(null);
+      }, 3000);
     } catch (error) {
-      Alert.alert('Error', 'Failed to copy link');
+      setMessage({ type: 'error', text: 'Failed to copy link' });
+      setTimeout(() => setMessage(null), 3000);
     }
   };
 
   const handleShare = async () => {
     try {
       const shareMessage = professionalData
-        ? `Check out ${professionalData.name} on Talkee! ${professionalData.title} - ${professionalData.rating}★ rating. ${profileUrl}`
+        ? `Check out ${professionalData.name} on Talkee! ${professionalData.title} - ${professionalData.rating}★ rating.\n\n${universalLink}`
         : username
-        ? `Check out ${username}'s profile on Talkee! ${profileUrl}`
-        : `Check out this profile on Talkee: ${profileUrl}`;
+        ? `Check out ${username}'s profile on Talkee!\n\n${universalLink}`
+        : `Check out this profile on Talkee:\n\n${universalLink}`;
 
       await Share.share({
         message: shareMessage,
-        url: profileUrl,
-        title: 'Share Professional Profile',
+        url: Platform.OS === 'ios' ? appDeepLink : profileUrl,
+        title: 'Share Profile',
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to share link');
+    }
+  };
+
+  const handleShareQrCode = async () => {
+    if (!qrCodeRef.current) {
+      setMessage({ type: 'error', text: 'QR code not ready' });
+      setTimeout(() => setMessage(null), 3000);
+      return;
+    }
+
+    try {
+      setSharingQr(true);
+
+      // Capture QR code as image
+      const uri = await qrCodeRef.current.capture();
+
+      if (!uri) {
+        throw new Error('Failed to capture QR code');
+      }
+
+      // Check if sharing is available
+      const isAvailable = await Sharing.isAvailableAsync();
+
+      if (isAvailable) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'image/png',
+          dialogTitle: 'Share QR Code',
+        });
+
+        setMessage({ type: 'success', text: 'QR code shared successfully' });
+        setTimeout(() => setMessage(null), 3000);
+      } else {
+        // Fallback: copy image to clipboard or show alert
+        setMessage({
+          type: 'warning',
+          text: "Sharing not available. Please use the share button in your device's image viewer.",
+        });
+        setTimeout(() => setMessage(null), 4000);
+      }
+    } catch (error: any) {
+      setMessage({
+        type: 'error',
+        text: error.message || 'Failed to share QR code',
+      });
+      setTimeout(() => setMessage(null), 3000);
+    } finally {
+      setSharingQr(false);
     }
   };
 
@@ -90,10 +161,7 @@ export function ShareProfileModal({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <Pressable
-        style={styles.overlay}
-        onPress={onClose}
-      >
+      <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable
           style={[
             styles.modalContainer,
@@ -110,6 +178,44 @@ export function ShareProfileModal({
             </TouchableOpacity>
           </View>
 
+          {message && (
+            <View
+              style={[
+                styles.messageContainer,
+                {
+                  backgroundColor:
+                    message.type === 'success'
+                      ? theme.colors.success + '20'
+                      : message.type === 'error'
+                      ? theme.colors.error + '20'
+                      : theme.colors.warning + '20',
+                  borderColor:
+                    message.type === 'success'
+                      ? theme.colors.success
+                      : message.type === 'error'
+                      ? theme.colors.error
+                      : theme.colors.warning,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.messageText,
+                  {
+                    color:
+                      message.type === 'success'
+                        ? theme.colors.success
+                        : message.type === 'error'
+                        ? theme.colors.error
+                        : theme.colors.warning,
+                  },
+                ]}
+              >
+                {message.text}
+              </Text>
+            </View>
+          )}
+
           <ScrollView
             style={styles.scrollContainer}
             contentContainerStyle={styles.scrollContent}
@@ -120,132 +226,15 @@ export function ShareProfileModal({
             bounces={true}
           >
             <View style={styles.content}>
-              {professionalData && (
-                <View
-                  style={[
-                    styles.professionalInfo,
-                    {
-                      backgroundColor: theme.colors.surface,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                >
-                  <Image
-                    source={{ uri: professionalData.avatar }}
-                    style={styles.professionalAvatar}
-                  />
-                  <View style={styles.professionalDetails}>
-                    <View style={styles.professionalNameRow}>
-                      <Text
-                        style={[
-                          styles.professionalName,
-                          { color: theme.colors.primary },
-                        ]}
-                      >
-                        {professionalData.name}
-                      </Text>
-                      {professionalData.isVerified && (
-                        <ShieldCheck size={22} color={theme.colors.primary} strokeWidth={3} />
-                      )}
-                    </View>
-                    <Text
-                      style={[
-                        styles.professionalTitle,
-                        { color: theme.colors.textSecondary },
-                      ]}
-                    >
-                      {professionalData.title}
-                    </Text>
-                    <View style={styles.professionalStats}>
-                      <View style={styles.statItem}>
-                        <Star
-                          size={14}
-                          color={theme.colors.warning}
-                          fill={theme.colors.warning}
-                        />
-                        <Text
-                          style={[
-                            styles.statText,
-                            { color: theme.colors.text },
-                          ]}
-                        >
-                          {professionalData.rating}
-                        </Text>
-                      </View>
-                      <Text
-                        style={[
-                          styles.statSeparator,
-                          { color: theme.colors.textMuted },
-                        ]}
-                      >
-                        •
-                      </Text>
-                      <Text
-                        style={[
-                          styles.statText,
-                          { color: theme.colors.textMuted },
-                        ]}
-                      >
-                        {professionalData.totalCalls} calls
-                      </Text>
-                      <Text
-                        style={[
-                          styles.statSeparator,
-                          { color: theme.colors.textMuted },
-                        ]}
-                      >
-                        •
-                      </Text>
-                      <Text
-                        style={[
-                          styles.statText,
-                          { color: theme.colors.warning },
-                        ]}
-                      >
-                        {'$' + professionalData.ratePerMinute.toFixed(2)}/min
-                      </Text>
-                    </View>
-                    {professionalData.specialties &&
-                      professionalData.specialties.length > 0 && (
-                      <View style={styles.specialtiesList}>
-                          {professionalData.specialties
-                            .slice(0, 3)
-                            .map((specialty, index) => (
-                              <View
-                                key={index}
-                                style={[
-                                  styles.specialtyBadge,
-                                  {
-                                    backgroundColor: theme.colors.background,
-                                    borderColor: theme.colors.border,
-                                  },
-                                ]}
-                              >
-                                <Text
-                                  style={[
-                                    styles.specialtyText,
-                                    { color: theme.colors.primary },
-                                  ]}
-                                >
-                              {specialty}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                  </View>
-                </View>
-              )}
-
-            <View style={styles.qrSection}>
+              <View style={styles.qrSection}>
                 <Text
                   style={[
                     styles.sectionLabel,
                     { color: theme.colors.textSecondary },
                   ]}
                 >
-                QR Code
-              </Text>
+                  QR Code
+                </Text>
                 <View
                   style={[
                     styles.qrContainer,
@@ -255,67 +244,106 @@ export function ShareProfileModal({
                     },
                   ]}
                 >
-                <View style={styles.qrCodeWrapper}>
-                  <QRCode
-                    value={profileUrl}
-                    size={70}
+                  <ViewShot
+                    ref={qrCodeRef}
+                    options={{ format: 'png', quality: 1.0 }}
+                    style={styles.qrCodeWrapper}
+                  >
+                    <QRCode
+                      value={appDeepLink}
+                      size={200}
                       color={theme.name === 'dark' ? '#FFFFFF' : '#000000'}
                       backgroundColor={
                         theme.name === 'dark' ? '#1C1C1E' : '#FFFFFF'
                       }
-                    logo={require('../../assets/images/icon.png')}
-                    logoSize={15}
+                      logo={require('../../assets/images/icon.png')}
+                      logoSize={40}
                       logoBackgroundColor="#FFFFFF"
-                    logoMargin={2}
-                  />
+                      logoMargin={4}
+                    />
+                  </ViewShot>
                 </View>
+                <TouchableOpacity
+                  style={[
+                    styles.shareQrButton,
+                    {
+                      backgroundColor: theme.colors.primary + '20',
+                      borderColor: theme.colors.primary,
+                    },
+                  ]}
+                  onPress={handleShareQrCode}
+                  disabled={sharingQr}
+                >
+                  <Download size={16} color={theme.colors.primary} />
+                  <Text
+                    style={[
+                      styles.shareQrButtonText,
+                      { color: theme.colors.primary },
+                    ]}
+                  >
+                    {sharingQr ? 'Sharing...' : 'Share QR Code'}
+                  </Text>
+                </TouchableOpacity>
               </View>
-            </View>
 
-            <View style={styles.linkSection}>
+              <View style={styles.linkSection}>
                 <Text
                   style={[
                     styles.linkLabel,
                     { color: theme.colors.textSecondary },
                   ]}
                 >
-                Profile Link
-              </Text>
-              <View
-                style={[
-                  styles.linkContainer,
-                  {
-                    backgroundColor: theme.colors.surface,
-                    borderColor: theme.colors.border,
-                    },
-                ]}
-              >
-                <Text
-                    style={[
-                      styles.linkText,
-                      { color: theme.colors.textSecondary },
-                    ]}
-                  numberOfLines={1}
-                  ellipsizeMode="middle"
-                >
-                  {profileUrl}
+                  Profile Link
                 </Text>
-                <TouchableOpacity
-                  onPress={handleCopyLink}
+                <View
                   style={[
-                    styles.copyButton,
-                      { borderColor: theme.colors.primary },
+                    styles.linkContainer,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.border,
+                    },
                   ]}
                 >
-                  <Copy size={16} color={theme.colors.primary} />
+                  <View style={styles.linkTextContainer}>
+                    <Text
+                      style={[
+                        styles.linkText,
+                        { color: theme.colors.textSecondary },
+                      ]}
+                      numberOfLines={2}
+                      ellipsizeMode="middle"
+                    >
+                      {Platform.OS === 'web' ? profileUrl : appDeepLink}
+                    </Text>
+                    {Platform.OS !== 'web' && (
+                      <Text
+                        style={[
+                          styles.linkSubtext,
+                          { color: theme.colors.textMuted },
+                        ]}
+                        numberOfLines={1}
+                        ellipsizeMode="middle"
+                      >
+                        Web: {profileUrl}
+                      </Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    onPress={handleCopyLink}
+                    style={[
+                      styles.copyButton,
+                      { borderColor: theme.colors.primary },
+                    ]}
+                  >
+                    <Copy size={16} color={theme.colors.primary} />
                     <Text
                       style={[styles.copyText, { color: theme.colors.primary }]}
                     >
-                    {copied ? 'Copied!' : 'Copy'}
-                  </Text>
-                </TouchableOpacity>
+                      {copied ? 'Copied!' : 'Copy'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
             </View>
           </ScrollView>
 
@@ -355,7 +383,7 @@ const styles = StyleSheet.create({
     width: Dimensions.get('window').width * 0.9,
     maxWidth: 400,
     height: Dimensions.get('window').height * 0.85,
-    maxHeight: Dimensions.get('window').height * 0.90,
+    maxHeight: Dimensions.get('window').height * 0.9,
     borderRadius: 20,
     padding: 0,
     shadowColor: '#000',
@@ -384,6 +412,19 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: 4,
   },
+  messageContainer: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  messageText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    textAlign: 'center',
+  },
   scrollContainer: {
     flex: 1,
   },
@@ -394,71 +435,6 @@ const styles = StyleSheet.create({
   },
   content: {
     alignItems: 'center',
-  },
-  professionalInfo: {
-    flexDirection: 'row',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 20,
-    width: '100%',
-  },
-  professionalAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginRight: 12,
-  },
-  professionalDetails: {
-    flex: 1,
-  },
-  professionalNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  professionalName: {
-    fontSize: 16,
-    fontFamily: 'Inter-Bold',
-    marginRight: 6,
-  },
-  professionalTitle: {
-    fontSize: 13,
-    fontFamily: 'Inter-Regular',
-    marginBottom: 6,
-  },
-  professionalStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    marginLeft: 4,
-  },
-  statSeparator: {
-    fontSize: 12,
-    marginHorizontal: 6,
-  },
-  specialtiesList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  specialtyBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  specialtyText: {
-    fontSize: 11,
-    fontFamily: 'Inter-Medium',
   },
   qrSection: {
     width: '100%',
@@ -479,9 +455,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   qrCodeWrapper: {
-    padding: 6,
+    padding: 12,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareQrButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 12,
+    gap: 8,
+  },
+  shareQrButtonText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+  },
+  linkTextContainer: {
+    flex: 1,
+    marginRight: 12,
+  },
+  linkSubtext: {
+    fontSize: 11,
+    fontFamily: 'Inter-Regular',
+    marginTop: 4,
   },
   linkSection: {
     width: '100%',

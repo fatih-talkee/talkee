@@ -275,8 +275,8 @@ export default function BecomeProfessionalScreen() {
           message:
             'Your bio must be at least 50 characters to help clients understand your expertise',
         });
-      return;
-    }
+        return;
+      }
     }
 
     // Step 2 validation
@@ -426,6 +426,21 @@ export default function BecomeProfessionalScreen() {
             ? 'Your professional profile has been updated successfully.'
             : 'Your professional profile has been created successfully. Welcome aboard!',
         });
+
+        // Reset all form states after successful save/update
+        setFullName('');
+        setEmail('');
+        setBio('');
+        setSpecialties([]);
+        setLanguages([]);
+        setSkillsCertifications([]);
+        setEducations([]);
+        setExperiences([]);
+        setSelectedCategories([]);
+        setAvailabilities([]);
+        setIsAvailable(true);
+        setIsPublic(true);
+        setCurrentStep(1);
 
         // Navigate to home
         setTimeout(() => {
@@ -618,14 +633,12 @@ export default function BecomeProfessionalScreen() {
       case 6:
     return (
           <Step6Finish
-            loading={loading}
             onTermsPress={() => {
               // Open terms modal or navigate
             }}
             onPrivacyPress={() => {
               // Open privacy modal or navigate
             }}
-            onComplete={handleComplete}
           />
         );
 
@@ -647,8 +660,8 @@ export default function BecomeProfessionalScreen() {
           </Text>
           <Text style={{ color: theme.colors.textMuted, fontSize: 14, fontFamily: 'Inter-Regular' }}>
             Please wait
-          </Text>
-        </View>
+            </Text>
+          </View>
       </SafeAreaView>
     );
   }
@@ -696,7 +709,15 @@ export default function BecomeProfessionalScreen() {
           />
         ) : (
           <Button
-            title={loading ? 'Creating Profile...' : 'Complete'}
+            title={
+              loading
+                ? isEditMode
+                  ? 'Updating...'
+                  : 'Creating...'
+                : isEditMode
+                ? 'Update Profile'
+                : 'Save & Become Professional'
+            }
             onPress={handleComplete}
             style={styles.nextButtonFullWidth}
             disabled={loading}

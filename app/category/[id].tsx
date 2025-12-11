@@ -5,11 +5,11 @@ import {
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
-  FlatList,
   ActivityIndicator,
+  SectionList,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Filter } from 'lucide-react-native';
+import { Filter, Star } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
@@ -20,8 +20,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useProfessionals } from '@/hooks/useProfessionals';
 import { useCategory } from '@/hooks/useCategories';
 
-// ✅ TYPE ADAPTERS
-import { adaptProfessionals, UIProfessional } from '@/utils/typeAdapters';
+// ✅ TYPE ADAPTERS (not needed here, ProfessionalCard uses ProfessionalWithRelations directly)
 import { ProfessionalWithRelations } from '@/types/database.types';
 
 export default function CategoryScreen() {
@@ -40,53 +39,145 @@ export default function CategoryScreen() {
   const { data: categoryData } = useCategory(id as string);
   const categoryName = (name as string) || categoryData?.name || 'Category';
 
-  // ✅ Fetch all professionals (will filter by category)
+  // ✅ Fetch all professionals (already sorted by is_featured in service)
   const {
     data: professionalsData = [],
     isLoading: professionalsLoading,
     error: professionalsError,
   } = useProfessionals(id as string);
 
-  // ✅ Convert to UI format
-  const professionals = useMemo(
-    () =>
-      adaptProfessionals(
-        professionalsData as unknown as ProfessionalWithRelations[]
-      ),
-    [professionalsData]
+  // ✅ Use professionals data directly (no need to adapt, ProfessionalCard uses ProfessionalWithRelations)
+  const professionals = professionalsData;
+
+  // ✅ Apply client-side filters and separate featured/regular
+  const { featuredProfessionals, regularProfessionals, totalCount } =
+    useMemo(() => {
+      const filtered = professionals.filter(
+        (professional: ProfessionalWithRelations) => {
+          const userName = professional.users?.name || '';
+          const title = professional.title || '';
+          const specialties = professional.specialties || [];
+
+          // Search filter
+          const matchesSearch =
+            userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            specialties.some((s) =>
+              s.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+
+          // Price filter
+          const ratePerMinute = Number(professional.rate_per_minute) || 0;
+          const matchesPrice =
+            ratePerMinute >= filters.priceRange[0] &&
+            ratePerMinute <= filters.priceRange[1];
+
+          // Rating filter (calculate from reviews if available, otherwise 0)
+          const reviews = professional.reviews || [];
+          const rating =
+            reviews.length > 0
+              ? reviews.reduce((sum, r) => sum + (r.rating || 0), 0) /
+                reviews.length
+              : 0;
+          const matchesRating = rating >= filters.rating;
+
+          // Availability filter
+          const matchesAvailability =
+            filters.availability === 'all' ||
+            (filters.availability === 'online' && professional.is_available) ||
+            (filters.availability === 'quick-response' &&
+              professional.is_available); // Simplified: quick response = available
+
+          return (
+            matchesSearch &&
+            matchesPrice &&
+            matchesRating &&
+            matchesAvailability
+          );
+        }
+      );
+
+      // Separate featured and regular professionals
+      const featured = filtered.filter(
+        (p: ProfessionalWithRelations) => p.is_featured
+      );
+      const regular = filtered.filter(
+        (p: ProfessionalWithRelations) => !p.is_featured
+      );
+
+      return {
+        featuredProfessionals: featured,
+        regularProfessionals: regular,
+        totalCount: filtered.length,
+      };
+    }, [professionals, searchQuery, filters]);
+
+  // ✅ Prepare sections for SectionList
+  const sections = useMemo(() => {
+    const result = [];
+
+    // Add featured section if there are featured professionals
+    if (featuredProfessionals.length > 0) {
+      result.push({
+        title: 'Featured Professionals',
+        data: featuredProfessionals,
+        isFeatured: true,
+      });
+    }
+
+    // Add regular section if there are regular professionals
+    if (regularProfessionals.length > 0) {
+      result.push({
+        title: featuredProfessionals.length > 0 ? 'All Professionals' : '',
+        data: regularProfessionals,
+        isFeatured: false,
+      });
+    }
+
+    return result;
+  }, [featuredProfessionals, regularProfessionals]);
+
+  const renderSectionHeader = ({ section }: any) => {
+    if (!section.title) return null;
+
+    return (
+      <View style={styles.sectionHeader}>
+        {section.isFeatured && (
+          <View
+            style={[
+              styles.featuredBadge,
+              { backgroundColor: theme.colors.brandPink },
+            ]}
+          >
+            <Star size={14} color="#FFFFFF" fill="#FFFFFF" />
+          </View>
+        )}
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+          {section.title}
+        </Text>
+        <Text style={[styles.sectionCount, { color: theme.colors.textMuted }]}>
+          {section.data.length}
+        </Text>
+      </View>
+    );
+  };
+
+  const renderItem = ({ item }: { item: ProfessionalWithRelations }) => (
+    <ProfessionalCard professional={item} />
   );
 
-  // ✅ Apply client-side filters (search, price, rating, availability)
-  const filteredProfessionals = useMemo(() => {
-    return professionals.filter((professional: UIProfessional) => {
-      // Search filter
-      const matchesSearch =
-        professional.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        professional.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        professional.specialties.some((s) =>
-          s.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-
-      // Price filter
-      const matchesPrice =
-        professional.ratePerMinute >= filters.priceRange[0] &&
-        professional.ratePerMinute <= filters.priceRange[1];
-
-      // Rating filter
-      const matchesRating = professional.rating >= filters.rating;
-
-      // Availability filter
-      const matchesAvailability =
-        filters.availability === 'all' ||
-        (filters.availability === 'online' && professional.isOnline) ||
-        (filters.availability === 'quick-response' &&
-          professional.responseTime.includes('< 5'));
-
-      return (
-        matchesSearch && matchesPrice && matchesRating && matchesAvailability
-      );
-    });
-  }, [professionals, searchQuery, filters]);
+  const renderEmptyState = () => (
+    <View style={styles.emptyState}>
+      <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+        No professionals found
+      </Text>
+      <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
+        {searchQuery || filters.rating > 0 || filters.availability !== 'all'
+          ? `Try adjusting your search or filters to find more ${categoryName.toLowerCase()} professionals`
+          : `No ${categoryName.toLowerCase()} professionals available yet`}
+      </Text>
+    </View>
+  );
 
   return (
     <SafeAreaView
@@ -120,10 +211,10 @@ export default function CategoryScreen() {
         onChangeText={setSearchQuery}
         placeholder="Search professionals..."
         showResultsCount={true}
-        resultsCount={filteredProfessionals.length}
-        resultsCountLabel={`${
-          filteredProfessionals.length
-        } ${categoryName.toLowerCase()} professionals`}
+        resultsCount={totalCount}
+        resultsCountLabel={`${totalCount} ${categoryName.toLowerCase()} professional${
+          totalCount !== 1 ? 's' : ''
+        }`}
       />
 
       {professionalsLoading ? (
@@ -144,29 +235,21 @@ export default function CategoryScreen() {
             Please try again later
           </Text>
         </View>
+      ) : sections.length === 0 ? (
+        renderEmptyState()
       ) : (
-        <FlatList
-          data={filteredProfessionals}
+        <SectionList
+          sections={sections}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <ProfessionalCard professional={item} />}
+          renderItem={renderItem}
+          renderSectionHeader={renderSectionHeader}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
-                No professionals found
-              </Text>
-              <Text
-                style={[styles.emptyText, { color: theme.colors.textMuted }]}
-              >
-                {searchQuery ||
-                filters.rating > 0 ||
-                filters.availability !== 'all'
-                  ? `Try adjusting your search or filters to find more ${categoryName.toLowerCase()} professionals`
-                  : `No ${categoryName.toLowerCase()} professionals available yet`}
-              </Text>
-            </View>
-          }
+          stickySectionHeadersEnabled={false}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          SectionSeparatorComponent={() => (
+            <View style={styles.sectionSeparator} />
+          )}
         />
       )}
 
@@ -223,10 +306,40 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 24,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  featuredBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter-Bold',
+    flex: 1,
+  },
+  sectionCount: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+  },
+  separator: {
+    height: 16,
+  },
+  sectionSeparator: {
+    height: 32,
+  },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
+    paddingHorizontal: 40,
   },
   emptyTitle: {
     fontSize: 20,
@@ -238,6 +351,5 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     textAlign: 'center',
     lineHeight: 20,
-    paddingHorizontal: 40,
   },
 });

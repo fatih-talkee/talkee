@@ -263,7 +263,7 @@ export function ToastStack() {
               },
             ],
             opacity: toast.opacity,
-            zIndex: 1000 - index,
+            zIndex: 10000 - index,
           },
         ]}
       >
