@@ -21,12 +21,16 @@ import { Header } from '@/components/ui/Header';
 import { useFeaturedProfessionals } from '@/hooks/useProfessionals';
 import { usePopularCategories } from '@/hooks/useCategories';
 import { useFeaturedPromotions } from '@/hooks/usePromotions';
+import { useProfile } from '@/hooks/useProfile';
 import { ProfessionalWithRelations } from '@/types/database.types';
 
 // ✅ TYPE ADAPTERS (not needed here, ProfessionalCard uses ProfessionalWithRelations directly)
 
 export default function HomeScreen() {
   const { theme } = useTheme();
+
+  // ✅ Get user profile to check if professional
+  const { isProfessional } = useProfile();
 
   // ✅ Fetch featured professionals (is_featured = true from database)
   const {
@@ -46,6 +50,9 @@ export default function HomeScreen() {
   const professionals = professionalsData;
   const categories = categoriesData;
   const promotions = promotionsData;
+
+  // ✅ Dummy unread notification count (will be replaced with real data later)
+  const unreadNotificationCount = 3;
 
   return (
     <SafeAreaView
@@ -67,9 +74,25 @@ export default function HomeScreen() {
                       : '#000000',
                 },
               ]}
-              onPress={() => router.push('/notifications' as any)}
+              onPress={() => router.push('/notifications/index' as any)}
             >
               <Bell size={20} color="#FFFFFF" />
+              {unreadNotificationCount > 0 && (
+                <View
+                  style={[
+                    styles.badge,
+                    {
+                      backgroundColor: theme.colors.error || '#EF4444',
+                    },
+                  ]}
+                >
+                  <Text style={styles.badgeText}>
+                    {unreadNotificationCount > 99
+                      ? '99+'
+                      : unreadNotificationCount}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         }
@@ -79,7 +102,10 @@ export default function HomeScreen() {
         {/* Promotion Carousel */}
         {promotions.length > 0 && (
           <View style={styles.carouselSection}>
-            <PromotionCarousel promotions={promotions} />
+            <PromotionCarousel
+              promotions={promotions}
+              isProfessional={isProfessional}
+            />
           </View>
         )}
 
@@ -166,6 +192,26 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  badgeText: {
+    fontSize: 10,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
   content: {
     flex: 1,

@@ -210,8 +210,8 @@ export function FilterModal({
                 Reset
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={onClose}
+            <TouchableOpacity 
+              onPress={onClose} 
               style={[
                 styles.closeButton,
                 {
@@ -229,8 +229,8 @@ export function FilterModal({
           </View>
         </View>
 
-        <ScrollView
-          style={styles.content}
+        <ScrollView 
+          style={styles.content} 
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled={true}
@@ -248,7 +248,7 @@ export function FilterModal({
               {priceRanges.map((range, index) => {
                 const isSelected =
                   filters.priceRange[0] === range.value[0] &&
-                  filters.priceRange[1] === range.value[1];
+                                  filters.priceRange[1] === range.value[1];
                 return (
                   <TouchableOpacity
                     key={index}
@@ -269,9 +269,9 @@ export function FilterModal({
                   >
                     <Text
                       style={[
-                        styles.optionText,
-                        {
-                          color: isSelected ? '#000000' : theme.colors.text,
+                      styles.optionText,
+                      {
+                        color: isSelected ? '#000000' : theme.colors.text,
                         },
                       ]}
                     >
@@ -314,9 +314,9 @@ export function FilterModal({
                   >
                     <Text
                       style={[
-                        styles.optionText,
-                        {
-                          color: isSelected ? '#000000' : theme.colors.text,
+                      styles.optionText,
+                      {
+                        color: isSelected ? '#000000' : theme.colors.text,
                         },
                       ]}
                     >
@@ -398,9 +398,9 @@ export function FilterModal({
                   >
                     <Text
                       style={[
-                        styles.categoryChipText,
-                        {
-                          color: isSelected ? '#000000' : theme.colors.text,
+                      styles.categoryChipText,
+                      {
+                        color: isSelected ? '#000000' : theme.colors.text,
                         },
                       ]}
                     >

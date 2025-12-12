@@ -13,8 +13,6 @@ export class ProfileService {
    */
   static async getProfileData(authId: string): Promise<UserProfileData | null> {
     try {
-      console.log('🔍 Fetching profile for auth ID:', authId);
-
       // Get user data by auth_id
       const { data: users, error: userError } = await supabase
         .from('users')
@@ -27,12 +25,10 @@ export class ProfileService {
       }
 
       if (!users || users.length === 0) {
-        console.warn('⚠️ No user found with auth ID:', authId);
         return null;
       }
 
       const user = users[0];
-      console.log('✅ User found:', user.name || user.primary_email);
 
       // Get stats from function using user.id (not auth_id!)
       const { data: statsData, error: statsError } = await supabase.rpc(
@@ -54,8 +50,6 @@ export class ProfileService {
         member_since: user.created_at,
       };
 
-      console.log('📊 Stats loaded:', stats);
-
       // Check if professional - query professionals table directly
       const { data: profData } = await supabase
         .from('professionals')
@@ -65,13 +59,6 @@ export class ProfileService {
 
       const professional = profData;
       const is_professional = !!profData;
-
-      console.log(
-        '👔 Professional check:',
-        is_professional ? 'Is professional' : 'Not professional'
-      );
-
-      console.log('✅ Profile data complete');
 
       return {
         user,

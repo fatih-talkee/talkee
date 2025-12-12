@@ -1,7 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Animated,
+  Dimensions,
+  Platform,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from 'lucide-react-native';
+import {
+  CheckCircle2,
+  AlertCircle,
+  AlertTriangle,
+  Info,
+  X,
+} from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 
 export enum ToastType {
@@ -34,12 +48,12 @@ class ToastStackManager {
   subscribe(listener: (toasts: ToastItem[]) => void) {
     this.listeners.push(listener);
     return () => {
-      this.listeners = this.listeners.filter(l => l !== listener);
+      this.listeners = this.listeners.filter((l) => l !== listener);
     };
   }
 
   private notify() {
-    this.listeners.forEach(listener => listener([...this.toasts]));
+    this.listeners.forEach((listener) => listener([...this.toasts]));
   }
 
   show(type: ToastType, options: ToastOptions) {
@@ -88,7 +102,8 @@ class ToastStackManager {
     ]).start();
 
     // Auto dismiss
-    const duration = options.duration || (type === ToastType.ERROR ? 4000 : 3000);
+    const duration =
+      options.duration || (type === ToastType.ERROR ? 4000 : 3000);
     setTimeout(() => {
       this.hide(id);
     }, duration);
@@ -97,7 +112,7 @@ class ToastStackManager {
   }
 
   hide(id: string) {
-    const index = this.toasts.findIndex(t => t.id === id);
+    const index = this.toasts.findIndex((t) => t.id === id);
     if (index === -1) return;
 
     const toast = this.toasts[index];
@@ -116,8 +131,8 @@ class ToastStackManager {
       }),
     ]).start(() => {
       // Remove from stack
-      this.toasts = this.toasts.filter(t => t.id !== id);
-      
+      this.toasts = this.toasts.filter((t) => t.id !== id);
+
       // Slide remaining toasts up to fill the gap
       this.toasts.forEach((t, i) => {
         const newOffset = i * 80;
@@ -170,11 +185,19 @@ export function ToastStack() {
         borderColor: isDark ? 'rgba(255, 255, 255, 0.3)' : theme.colors.border,
         paddingHorizontal: 16,
         paddingVertical: 14,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: isDark ? 0.5 : 0.15,
-        shadowRadius: 16,
-        elevation: 12,
+        ...(Platform.OS === 'web'
+          ? {
+              boxShadow: isDark
+                ? '0px 8px 16px rgba(0,0,0,0.5)'
+                : '0px 8px 16px rgba(0,0,0,0.15)',
+            }
+          : {
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: isDark ? 0.5 : 0.15,
+              shadowRadius: 16,
+              elevation: 12,
+            }),
         flexDirection: 'row' as const,
         alignItems: 'center' as const,
         marginBottom: 12,
@@ -298,4 +321,3 @@ export function ToastStack() {
     </View>
   );
 }
-

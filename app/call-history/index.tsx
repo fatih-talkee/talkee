@@ -117,7 +117,7 @@ export default function CallHistoryScreen() {
           title: 'User Blocked',
           message: 'This user can no longer contact you',
         });
-      } else {
+    } else {
         await unblockUserMutation.mutateAsync(userId);
         toast.success({
           title: 'User Unblocked',
@@ -161,7 +161,7 @@ export default function CallHistoryScreen() {
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
             Loading call history...
-          </Text>
+                </Text>
         </View>
       </SafeAreaView>
     );
@@ -189,9 +189,9 @@ export default function CallHistoryScreen() {
       <Header showLogo showBack />
 
       <SearchBar
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-        placeholder="Search call history..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search call history..."
         showTabButtons={true}
         tabOptions={filters}
         selectedTabKey={selectedFilter}

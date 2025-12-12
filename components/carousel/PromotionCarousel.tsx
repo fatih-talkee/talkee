@@ -26,15 +26,36 @@ interface Promotion {
 
 interface PromotionCarouselProps {
   promotions: Promotion[];
+  isProfessional?: boolean;
 }
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 40;
 
-export function PromotionCarousel({ promotions }: PromotionCarouselProps) {
+export function PromotionCarousel({
+  promotions,
+  isProfessional = false,
+}: PromotionCarouselProps) {
   const handlePromotionPress = (promotion: Promotion) => {
     if (promotion.ctaLink) {
-      router.push(promotion.ctaLink as any);
+      // ✅ Conditional routing: If "Get Started" button points to become-professional
+      // and user is already professional, redirect to professional-settings instead
+      if (
+        (promotion.ctaLink === '/become-professional' ||
+          promotion.ctaLink === '/become-professional/index') &&
+        isProfessional
+      ) {
+        router.push('/professional-settings' as any);
+      } else {
+        // Normalize route paths
+        let normalizedLink = promotion.ctaLink;
+        if (normalizedLink === '/become-professional') {
+          normalizedLink = '/become-professional/index';
+        } else if (normalizedLink === '/notifications') {
+          normalizedLink = '/notifications/index';
+        }
+        router.push(normalizedLink as any);
+      }
     } else {
       router.push('/(tabs)/search');
     }
@@ -43,7 +64,7 @@ export function PromotionCarousel({ promotions }: PromotionCarouselProps) {
   const renderPromotion = ({ item }: { item: Promotion }) => {
     // ✅ Convert hex colors to rgba for transparency
     // Using 50% opacity (80 in hex) to allow background images to show through better
-    const gradientColors = item.gradient.map(color => {
+    const gradientColors = item.gradient.map((color) => {
       if (color.startsWith('#')) {
         return `${color}80`; // Adds 80 (50% opacity) to hex color for lighter overlay
       }
@@ -162,9 +183,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginBottom: 8,
     lineHeight: 28,
+    ...(Platform.OS === 'web'
+      ? { textShadow: '-1px 1px 10px rgba(0, 0, 0, 0.75)' }
+      : {
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: -1, height: 1 },
     textShadowRadius: 10,
+        }),
   },
   subtitle: {
     fontSize: 16,
@@ -172,9 +197,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     opacity: 0.9,
     lineHeight: 22,
+    ...(Platform.OS === 'web'
+      ? { textShadow: '-1px 1px 10px rgba(0, 0, 0, 0.75)' }
+      : {
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: -1, height: 1 },
     textShadowRadius: 10,
+        }),
   },
   ctaContainer: {
     flexDirection: 'row',

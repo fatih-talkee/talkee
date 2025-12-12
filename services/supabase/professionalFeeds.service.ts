@@ -21,8 +21,6 @@ class ProfessionalFeedsService {
     data: CreateFeedRequest
   ): Promise<FeedResponse> {
     try {
-      console.log('📤 Creating feed post:', { professionalId, data });
-
       // Validate content length
       if (data.content.length < 10 || data.content.length > 1000) {
         return {
@@ -62,8 +60,6 @@ class ProfessionalFeedsService {
         return { success: false, error: error.message };
       }
 
-      console.log('✅ Feed created:', feed.id);
-
       // Transform response
       const feedWithDetails: ProfessionalFeedWithDetails = {
         ...feed,
@@ -87,8 +83,6 @@ class ProfessionalFeedsService {
    */
   async getFeeds(params?: FeedQueryParams): Promise<FeedResponse> {
     try {
-      console.log('📥 Fetching feeds:', params);
-
       let query = supabase.from('professional_feeds').select(
         `
           *,
@@ -151,8 +145,6 @@ class ProfessionalFeedsService {
         return { success: false, error: error.message };
       }
 
-      console.log(`✅ Fetched ${feeds?.length || 0} feeds`);
-
       // Transform response
       const feedsWithDetails: ProfessionalFeedWithDetails[] = (feeds || []).map(
         (feed) => ({
@@ -182,8 +174,6 @@ class ProfessionalFeedsService {
    */
   async getFeedById(feedId: string): Promise<FeedResponse> {
     try {
-      console.log('📥 Fetching feed:', feedId);
-
       const { data: feed, error } = await supabase
         .from('professional_feeds')
         .select(
@@ -211,8 +201,6 @@ class ProfessionalFeedsService {
         console.error('❌ Error fetching feed:', error);
         return { success: false, error: error.message };
       }
-
-      console.log('✅ Feed fetched:', feed.id);
 
       // Increment view count (fire and forget)
       this.incrementViewCount(feedId);
@@ -243,8 +231,6 @@ class ProfessionalFeedsService {
     data: UpdateFeedRequest
   ): Promise<FeedResponse> {
     try {
-      console.log('📝 Updating feed:', { feedId, data });
-
       // Validate content if provided
       if (
         data.content &&
@@ -288,8 +274,6 @@ class ProfessionalFeedsService {
         return { success: false, error: error.message };
       }
 
-      console.log('✅ Feed updated:', feed.id);
-
       // Transform response
       const feedWithDetails: ProfessionalFeedWithDetails = {
         ...feed,
@@ -313,8 +297,6 @@ class ProfessionalFeedsService {
    */
   async deleteFeed(feedId: string): Promise<FeedResponse> {
     try {
-      console.log('🗑️ Deleting feed:', feedId);
-
       const { error } = await supabase.rpc('soft_delete_professional_feed', {
         feed_id: feedId,
       });
@@ -324,7 +306,6 @@ class ProfessionalFeedsService {
         return { success: false, error: error.message };
       }
 
-      console.log('✅ Feed deleted:', feedId);
       return { success: true };
     } catch (error: any) {
       console.error('❌ Error in deleteFeed:', error);
@@ -375,8 +356,6 @@ class ProfessionalFeedsService {
    */
   async getTrendingFeeds(limit: number = 10): Promise<FeedResponse> {
     try {
-      console.log('🔥 Fetching trending feeds');
-
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -410,8 +389,6 @@ class ProfessionalFeedsService {
         console.error('❌ Error fetching trending feeds:', error);
         return { success: false, error: error.message };
       }
-
-      console.log(`✅ Fetched ${feeds?.length || 0} trending feeds`);
 
       // Transform response
       const feedsWithDetails: ProfessionalFeedWithDetails[] = (feeds || []).map(

@@ -14,8 +14,6 @@ export class AvatarService {
     imageUri: string
   ): Promise<string | null> {
     try {
-      console.log('📤 Uploading avatar for user:', userId);
-
       // 1. Convert URI to blob
       const response = await fetch(imageUri);
       const blob = await response.blob();
@@ -30,8 +28,6 @@ export class AvatarService {
       const fileName = `avatar-${timestamp}.${ext}`;
       const filePath = `${userId}/${fileName}`;
 
-      console.log('📁 File path:', filePath);
-
       // 4. Delete old avatars for this user (optional - keeps storage clean)
       const { data: existingFiles } = await supabase.storage
         .from(this.BUCKET_NAME)
@@ -42,7 +38,6 @@ export class AvatarService {
           (file) => `${userId}/${file.name}`
         );
         await supabase.storage.from(this.BUCKET_NAME).remove(filesToRemove);
-        console.log('🗑️ Removed old avatars:', filesToRemove.length);
       }
 
       // 5. Upload new avatar
@@ -59,14 +54,10 @@ export class AvatarService {
         throw uploadError;
       }
 
-      console.log('✅ Upload successful:', uploadData.path);
-
       // 6. Get public URL
       const {
         data: { publicUrl },
       } = supabase.storage.from(this.BUCKET_NAME).getPublicUrl(filePath);
-
-      console.log('🌐 Public URL:', publicUrl);
 
       // 7. Update user record in database
       const { error: updateError } = await supabase
@@ -78,8 +69,6 @@ export class AvatarService {
         console.error('❌ Database update error:', updateError);
         throw updateError;
       }
-
-      console.log('✅ Database updated with new avatar URL');
 
       return publicUrl;
     } catch (error) {
@@ -95,8 +84,6 @@ export class AvatarService {
    */
   static async deleteAvatar(userId: string): Promise<boolean> {
     try {
-      console.log('🗑️ Deleting avatar for user:', userId);
-
       // 1. List all files for this user
       const { data: files, error: listError } = await supabase.storage
         .from(this.BUCKET_NAME)
@@ -108,7 +95,6 @@ export class AvatarService {
       }
 
       if (!files || files.length === 0) {
-        console.log('ℹ️ No avatars to delete');
         return true;
       }
 
@@ -134,7 +120,6 @@ export class AvatarService {
         return false;
       }
 
-      console.log('✅ Avatar deleted successfully');
       return true;
     } catch (error) {
       console.error('❌ Delete avatar error:', error);

@@ -15,6 +15,24 @@ import { initI18n } from '../lib/i18n';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAutoAvailability } from '../hooks/useAutoAvailability';
 import { useProfile } from '../hooks/useProfile';
+import { logger } from '../lib/logger';
+import { setupGlobalErrorHandlers } from '../lib/globalErrorHandler';
+import * as Sentry from '@sentry/react-native';
+import { SentryAdapter } from '../lib/sentryAdapter';
+
+// Initialize Sentry
+Sentry.init({
+  dsn: 'https://18e1c6ac9df262bbd98c89fd2db05f06@o4510523149647872.ingest.de.sentry.io/4510523154563152', // Sentry panelinden aldığınız DSN'i buraya yapıştırın
+  debug: __DEV__, // Geliştirme ortamında debug modunu açar
+});
+
+try {
+  // Register adapter immediately to catch early boot errors
+  logger.registerRemoteLogger(new SentryAdapter());
+  logger.info('Sentry adapter registered');
+} catch (e) {
+  console.error('Failed to register Sentry adapter', e);
+}
 
 SplashScreen.preventAutoHideAsync();
 
@@ -49,6 +67,25 @@ export default function RootLayout() {
   const [i18nReady, setI18nReady] = useState(false);
   const [initError, setInitError] = useState<Error | null>(null);
 
+  // Initialize logger and error handlers
+  useEffect(() => {
+    // Configure logger for production
+    logger.configure({
+      enableRemoteLogging: !__DEV__,
+      logLevel: __DEV__ ? 'debug' : 'error',
+      enableBreadcrumbs: true,
+      enablePerformanceTracking: true,
+    });
+
+    // Setup global error handlers
+    setupGlobalErrorHandlers();
+
+    // Cleanup on unmount
+    return () => {
+      logger.cleanup();
+    };
+  }, []);
+
   const [fontsLoaded, fontError] = useFonts({
     'Inter-Regular': Inter_400Regular,
     'Inter-Medium': Inter_500Medium,
@@ -71,12 +108,10 @@ export default function RootLayout() {
     let mounted = true;
     (async () => {
       try {
-        console.log('[App] Starting i18n initialization...');
         await initI18n();
-        console.log('[App] i18n initialized successfully');
         if (mounted) setI18nReady(true);
       } catch (error) {
-        console.error('[App] Failed to initialize i18n:', error);
+        logger.error('[App] Failed to initialize i18n', error);
         setInitError(error instanceof Error ? error : new Error(String(error)));
         // Still set ready to prevent app from hanging
         if (mounted) setI18nReady(true);
@@ -88,24 +123,14 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    console.log(
-      '[App] State check - fontsLoaded:',
-      fontsLoaded,
-      'fontError:',
-      fontError,
-      'i18nReady:',
-      i18nReady
-    );
-
     if (fontError) {
-      console.error('[App] Font loading error:', fontError);
-      console.warn('[App] App will continue with system fonts');
+      logger.error('[App] Font loading error', fontError);
+      logger.warn('[App] App will continue with system fonts');
     }
 
     if ((fontsLoaded || fontError) && i18nReady) {
-      console.log('[App] All initialization complete, hiding splash screen');
       SplashScreen.hideAsync().catch((error) => {
-        console.error('[App] Error hiding splash screen:', error);
+        logger.error('[App] Error hiding splash screen', error);
       });
     }
   }, [fontsLoaded, fontError, i18nReady]);
@@ -121,11 +146,11 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="auth" />
             <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="become-professional" />
+            <Stack.Screen name="become-professional/index" />
             <Stack.Screen name="call-review/[id]" />
             <Stack.Screen name="credit-selection" />
             <Stack.Screen name="purchase" />
-            <Stack.Screen name="notifications" />
+            <Stack.Screen name="notifications/index" />
             <Stack.Screen name="wallet-history" />
             <Stack.Screen name="blocked-users" />
             <Stack.Screen name="how-it-works" />
@@ -134,10 +159,9 @@ export default function RootLayout() {
             <Stack.Screen name="settings/language" />
             <Stack.Screen name="settings/notifications" />
             <Stack.Screen name="settings/change-password" />
-            <Stack.Screen name="settings/availability" />
             <Stack.Screen name="+not-found" />
             <Stack.Screen name="profile/professional-settings" />
-            <Stack.Screen name="profile/privacy-security" />
+            <Stack.Screen name="profile/privacy-policy" />
             <Stack.Screen name="profile/devices" />
             <Stack.Screen name="schedule-call/[id]" />
           </Stack>

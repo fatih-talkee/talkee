@@ -22,12 +22,10 @@ class NotificationsService {
   async initialize(): Promise<string | null> {
     try {
       if (Platform.OS === 'web') {
-        console.log('Notifications not supported on web');
         return null;
       }
 
       if (!Device.isDevice) {
-        console.log('Notifications only work on physical devices');
         return null;
       }
 
@@ -42,7 +40,6 @@ class NotificationsService {
       }
 
       if (finalStatus !== 'granted') {
-        console.log('Failed to get push token for push notification!');
         return null;
       }
 
@@ -274,7 +271,6 @@ class NotificationsService {
   ): Promise<void> {
     try {
       if (Platform.OS === 'web') {
-        console.log('Local notifications not supported on web');
         return;
       }
 
@@ -345,7 +341,6 @@ class NotificationsService {
       }
 
       // TODO: Implement when notification_settings table is created
-      console.log('Settings would be updated:', settings);
       return true;
     } catch (error) {
       console.error('Error in updateSettings:', error);
@@ -413,7 +408,6 @@ class NotificationsService {
     Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data;
       // Handle navigation based on notification type
-      console.log('Notification tapped:', data);
       // TODO: Implement navigation logic
     });
   }

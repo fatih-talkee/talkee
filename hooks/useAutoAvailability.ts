@@ -49,18 +49,11 @@ export function useAutoAvailability(options: UseAutoAvailabilityOptions = {}) {
 
     try {
       isSettingStatus.current = true;
-      console.log(
-        `[AutoAvailability] Setting ${
-          isAvailable ? 'ONLINE' : 'OFFLINE'
-        } - Reason: ${reason}`
-      );
 
       await professionalsService.updateAvailability(
         professionalId,
         isAvailable
       );
-
-      console.log(`[AutoAvailability] ✅ Status updated successfully`);
     } catch (error) {
       console.error('[AutoAvailability] ❌ Failed to update status:', error);
     } finally {
@@ -72,10 +65,6 @@ export function useAutoAvailability(options: UseAutoAvailabilityOptions = {}) {
   const handleAppStateChange = (nextAppState: AppStateStatus) => {
     const previousState = appState.current;
     appState.current = nextAppState;
-
-    console.log(
-      `[AutoAvailability] App state: ${previousState} → ${nextAppState}`
-    );
 
     // Clear any pending background timer
     if (backgroundTimer.current) {
@@ -173,11 +162,6 @@ class AutoAvailabilityService {
       'change',
       this.handleAppStateChange.bind(this)
     );
-
-    console.log(
-      '[AutoAvailabilityService] ✅ Initialized for professional:',
-      professionalId
-    );
   }
 
   /**
@@ -198,17 +182,11 @@ class AutoAvailabilityService {
     if (this.professionalId) {
       await this.setAvailable(false, 'Service cleanup');
     }
-
-    console.log('[AutoAvailabilityService] ✅ Cleaned up');
   }
 
   private handleAppStateChange(nextAppState: AppStateStatus) {
     const previousState = this.appState;
     this.appState = nextAppState;
-
-    console.log(
-      `[AutoAvailabilityService] App state: ${previousState} → ${nextAppState}`
-    );
 
     // Clear pending timer
     if (this.backgroundTimer) {
@@ -239,16 +217,10 @@ class AutoAvailabilityService {
     if (!this.professionalId) return;
 
     try {
-      console.log(
-        `[AutoAvailabilityService] Setting ${
-          isAvailable ? 'ONLINE' : 'OFFLINE'
-        } - ${reason}`
-      );
       await professionalsService.updateAvailability(
         this.professionalId,
         isAvailable
       );
-      console.log('[AutoAvailabilityService] ✅ Status updated');
     } catch (error) {
       console.error('[AutoAvailabilityService] ❌ Failed:', error);
     }

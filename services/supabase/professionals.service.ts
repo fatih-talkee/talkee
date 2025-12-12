@@ -34,6 +34,7 @@ class ProfessionalsService {
         `
         )
         .eq('is_active', true)
+        .eq('is_public', true) // ✅ Only show public profiles
         .order('is_featured', { ascending: false }) // ✅ Featured first
         .order('total_calls', { ascending: false }); // ✅ Then by popularity
 
@@ -83,6 +84,7 @@ class ProfessionalsService {
         )
         .eq('is_active', true)
         .eq('is_available', true)
+        .eq('is_public', true) // ✅ Only show public profiles
         .order('is_featured', { ascending: false }) // ✅ Featured first
         .order('total_calls', { ascending: false }); // ✅ Then by popularity
 
@@ -186,6 +188,7 @@ class ProfessionalsService {
         `
         )
         .eq('is_active', true)
+        .eq('is_public', true) // ✅ Only show public profiles
         .ilike('title', searchPattern)
         .order('is_featured', { ascending: false })
         .order('total_calls', { ascending: false });
@@ -222,6 +225,7 @@ class ProfessionalsService {
           `
           )
           .eq('is_active', true)
+          .eq('is_public', true) // ✅ Only show public profiles
           .in('user_id', matchingUserIds)
           .order('is_featured', { ascending: false })
           .order('total_calls', { ascending: false });
@@ -232,7 +236,7 @@ class ProfessionalsService {
             nameError
           );
           throw nameError;
-        }
+      }
 
         nameResults = nameData || [];
       }
@@ -289,6 +293,7 @@ class ProfessionalsService {
         `
         )
         .eq('is_active', true)
+        .eq('is_public', true) // ✅ Only show public profiles
         .eq('is_featured', true) // ✅ Only featured
         .order('total_calls', { ascending: false }) // ✅ Order by popularity
         .limit(limit);
@@ -839,8 +844,6 @@ class ProfessionalsService {
     professionalId: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log('🗑️ Deleting professional profile:', professionalId);
-
       // Delete related data first (cascading deletes)
       // 1. Delete professional feeds
       const { error: feedsError } = await supabase
@@ -908,7 +911,6 @@ class ProfessionalsService {
         return { success: false, error: professionalError.message };
       }
 
-      console.log('✅ Professional profile deleted successfully');
       return { success: true };
     } catch (error: any) {
       console.error('Error in deleteProfessional:', error);

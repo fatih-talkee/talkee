@@ -103,8 +103,8 @@ export function PrimaryHeader({
     >
       <View style={styles.leftSection}>
         {showLogo && (
-          <TouchableOpacity 
-            disabled={!onLogoPress} 
+          <TouchableOpacity
+            disabled={!onLogoPress}
             onPress={onLogoPress}
             style={styles.logoContainer}
             activeOpacity={onLogoPress ? 0.7 : 1}
@@ -160,11 +160,15 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     minHeight: 60,
     // shiny shadow/elevation (no divider)
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 8px 16px rgba(0,0,0,0.08)' }
+      : {
+          shadowColor: '#000',
+          shadowOpacity: 0.08,
+          shadowRadius: 16,
+          shadowOffset: { width: 0, height: 8 },
+          elevation: 6,
+        }),
   },
   leftSection: {
     flex: 0,

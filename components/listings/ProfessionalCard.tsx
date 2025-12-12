@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,7 @@ export function ProfessionalCard({
   isUnblocking = false,
 }: ProfessionalCardProps) {
   const { theme } = useTheme();
+  const [avatarError, setAvatarError] = useState(false);
 
   // Check if favorited
   const { data: isFavorite = false } = useIsFavorite(professional.id);
@@ -42,10 +43,46 @@ export function ProfessionalCard({
 
   // Get user data
   const userName = professional.users?.name || 'Unknown';
-  const userAvatar =
-    professional.users?.avatar_url || 'https://via.placeholder.com/150';
+  const userAvatar = professional.users?.avatar_url || '';
   const isVerified =
     professional.users?.is_verified || professional.is_verified;
+
+  // Reset avatar error when avatar URL changes
+  useEffect(() => {
+    setAvatarError(false);
+  }, [userAvatar]);
+
+  // ✅ Get user initials for avatar
+  const getInitials = (name: string): string => {
+    if (!name) return '?';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) {
+      return parts[0].charAt(0).toUpperCase();
+    }
+    return (
+      parts[0].charAt(0) + parts[parts.length - 1].charAt(0)
+    ).toUpperCase();
+  };
+
+  // ✅ Get avatar background color based on name (consistent color)
+  const getAvatarColor = (name: string): string => {
+    if (!name) return '#64748b';
+    const colors = [
+      '#3b82f6', // Blue
+      '#8b5cf6', // Purple
+      '#ec4899', // Pink
+      '#10b981', // Green
+      '#f59e0b', // Amber
+      '#ef4444', // Red
+      '#06b6d4', // Cyan
+      '#f97316', // Orange
+    ];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
 
   // Get category data
   const categoryName = professional.categories?.name || professional.title;
@@ -85,13 +122,42 @@ export function ProfessionalCard({
           {
             backgroundColor: theme.colors.card,
             borderColor: theme.colors.border,
-            shadowColor: theme.colors.text,
           },
         ]}
       >
         <View style={styles.header}>
           <View style={styles.avatarContainer}>
-            <Image source={{ uri: userAvatar }} style={styles.avatar} />
+            {(() => {
+              const hasValidAvatar =
+                userAvatar &&
+                typeof userAvatar === 'string' &&
+                userAvatar.trim() !== '' &&
+                !userAvatar.includes('placeholder') &&
+                !userAvatar.includes('via.placeholder') &&
+                !avatarError;
+
+              return hasValidAvatar ? (
+                <Image
+                  source={{ uri: userAvatar }}
+                  style={styles.avatar}
+                  onError={() => {
+                    setAvatarError(true);
+                  }}
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.avatar,
+                    styles.avatarInitials,
+                    { backgroundColor: getAvatarColor(userName) },
+                  ]}
+                >
+                  <Text style={styles.avatarInitialsText}>
+                    {getInitials(userName)}
+                  </Text>
+                </View>
+              );
+            })()}
             {isFavorite && (
               <View
                 style={[
@@ -223,37 +289,37 @@ export function ProfessionalCard({
                 </Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity
-              style={[
-                styles.profileButton,
-                {
-                  backgroundColor:
-                    theme.name === 'light'
-                      ? theme.colors.surface
-                      : theme.colors.primaryLight,
-                  borderColor:
+          <TouchableOpacity
+            style={[
+              styles.profileButton,
+              {
+                backgroundColor:
+                  theme.name === 'light'
+                    ? theme.colors.surface
+                    : theme.colors.primaryLight,
+                borderColor:
                     theme.name === 'light'
                       ? theme.colors.primary
                       : 'transparent',
-                  borderWidth: theme.name === 'light' ? 1 : 0,
+                borderWidth: theme.name === 'light' ? 1 : 0,
+              },
+            ]}
+            onPress={handleProfilePress}
+          >
+            <Text
+              style={[
+                styles.profileButtonText,
+                {
+                  color:
+                    theme.name === 'light'
+                      ? theme.colors.primary
+                      : theme.colors.surface,
                 },
               ]}
-              onPress={handleProfilePress}
             >
-              <Text
-                style={[
-                  styles.profileButtonText,
-                  {
-                    color:
-                      theme.name === 'light'
-                        ? theme.colors.primary
-                        : theme.colors.surface,
-                  },
-                ]}
-              >
-                Profile Page
-              </Text>
-            </TouchableOpacity>
+              Profile Page
+            </Text>
+          </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -293,6 +359,15 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
+  },
+  avatarInitials: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitialsText: {
+    fontSize: 20,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
   },
   favoriteIndicator: {
     position: 'absolute',

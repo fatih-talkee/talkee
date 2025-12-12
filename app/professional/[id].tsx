@@ -43,6 +43,7 @@ import {
   useProfessionalFeeds,
 } from '@/hooks/useProfessionalFeeds';
 import { professionalsService } from '@/services/supabase/professionals.service';
+import { usersService } from '@/services/supabase/user.service';
 import { useQuery } from '@tanstack/react-query';
 import type { Availability } from '@/types/database.types';
 
@@ -86,6 +87,18 @@ export default function ProfessionalProfileScreen() {
     queryFn: () =>
       professionalsService.getProfessionalAvailabilities(id as string),
     enabled: !!id,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+  // ✅ Check if professional has blocked current user
+  const professionalUserId = professionalData?.user_id;
+  const { data: isBlockedByProfessional = false } = useQuery<boolean>({
+    queryKey: ['isBlockedByUser', professionalUserId],
+    queryFn: () => {
+      if (!professionalUserId) return false;
+      return usersService.isBlockedByUser(professionalUserId);
+    },
+    enabled: !!professionalUserId,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
@@ -228,6 +241,10 @@ export default function ProfessionalProfileScreen() {
   const [remainingTime, setRemainingTime] = useState<number | null>(
     currentAvailability?.remainingMinutes || null
   );
+  const [avatarError, setAvatarError] = useState(false);
+  const [feedAvatarErrors, setFeedAvatarErrors] = useState<{
+    [key: string]: boolean;
+  }>({});
 
   // Update remaining time when currentAvailability changes
   useEffect(() => {
@@ -300,6 +317,44 @@ export default function ProfessionalProfileScreen() {
     return `${hours}h ${mins}m left`;
   };
 
+  // ✅ Get user initials for avatar
+  const getInitials = (name: string): string => {
+    if (!name) return '?';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) {
+      return parts[0].charAt(0).toUpperCase();
+    }
+    return (
+      parts[0].charAt(0) + parts[parts.length - 1].charAt(0)
+    ).toUpperCase();
+  };
+
+  // ✅ Get avatar background color based on name (consistent color)
+  const getAvatarColor = (name: string): string => {
+    if (!name) return '#64748b';
+    const colors = [
+      '#3b82f6', // Blue
+      '#8b5cf6', // Purple
+      '#ec4899', // Pink
+      '#10b981', // Green
+      '#f59e0b', // Amber
+      '#ef4444', // Red
+      '#06b6d4', // Cyan
+      '#f97316', // Orange
+    ];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  // Reset avatar error when professional changes
+  useEffect(() => {
+    setAvatarError(false);
+    setFeedAvatarErrors({});
+  }, [professional?.users?.avatar_url]);
+
   // ✅ Toggle favorite mutation
   const toggleFavoriteMutation = useToggleFavorite();
 
@@ -348,9 +403,11 @@ export default function ProfessionalProfileScreen() {
   // Buttons enabled if:
   // 1. Scheduled availability + online, OR
   // 2. Urgent call availability + online
+  // 3. AND professional has NOT blocked us
   const buttonsEnabled =
-    (isAvailable && isOnline && !isUrgentCallAvailability) ||
-    (isUrgentCallAvailability && isOnline);
+    !isBlockedByProfessional &&
+    ((isAvailable && isOnline && !isUrgentCallAvailability) ||
+      (isUrgentCallAvailability && isOnline));
 
   if (isLoading) {
     return (
@@ -479,15 +536,51 @@ export default function ProfessionalProfileScreen() {
                 >
                   <View style={styles.feedHeader}>
                     <View style={styles.feedAuthorRow}>
-                      <Image
-                        source={{
-                          uri:
+                      {(() => {
+                        const feedAvatarUrl =
                             feed.professional_avatar ||
                             professional.users?.avatar_url ||
-                            'https://via.placeholder.com/150',
-                        }}
+                          '';
+                        const feedName =
+                          feed.professional_name ||
+                          professional.users?.name ||
+                          'Unknown';
+                        const feedId = feed.id || '';
+                        const hasFeedAvatarError =
+                          feedAvatarErrors[feedId] || false;
+                        const hasValidFeedAvatar =
+                          feedAvatarUrl &&
+                          typeof feedAvatarUrl === 'string' &&
+                          feedAvatarUrl.trim() !== '' &&
+                          !feedAvatarUrl.includes('placeholder') &&
+                          !feedAvatarUrl.includes('via.placeholder') &&
+                          !hasFeedAvatarError;
+
+                        return hasValidFeedAvatar ? (
+                          <Image
+                            source={{ uri: feedAvatarUrl }}
                         style={styles.feedAvatar}
-                      />
+                            onError={() => {
+                              setFeedAvatarErrors((prev) => ({
+                                ...prev,
+                                [feedId]: true,
+                              }));
+                            }}
+                          />
+                        ) : (
+                          <View
+                            style={[
+                              styles.feedAvatar,
+                              styles.feedAvatarInitials,
+                              { backgroundColor: getAvatarColor(feedName) },
+                            ]}
+                          >
+                            <Text style={styles.feedAvatarInitialsText}>
+                              {getInitials(feedName)}
+                            </Text>
+                          </View>
+                        );
+                      })()}
                       <View style={styles.feedAuthorInfo}>
                         <View style={styles.feedAuthorNameRow}>
                           <Text
@@ -1379,14 +1472,42 @@ export default function ProfessionalProfileScreen() {
           ]}
         >
           <View style={styles.avatarContainer}>
+            {(() => {
+              const avatarUrl = professional.users?.avatar_url || '';
+              const hasValidAvatar =
+                avatarUrl &&
+                typeof avatarUrl === 'string' &&
+                avatarUrl.trim() !== '' &&
+                !avatarUrl.includes('placeholder') &&
+                !avatarUrl.includes('via.placeholder') &&
+                !avatarError;
+
+              return hasValidAvatar ? (
             <Image
-              source={{
-                uri:
-                  professional.users?.avatar_url ||
-                  'https://via.placeholder.com/150',
-              }}
+                  source={{ uri: avatarUrl }}
               style={styles.avatar}
-            />
+                  onError={() => {
+                    setAvatarError(true);
+                  }}
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.avatar,
+                    styles.avatarInitials,
+                    {
+                      backgroundColor: getAvatarColor(
+                        professional.users?.name || 'Unknown'
+                      ),
+                    },
+                  ]}
+                >
+                  <Text style={styles.avatarInitialsText}>
+                    {getInitials(professional.users?.name || 'Unknown')}
+                  </Text>
+                </View>
+              );
+            })()}
             {isFavorite && (
               <View
                 style={[
@@ -1830,17 +1951,60 @@ export default function ProfessionalProfileScreen() {
             )}
           </View>
           <View style={styles.callButtonsRow}>
-            {showUrgentCall ? (
+            {isBlockedByProfessional ? (
+              // Professional has blocked us - show warning message
+              <View
+                style={[
+                  styles.blockedWarningContainer,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <AlertCircle
+                  size={20}
+                  color={theme.colors.error || '#EF4444'}
+                />
+                <Text
+                  style={[
+                    styles.blockedWarningText,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  This professional has blocked you. You cannot make calls.
+                </Text>
+              </View>
+            ) : showUrgentCall ? (
               // Available değil ama Online → Urgent Call (sarı)
               <TouchableOpacity
                 style={[
                   styles.callTypeButton,
-                  { backgroundColor: '#F59E0B', flex: 1 },
+                  {
+                    backgroundColor: buttonsEnabled
+                      ? '#F59E0B'
+                      : theme.colors.border,
+                    flex: 1,
+                    opacity: buttonsEnabled ? 1 : 0.5,
+                  },
                 ]}
                 onPress={handleUrgentCall}
+                disabled={!buttonsEnabled}
               >
-                <Zap size={20} color="#FFFFFF" />
-                <Text style={[styles.callTypeText, { color: '#FFFFFF' }]}>
+                <Zap
+                  size={20}
+                  color={buttonsEnabled ? '#FFFFFF' : theme.colors.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.callTypeText,
+                    {
+                      color: buttonsEnabled
+                        ? '#FFFFFF'
+                        : theme.colors.textMuted,
+                    },
+                  ]}
+                >
                   Urgent Call
                 </Text>
               </TouchableOpacity>
@@ -2355,6 +2519,15 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 50,
   },
+  avatarInitials: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitialsText: {
+    fontSize: 40,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
+  },
   favoriteIndicator: {
     position: 'absolute',
     top: 0,
@@ -2731,6 +2904,15 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginRight: 12,
   },
+  feedAvatarInitials: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feedAvatarInitialsText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
+  },
   feedAuthorInfo: {
     flex: 1,
   },
@@ -2835,6 +3017,23 @@ const styles = StyleSheet.create({
   callTypeText: {
     fontSize: 15,
     fontFamily: 'Inter-Bold',
+  },
+  blockedWarningContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 8,
+    flex: 1,
+  },
+  blockedWarningText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    flex: 1,
+    textAlign: 'center',
   },
   cvSection: {
     marginBottom: 24,

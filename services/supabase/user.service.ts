@@ -505,9 +505,14 @@ class UsersService {
           }
         } catch (adminError) {
           console.error('Error creating admin client:', adminError);
+          let errorMessage =
+            'Failed to soft delete user. Please run the SQL migration: docs/sql/soft_delete_user_account.sql';
+          if (adminError instanceof Error) {
+            errorMessage = `Failed to soft delete user: ${adminError.message}. Please run the SQL migration: docs/sql/soft_delete_user_account.sql`;
+          }
           return {
             success: false,
-            error: `Failed to soft delete user: ${adminError.message}. Please run the SQL migration: docs/sql/soft_delete_user_account.sql`,
+            error: errorMessage,
           };
         }
       } else {
@@ -754,6 +759,39 @@ class UsersService {
     } catch (error) {
       console.error('Error in getBlockedUsers:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Check if current user is blocked by a specific user
+   * @param userId - The user ID to check if they blocked us
+   * @returns true if the user has blocked the current user
+   */
+  async isBlockedByUser(userId: string): Promise<boolean> {
+    try {
+      const currentUser = await this.getCurrentUser();
+
+      if (!currentUser) {
+        return false;
+      }
+
+      // Check if there's a record where blocker_id = userId and blocked_id = currentUser.id
+      const { data, error } = await supabase
+        .from('blocked_users')
+        .select('id')
+        .eq('blocker_id', userId)
+        .eq('blocked_id', currentUser.id)
+        .limit(1);
+
+      if (error) {
+        console.error('Error checking if blocked by user:', error);
+        return false;
+      }
+
+      return (data?.length || 0) > 0;
+    } catch (error) {
+      console.error('Error in isBlockedByUser:', error);
+      return false;
     }
   }
 

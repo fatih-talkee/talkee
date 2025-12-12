@@ -114,7 +114,7 @@ export default function BecomeProfessionalScreen() {
   // Load profile data for initial form population
   // Use a ref to track if we've already loaded initial data
   const hasLoadedInitialData = useRef(false);
-  
+
   useEffect(() => {
     if (profileData && !profileLoading && !hasLoadedInitialData.current) {
       setFullName(profileData.user.name || '');
@@ -161,7 +161,6 @@ export default function BecomeProfessionalScreen() {
         isPublic,
       },
     };
-    console.log(`[${action}] Form Data:`, JSON.stringify(formData, null, 2));
   };
 
   const handleNextStep = () => {
@@ -361,7 +360,8 @@ export default function BecomeProfessionalScreen() {
           user_id: dbUser.id,
           bio: professionalData.bio,
           category_id: professionalData.category_ids[0] || null,
-          rate_per_minute: professionalData.availabilities[0]?.price_per_minute || 0,
+          rate_per_minute:
+            professionalData.availabilities[0]?.price_per_minute || 0,
           is_available: professionalData.is_available,
           is_public: professionalData.is_public,
         })
@@ -371,7 +371,8 @@ export default function BecomeProfessionalScreen() {
       if (createError || !newProfessional) {
         toast.error({
           title: 'Error',
-          message: createError?.message || 'Failed to create professional profile',
+          message:
+            createError?.message || 'Failed to create professional profile',
         });
         setLoading(false);
         return;
@@ -381,12 +382,17 @@ export default function BecomeProfessionalScreen() {
 
       // Update all sub-sections using existing methods
       // 1. About Me
-      if (professionalData.specialties || professionalData.languages || professionalData.skills_certifications) {
-        const aboutResult = await professionalsService.updateProfessionalAboutMe(professionalId, {
-          specialties: professionalData.specialties || [],
-          languages: professionalData.languages || [],
-          skills_certifications: professionalData.skills_certifications || [],
-        });
+      if (
+        professionalData.specialties ||
+        professionalData.languages ||
+        professionalData.skills_certifications
+      ) {
+        const aboutResult =
+          await professionalsService.updateProfessionalAboutMe(professionalId, {
+            specialties: professionalData.specialties || [],
+            languages: professionalData.languages || [],
+            skills_certifications: professionalData.skills_certifications || [],
+          });
         if (!aboutResult.success) {
           throw new Error(aboutResult.error || 'Failed to update about me');
         }
@@ -394,34 +400,52 @@ export default function BecomeProfessionalScreen() {
 
       // 2. Education & Experience
       if (professionalData.educations || professionalData.experiences) {
-        const eduExpResult = await professionalsService.updateProfessionalEducationExperience(professionalId, {
-          educations: professionalData.educations || [],
-          experiences: professionalData.experiences || [],
-        });
+        const eduExpResult =
+          await professionalsService.updateProfessionalEducationExperience(
+            professionalId,
+            {
+              educations: professionalData.educations || [],
+              experiences: professionalData.experiences || [],
+            }
+          );
         if (!eduExpResult.success) {
-          throw new Error(eduExpResult.error || 'Failed to update education & experience');
+          throw new Error(
+            eduExpResult.error || 'Failed to update education & experience'
+          );
         }
       }
 
       // 3. Categories
-      if (professionalData.category_ids && professionalData.category_ids.length > 0) {
-        const categoriesResult = await professionalsService.updateProfessionalCategories(
-          professionalId,
-          professionalData.category_ids
-        );
+      if (
+        professionalData.category_ids &&
+        professionalData.category_ids.length > 0
+      ) {
+        const categoriesResult =
+          await professionalsService.updateProfessionalCategories(
+            professionalId,
+            professionalData.category_ids
+          );
         if (!categoriesResult.success) {
-          throw new Error(categoriesResult.error || 'Failed to update categories');
+          throw new Error(
+            categoriesResult.error || 'Failed to update categories'
+          );
         }
       }
 
       // 4. Availabilities
-      if (professionalData.availabilities && professionalData.availabilities.length > 0) {
-        const availabilitiesResult = await professionalsService.updateProfessionalAvailabilities(
-          professionalId,
-          professionalData.availabilities
-        );
+      if (
+        professionalData.availabilities &&
+        professionalData.availabilities.length > 0
+      ) {
+        const availabilitiesResult =
+          await professionalsService.updateProfessionalAvailabilities(
+            professionalId,
+            professionalData.availabilities
+          );
         if (!availabilitiesResult.success) {
-          throw new Error(availabilitiesResult.error || 'Failed to update availabilities');
+          throw new Error(
+            availabilitiesResult.error || 'Failed to update availabilities'
+          );
         }
       }
 
@@ -430,7 +454,8 @@ export default function BecomeProfessionalScreen() {
       if (result.success) {
         toast.success({
           title: 'Profile Created!',
-          message: 'Your professional profile has been created successfully. Welcome aboard!',
+          message:
+            'Your professional profile has been created successfully. Welcome aboard!',
         });
 
         // Reset all form states after successful save/update
@@ -666,7 +691,6 @@ export default function BecomeProfessionalScreen() {
     }
   };
 
-
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -815,7 +839,9 @@ export default function BecomeProfessionalScreen() {
                               ? theme.colors.primary
                               : theme.colors.border,
                           borderWidth:
-                            availabilityFormData.availableAt === 'every' ? 2 : 1,
+                            availabilityFormData.availableAt === 'every'
+                              ? 2
+                              : 1,
                         },
                       ]}
                       onPress={() => {
@@ -852,7 +878,9 @@ export default function BecomeProfessionalScreen() {
                             strokeWidth={2}
                           />
                         </View>
-                        <View style={availabilityModalStyles.optionTextContainer}>
+                        <View
+                          style={availabilityModalStyles.optionTextContainer}
+                        >
                           <Text
                             style={[
                               availabilityModalStyles.optionTitle,
@@ -918,7 +946,9 @@ export default function BecomeProfessionalScreen() {
                               ? theme.colors.primary
                               : theme.colors.border,
                           borderWidth:
-                            availabilityFormData.availableAt === 'specific' ? 2 : 1,
+                            availabilityFormData.availableAt === 'specific'
+                              ? 2
+                              : 1,
                         },
                       ]}
                       onPress={() => {
@@ -955,13 +985,16 @@ export default function BecomeProfessionalScreen() {
                             strokeWidth={2}
                           />
                         </View>
-                        <View style={availabilityModalStyles.optionTextContainer}>
+                        <View
+                          style={availabilityModalStyles.optionTextContainer}
+                        >
                           <Text
                             style={[
                               availabilityModalStyles.optionTitle,
                               {
                                 color:
-                                  availabilityFormData.availableAt === 'specific'
+                                  availabilityFormData.availableAt ===
+                                  'specific'
                                     ? theme.colors.primary
                                     : theme.colors.text,
                               },
@@ -1021,7 +1054,9 @@ export default function BecomeProfessionalScreen() {
                               ? '#F59E0B'
                               : theme.colors.border,
                           borderWidth:
-                            availabilityFormData.availableAt === 'urgent' ? 2 : 1,
+                            availabilityFormData.availableAt === 'urgent'
+                              ? 2
+                              : 1,
                         },
                       ]}
                       onPress={() => {
@@ -1059,7 +1094,9 @@ export default function BecomeProfessionalScreen() {
                             strokeWidth={2}
                           />
                         </View>
-                        <View style={availabilityModalStyles.optionTextContainer}>
+                        <View
+                          style={availabilityModalStyles.optionTextContainer}
+                        >
                           <Text
                             style={[
                               availabilityModalStyles.optionTitle,

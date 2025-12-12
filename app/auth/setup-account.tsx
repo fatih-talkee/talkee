@@ -78,7 +78,7 @@ export default function SetupAccountScreen() {
   };
 
   const handleBecomeProfessional = () => {
-    router.push('/become-professional');
+    router.push('/become-professional/index');
   };
 
   const toggleInterest = (categoryId: string) => {

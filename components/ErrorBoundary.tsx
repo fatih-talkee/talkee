@@ -1,7 +1,7 @@
 /**
  * Error Boundary Component
  * Catches JavaScript errors anywhere in the component tree
- * 
+ *
  * Usage:
  * ```tsx
  * <ErrorBoundary fallback={<CustomError />}>
@@ -68,7 +68,7 @@ export class ErrorBoundary extends Component<Props, State> {
       // Default error UI
       return (
         <View style={styles.container}>
-          <ScrollView 
+          <ScrollView
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
@@ -83,7 +83,8 @@ export class ErrorBoundary extends Component<Props, State> {
 
               {/* Message */}
               <Text style={styles.message}>
-                We're sorry for the inconvenience. The app encountered an unexpected error.
+                We're sorry for the inconvenience. The app encountered an
+                unexpected error.
               </Text>
 
               {/* Error details (dev mode only) */}
@@ -125,14 +126,13 @@ export class ErrorBoundary extends Component<Props, State> {
                   variant="primary"
                   style={styles.button}
                 />
-                
+
                 {/* Optional: Report button */}
                 {!__DEV__ && (
                   <Button
                     title="Report Issue"
                     onPress={() => {
                       // TODO: Navigate to feedback/support screen
-                      console.log('Report issue clicked');
                     }}
                     variant="outline"
                     style={styles.button}
@@ -142,7 +142,8 @@ export class ErrorBoundary extends Component<Props, State> {
 
               {/* Helper text */}
               <Text style={styles.helperText}>
-                If the problem persists, please try restarting the app or contact support.
+                If the problem persists, please try restarting the app or
+                contact support.
               </Text>
             </View>
           </ScrollView>

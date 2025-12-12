@@ -116,11 +116,6 @@ class FavoritesService {
         throw new Error('User not authenticated');
       }
 
-      console.log('🔍 [addFavorite] Calling RPC function with:', {
-        professionalId,
-        authId: authUser.id,
-      });
-
       // ✅ Call RPC function (bypasses RLS)
       const { data, error } = await supabase.rpc('insert_favorite', {
         p_professional_id: professionalId,
@@ -130,8 +125,6 @@ class FavoritesService {
         console.error('❌ [addFavorite] RPC error:', error);
         throw new Error(error.message || 'Failed to add favorite');
       }
-
-      console.log('✅ [addFavorite] Success:', data);
       return true;
     } catch (error: any) {
       console.error('❌ [addFavorite] Error:', error);
@@ -153,11 +146,6 @@ class FavoritesService {
         throw new Error('User not authenticated');
       }
 
-      console.log('🔍 [removeFavorite] Calling RPC function with:', {
-        professionalId,
-        authId: authUser.id,
-      });
-
       // ✅ Call RPC function (bypasses RLS)
       const { data, error } = await supabase.rpc('remove_favorite', {
         p_professional_id: professionalId,
@@ -167,8 +155,6 @@ class FavoritesService {
         console.error('❌ [removeFavorite] RPC error:', error);
         throw new Error(error.message || 'Failed to remove favorite');
       }
-
-      console.log('✅ [removeFavorite] Success:', data);
       return true;
     } catch (error: any) {
       console.error('❌ [removeFavorite] Error:', error);

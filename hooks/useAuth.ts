@@ -16,10 +16,6 @@ export function useAuth() {
         const {
           data: { session },
         } = await supabase.auth.getSession();
-        console.log(
-          '🔐 Session check:',
-          session ? 'Authenticated' : 'Not authenticated'
-        );
         setIsAuthenticated(!!session);
       } catch (error) {
         console.error('❌ Auth check error:', error);
@@ -35,7 +31,6 @@ export function useAuth() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('🔄 Auth state changed:', event);
       setIsAuthenticated(!!session);
 
       // ✅ Auto-redirect on sign out
@@ -56,7 +51,6 @@ export function useAuth() {
       });
       if (error) throw error;
 
-      console.log('✅ Sign in successful');
       return { data, error: null };
     } catch (error) {
       console.error('❌ Sign in error:', error);
@@ -89,7 +83,6 @@ export function useAuth() {
         });
         if (error) throw error;
 
-        console.log('✅ Sign up successful');
         return { data, error: null };
       } catch (error) {
         console.error('❌ Sign up error:', error);
@@ -107,7 +100,6 @@ export function useAuth() {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
 
-      console.log('✅ Sign out successful');
       // onAuthStateChange will handle redirect automatically
     } catch (error) {
       console.error('❌ Sign out error:', error);
@@ -129,7 +121,6 @@ export function useAuth() {
       });
       if (error) throw error;
 
-      console.log('✅ Password reset email sent');
       return { error: null };
     } catch (error) {
       console.error('❌ Reset password error:', error);

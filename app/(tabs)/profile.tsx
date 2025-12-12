@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,6 @@ import {
   Mic,
   ChevronRight,
   Bell,
-  Shield,
   CircleHelp as HelpCircle,
   LogOut,
   QrCode,
@@ -29,8 +28,6 @@ import {
   UserX,
   Camera,
   BookOpen,
-  Key,
-  Calendar,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
@@ -59,11 +56,17 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [avatarModalVisible, setAvatarModalVisible] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
   const toast = useToast();
 
   // ✅ Use real profile data
   const { user, stats, isProfessional, professional, isLoading, profileData } =
     useProfile();
+
+  // Reset avatar error when user changes
+  useEffect(() => {
+    setAvatarError(false);
+  }, [user?.avatar_url]);
 
   // ✅ Format date helper
   const formatMemberSince = (date: string) => {
@@ -71,6 +74,35 @@ export default function ProfileScreen() {
       month: 'long',
       year: 'numeric',
     });
+  };
+
+  // ✅ Get user initials for avatar
+  const getInitials = (name: string): string => {
+    if (!name) return '?';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) {
+      return parts[0].charAt(0).toUpperCase();
+    }
+    return (
+      parts[0].charAt(0) + parts[parts.length - 1].charAt(0)
+    ).toUpperCase();
+  };
+
+  // ✅ Get avatar background color based on name (consistent color)
+  const getAvatarColor = (name: string): string => {
+    if (!name) return '#64748b';
+    const colors = [
+      '#3b82f6', // Blue
+      '#8b5cf6', // Purple
+      '#ec4899', // Pink
+      '#f59e0b', // Amber
+      '#10b981', // Green
+      '#ef4444', // Red
+      '#06b6d4', // Cyan
+      '#f97316', // Orange
+    ];
+    const index = name.charCodeAt(0) % colors.length;
+    return colors[index];
   };
 
   // ✅ Loading state
@@ -210,12 +242,24 @@ export default function ProfileScreen() {
         //   icon: <Mic size={20} color="#8b5cf6" />,
         //   onPress: () => router.push('/profile/recordings'),
         // },
+        // Blocked Users - only for professionals
+        ...(isProfessional
+          ? [
         {
           id: 'blocked',
           label: 'Blocked Users',
           icon: <UserX size={20} color="#f59e0b" />,
           onPress: () => router.push('/blocked-users'),
           badge: stats.blocked_users_count?.toString(),
+              },
+            ]
+          : []),
+        {
+          id: 'notifications',
+          label: 'Notifications',
+          icon: <Bell size={20} color="#64748b" />,
+          onPress: () => router.push('/notifications/index' as any),
+          badge: '3', // TODO: Replace with real notification count
         },
       ],
     },
@@ -227,24 +271,6 @@ export default function ProfileScreen() {
           label: 'Account Settings',
           icon: <Settings size={20} color="#64748b" />,
           onPress: () => router.push('/settings/account'),
-        },
-        {
-          id: 'notifications',
-          label: 'Notifications',
-          icon: <Bell size={20} color="#64748b" />,
-          onPress: () => router.push('/notifications' as any),
-        },
-        {
-          id: 'availability',
-          label: 'Availability Settings',
-          icon: <Calendar size={20} color="#64748b" />,
-          onPress: () => router.push('/settings/availability'),
-        },
-        {
-          id: 'privacy',
-          label: 'Privacy & Security',
-          icon: <Shield size={20} color="#64748b" />,
-          onPress: () => router.push('/profile/privacy-security'),
         },
       ],
     },
@@ -293,12 +319,37 @@ export default function ProfileScreen() {
         >
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
+              {(() => {
+                const hasValidAvatar =
+                  user.avatar_url &&
+                  typeof user.avatar_url === 'string' &&
+                  user.avatar_url.trim() !== '' &&
+                  !user.avatar_url.includes('placeholder') &&
+                  !user.avatar_url.includes('via.placeholder') &&
+                  !avatarError;
+
+                return hasValidAvatar ? (
               <Image
-                source={{
-                  uri: user.avatar_url || 'https://via.placeholder.com/80',
-                }}
+                    source={{ uri: user.avatar_url }}
                 style={styles.avatar}
-              />
+                    onError={() => {
+                      setAvatarError(true);
+                    }}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.avatar,
+                      styles.avatarInitials,
+                      { backgroundColor: getAvatarColor(user.name) },
+                    ]}
+                  >
+                    <Text style={styles.avatarInitialsText}>
+                      {getInitials(user.name)}
+                    </Text>
+                  </View>
+                );
+              })()}
               <TouchableOpacity
                 style={[
                   styles.cameraButton,
@@ -464,7 +515,7 @@ export default function ProfileScreen() {
                 </Text>
                 <Button
                   title="Become a Professional"
-                  onPress={() => router.push('/become-professional')}
+                  onPress={() => router.push('/become-professional/index')}
                   variant="primary"
                   size="medium"
                   style={[
@@ -664,6 +715,15 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
+  },
+  avatarInitials: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitialsText: {
+    fontSize: 32,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
   },
   cameraButton: {
     position: 'absolute',

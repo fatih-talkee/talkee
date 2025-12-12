@@ -1,13 +1,20 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, FlatList, Dimensions } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  FlatList,
+  Dimensions,
+} from 'react-native';
 import { router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
-import { 
-  Briefcase, 
-  Smartphone, 
-  Heart, 
-  DollarSign, 
-  Star, 
+import {
+  Briefcase,
+  Smartphone,
+  Heart,
+  DollarSign,
+  Star,
   BookOpen,
   Palette,
   Music,
@@ -51,7 +58,7 @@ import {
   Droplet,
   Flame,
   Snowflake,
-  Leaf
+  Leaf,
 } from 'lucide-react-native';
 import { Category } from '@/types/database.types';
 
@@ -63,147 +70,147 @@ interface CategoryGridProps {
 // Also supports category names and slugs for fallback
 const iconMap: Record<string, React.ComponentType<any>> = {
   // Kebab-case (seed data format)
-  'briefcase': Briefcase,
-  'smartphone': Smartphone,
-  'heart': Heart,
+  briefcase: Briefcase,
+  smartphone: Smartphone,
+  heart: Heart,
   'dollar-sign': DollarSign,
-  'dollarsign': DollarSign,
-  'star': Star,
-  'book': BookOpen,
+  dollarsign: DollarSign,
+  star: Star,
+  book: BookOpen,
   'book-open': BookOpen,
-  'palette': Palette,
-  'music': Music,
-  'activity': Activity,
-  'car': Car,
-  'camera': Camera,
+  palette: Palette,
+  music: Music,
+  activity: Activity,
+  car: Car,
+  camera: Camera,
   'gamepad-2': Gamepad2,
-  'gamepad': Gamepad2,
-  'gamepad2': Gamepad2,
-  'brain': Brain,
-  'dumbbell': Dumbbell,
-  'apple': Apple,
+  gamepad: Gamepad2,
+  gamepad2: Gamepad2,
+  brain: Brain,
+  dumbbell: Dumbbell,
+  apple: Apple,
   'graduation-cap': GraduationCap,
-  'target': Target,
-  'users': Users,
-  'zap': Zap,
-  'coffee': Coffee,
-  'home': Home,
+  target: Target,
+  users: Users,
+  zap: Zap,
+  coffee: Coffee,
+  home: Home,
   'shopping-bag': ShoppingBag,
-  'wrench': Wrench,
-  'code': Code,
-  'paintbrush': Paintbrush,
-  'video': Video,
-  'mic': Mic,
-  'image': ImageIcon,
-  'plane': Plane,
+  wrench: Wrench,
+  code: Code,
+  paintbrush: Paintbrush,
+  video: Video,
+  mic: Mic,
+  image: ImageIcon,
+  plane: Plane,
   'utensils-crossed': UtensilsCrossed,
-  'shirt': Shirt,
-  'baby': Baby,
-  'dog': Dog,
+  shirt: Shirt,
+  baby: Baby,
+  dog: Dog,
   'flower-2': Flower2,
   'tree-pine': TreePine,
-  'waves': Waves,
-  'mountain': Mountain,
-  'sun': Sun,
-  'moon': Moon,
-  'cloud': Cloud,
-  'droplet': Droplet,
-  'flame': Flame,
-  'snowflake': Snowflake,
-  'leaf': Leaf,
-  
+  waves: Waves,
+  mountain: Mountain,
+  sun: Sun,
+  moon: Moon,
+  cloud: Cloud,
+  droplet: Droplet,
+  flame: Flame,
+  snowflake: Snowflake,
+  leaf: Leaf,
+
   // PascalCase (actual DB format)
-  'Briefcase': Briefcase,
-  'Smartphone': Smartphone,
-  'Heart': Heart,
-  'DollarSign': DollarSign,
-  'Star': Star,
-  'Book': BookOpen,
-  'BookOpen': BookOpen,
-  'Palette': Palette,
-  'Music': Music,
-  'Activity': Activity,
-  'Car': Car,
-  'Camera': Camera,
-  'Gamepad2': Gamepad2,
-  'Gamepad': Gamepad2,
-  'Rocket': Rocket,
-  'TrendingUp': TrendingUp,
-  'Sparkles': Sparkles,
-  'PiggyBank': PiggyBank,
-  'Brain': Brain,
-  'Dumbbell': Dumbbell,
-  'Apple': Apple,
-  'GraduationCap': GraduationCap,
-  'Target': Target,
-  'Users': Users,
-  'Zap': Zap,
-  'Coffee': Coffee,
-  'Home': Home,
-  'ShoppingBag': ShoppingBag,
-  'Wrench': Wrench,
-  'Code': Code,
-  'Paintbrush': Paintbrush,
-  'Video': Video,
-  'Mic': Mic,
-  'Image': ImageIcon,
-  'Plane': Plane,
-  'UtensilsCrossed': UtensilsCrossed,
-  'Shirt': Shirt,
-  'Baby': Baby,
-  'Dog': Dog,
-  'Flower2': Flower2,
-  'TreePine': TreePine,
-  'Waves': Waves,
-  'Mountain': Mountain,
-  'Sun': Sun,
-  'Moon': Moon,
-  'Cloud': Cloud,
-  'Droplet': Droplet,
-  'Flame': Flame,
-  'Snowflake': Snowflake,
-  'Leaf': Leaf,
-  
+  Briefcase: Briefcase,
+  Smartphone: Smartphone,
+  Heart: Heart,
+  DollarSign: DollarSign,
+  Star: Star,
+  Book: BookOpen,
+  BookOpen: BookOpen,
+  Palette: Palette,
+  Music: Music,
+  Activity: Activity,
+  Car: Car,
+  Camera: Camera,
+  Gamepad2: Gamepad2,
+  Gamepad: Gamepad2,
+  Rocket: Rocket,
+  TrendingUp: TrendingUp,
+  Sparkles: Sparkles,
+  PiggyBank: PiggyBank,
+  Brain: Brain,
+  Dumbbell: Dumbbell,
+  Apple: Apple,
+  GraduationCap: GraduationCap,
+  Target: Target,
+  Users: Users,
+  Zap: Zap,
+  Coffee: Coffee,
+  Home: Home,
+  ShoppingBag: ShoppingBag,
+  Wrench: Wrench,
+  Code: Code,
+  Paintbrush: Paintbrush,
+  Video: Video,
+  Mic: Mic,
+  Image: ImageIcon,
+  Plane: Plane,
+  UtensilsCrossed: UtensilsCrossed,
+  Shirt: Shirt,
+  Baby: Baby,
+  Dog: Dog,
+  Flower2: Flower2,
+  TreePine: TreePine,
+  Waves: Waves,
+  Mountain: Mountain,
+  Sun: Sun,
+  Moon: Moon,
+  Cloud: Cloud,
+  Droplet: Droplet,
+  Flame: Flame,
+  Snowflake: Snowflake,
+  Leaf: Leaf,
+
   // Category name/slug fallbacks
-  'business': Briefcase,
-  'technology': Smartphone,
-  'health': Heart,
-  'finance': DollarSign,
-  'lifestyle': Star,
-  'education': BookOpen,
-  'design': Palette,
-  'entertainment': Music,
-  'sports': Activity,
-  'automotive': Car,
-  'photography': Camera,
-  'gaming': Gamepad2,
-  'entrepreneurship': Rocket,
-  'marketing': TrendingUp,
-  'sales': TrendingUp,
-  'mental': Brain,
+  business: Briefcase,
+  technology: Smartphone,
+  health: Heart,
+  finance: DollarSign,
+  lifestyle: Star,
+  education: BookOpen,
+  design: Palette,
+  entertainment: Music,
+  sports: Activity,
+  automotive: Car,
+  photography: Camera,
+  gaming: Gamepad2,
+  entrepreneurship: Rocket,
+  marketing: TrendingUp,
+  sales: TrendingUp,
+  mental: Brain,
   'mental-health': Brain,
-  'fitness': Dumbbell,
-  'nutrition': Apple,
-  'career': GraduationCap,
+  fitness: Dumbbell,
+  nutrition: Apple,
+  career: GraduationCap,
   'career-development': GraduationCap,
-  'coaching': Users,
-  'consulting': Briefcase,
-  'legal': Briefcase,
+  coaching: Users,
+  consulting: Briefcase,
+  legal: Briefcase,
   'real-estate': Home,
-  'travel': Plane,
-  'food': UtensilsCrossed,
-  'fashion': Shirt,
-  'beauty': Sparkles,
-  'pets': Dog,
-  'home': Home,
-  'shopping': ShoppingBag,
-  'tools': Wrench,
-  'code': Code,
-  'art': Paintbrush,
-  'video': Video,
-  'audio': Mic,
-  'image': ImageIcon,
-  'game': Gamepad2,
+  travel: Plane,
+  food: UtensilsCrossed,
+  fashion: Shirt,
+  beauty: Sparkles,
+  pets: Dog,
+  home: Home,
+  shopping: ShoppingBag,
+  tools: Wrench,
+  code: Code,
+  art: Paintbrush,
+  video: Video,
+  audio: Mic,
+  image: ImageIcon,
+  game: Gamepad2,
 };
 
 const { width } = Dimensions.get('window');
@@ -230,50 +237,62 @@ export function CategoryGrid({ categories }: CategoryGridProps) {
   const { theme } = useTheme();
 
   const handleCategoryPress = (categoryId: string, categoryName: string) => {
-    router.push(`/category/${categoryId}?name=${encodeURIComponent(categoryName)}`);
+    router.push(
+      `/category/${categoryId}?name=${encodeURIComponent(categoryName)}`
+    );
   };
 
-  const renderCategory = ({ item, index }: { item: Category; index: number }) => {
+  const renderCategory = ({
+    item,
+    index,
+  }: {
+    item: Category;
+    index: number;
+  }) => {
     // Normalize icon_name to handle different formats (PascalCase, kebab-case, lowercase)
     const iconKey = item.icon_name?.toLowerCase().replace(/-/g, '') || '';
     const pascalKey = item.icon_name || '';
     const kebabKey = item.icon_name?.toLowerCase() || '';
-    
+
     // Try multiple formats
-    const IconComponent = 
-      iconMap[pascalKey] || 
-      iconMap[kebabKey] || 
-      iconMap[iconKey] || 
-      iconMap[item.icon_name as string] || 
+    const IconComponent =
+      iconMap[pascalKey] ||
+      iconMap[kebabKey] ||
+      iconMap[iconKey] ||
+      iconMap[item.icon_name as string] ||
       iconMap[item.slug?.toLowerCase() || ''] ||
       Briefcase;
-    
-    // Debug: Log if icon not found
-    if (IconComponent === Briefcase && item.icon_name !== 'briefcase' && item.icon_name !== 'Briefcase') {
-      console.log(`[CategoryGrid] Icon not found for: ${item.name} (icon_name: ${item.icon_name}, slug: ${item.slug})`);
-    }
-    
+
     // Get color based on index position (0-7)
     const categoryColor = getCategoryColor(index);
-    
-    
+
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[
-          styles.categoryItem, 
-          { 
+          styles.categoryItem,
+          {
             backgroundColor: categoryColor + '30',
             borderColor: theme.colors.border,
-            borderWidth: 1
-          }
+            borderWidth: 1,
+          },
         ]}
         onPress={() => handleCategoryPress(item.id, item.name)}
         activeOpacity={0.8}
       >
-        <View style={[styles.iconContainer, { backgroundColor: categoryColor + '25' }]}>
+        <View
+          style={[
+            styles.iconContainer,
+            { backgroundColor: categoryColor + '25' },
+          ]}
+        >
           <IconComponent size={20} color={categoryColor} strokeWidth={2.5} />
         </View>
-        <Text style={[styles.categoryName, { color: theme.colors.text }]} numberOfLines={1}>{item.name}</Text>
+        <Text
+          style={[styles.categoryName, { color: theme.colors.text }]}
+          numberOfLines={1}
+        >
+          {item.name}
+        </Text>
       </TouchableOpacity>
     );
   };
@@ -281,7 +300,9 @@ export function CategoryGrid({ categories }: CategoryGridProps) {
   return (
     <View style={styles.container}>
       <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Browse by Category</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+          Browse by Category
+        </Text>
       </View>
       <FlatList
         data={categories}

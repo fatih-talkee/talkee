@@ -122,10 +122,10 @@ export default function SearchScreen() {
     } else if (filters.availability === 'urgent-call') {
       // Urgent call means available and active
       filtered = filtered.filter((p) => p.is_active && p.is_available);
-    }
-
+  }
+  
     // Filter by price range
-    if (filters.priceRange[0] > 0 || filters.priceRange[1] < 100) {
+  if (filters.priceRange[0] > 0 || filters.priceRange[1] < 100) {
       filtered = filtered.filter((p) => {
         const rate = p.rate_per_minute || 0;
         return rate >= filters.priceRange[0] && rate <= filters.priceRange[1];
@@ -133,11 +133,11 @@ export default function SearchScreen() {
     }
 
     // Filter by categories
-    if (filters.categories.length > 0) {
+  if (filters.categories.length > 0) {
       filtered = filtered.filter((p) =>
         filters.categories.includes(p.category_id)
       );
-    }
+  }
 
     // Filter by languages
     if (filters.languages.length > 0) {
@@ -220,9 +220,9 @@ export default function SearchScreen() {
 
   const getInitialFiltersForModal = useMemo(
     () => ({
-      priceRange: filters.priceRange,
+    priceRange: filters.priceRange,
       availability: filters.availability,
-      categories: filters.categories,
+    categories: filters.categories,
       languages: filters.languages,
       specialties: filters.specialties,
       skills: filters.skills,
