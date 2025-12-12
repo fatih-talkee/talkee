@@ -13,6 +13,7 @@ interface HeaderProps {
   showBack?: boolean;
   backRoute?: string;
   onBackPress?: () => void;
+  title?: string;
 }
 
 export function Header({
@@ -24,6 +25,7 @@ export function Header({
   showBack,
   backRoute,
   onBackPress,
+  title,
 }: HeaderProps) {
   const normalizedRight =
     rightButtons !== undefined
@@ -41,6 +43,7 @@ export function Header({
       showBack={showBack}
       backRoute={backRoute}
       onBackPress={onBackPress}
+      title={title}
     />
   );
 }

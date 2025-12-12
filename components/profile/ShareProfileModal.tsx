@@ -12,12 +12,20 @@ import {
   Platform,
   Pressable,
 } from 'react-native';
-import { X, Copy, Share2, Download } from 'lucide-react-native';
+import {
+  X,
+  Copy,
+  Share2,
+  Download,
+  ShieldCheck,
+  Star,
+} from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import QRCode from 'react-native-qrcode-svg';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import ViewShot from 'react-native-view-shot';
+import { Image } from 'react-native';
 
 interface ShareProfileModalProps {
   visible: boolean;
@@ -213,6 +221,95 @@ export function ShareProfileModal({
               >
                 {message.text}
               </Text>
+            </View>
+          )}
+
+          {/* Profile Card */}
+          {(professionalData || username) && (
+            <View
+              style={[
+                styles.profileCard,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <Image
+                source={{
+                  uri:
+                    professionalData?.avatar ||
+                    'https://via.placeholder.com/150',
+                }}
+                style={styles.profileAvatar}
+              />
+              <View style={styles.profileInfo}>
+                <View style={styles.profileHeader}>
+                  <Text
+                    style={[styles.profileName, { color: theme.colors.text }]}
+                    numberOfLines={1}
+                  >
+                    {professionalData?.name || username || 'User'}
+                  </Text>
+                  {professionalData?.isVerified && (
+                    <ShieldCheck
+                      size={16}
+                      color={theme.colors.primary}
+                      strokeWidth={2.5}
+                    />
+                  )}
+                </View>
+                <Text
+                  style={[
+                    styles.profileTitle,
+                    { color: theme.colors.textMuted },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {professionalData?.title || 'Talkee User'}
+                </Text>
+                {professionalData && (
+                  <View style={styles.profileStats}>
+                    {professionalData.rating > 0 && (
+                      <View style={styles.statItem}>
+                        <Star
+                          size={12}
+                          color={theme.colors.accent}
+                          fill={theme.colors.accent}
+                        />
+                        <Text
+                          style={[
+                            styles.statText,
+                            { color: theme.colors.textMuted },
+                          ]}
+                        >
+                          {professionalData.rating.toFixed(1)}
+                        </Text>
+                      </View>
+                    )}
+                    {professionalData.totalCalls > 0 && (
+                      <Text
+                        style={[
+                          styles.statText,
+                          { color: theme.colors.textMuted },
+                        ]}
+                      >
+                        {professionalData.totalCalls} calls
+                      </Text>
+                    )}
+                    {professionalData.ratePerMinute > 0 && (
+                      <Text
+                        style={[
+                          styles.statText,
+                          { color: theme.colors.primary },
+                        ]}
+                      >
+                        ${professionalData.ratePerMinute.toFixed(2)}/min
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </View>
             </View>
           )}
 
@@ -424,6 +521,54 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Medium',
     textAlign: 'center',
+  },
+  profileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  profileAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  profileName: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    flex: 1,
+  },
+  profileTitle: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    marginBottom: 6,
+  },
+  profileStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statText: {
+    fontSize: 11,
+    fontFamily: 'Inter-Regular',
   },
   scrollContainer: {
     flex: 1,

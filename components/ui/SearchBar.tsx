@@ -40,10 +40,17 @@ export function SearchBar({
 }: SearchBarProps) {
   const { theme } = useTheme();
 
-  const wrapperBackground = theme.name === 'dark' ? '#000000' : theme.colors.surface;
+  const wrapperBackground =
+    theme.name === 'dark' ? '#000000' : theme.colors.surface;
 
   return (
-    <View style={[styles.container, { backgroundColor: wrapperBackground }, containerStyle]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: wrapperBackground },
+        containerStyle,
+      ]}
+    >
       <Input
         value={value}
         onChangeText={onChangeText}
@@ -58,15 +65,18 @@ export function SearchBar({
         ]}
       />
 
-      {showTabButtons && tabOptions.length > 0 && selectedTabKey && onTabSelect && (
-        <TabButtons
-          options={tabOptions}
-          selectedKey={selectedTabKey}
-          onSelect={onTabSelect}
-          showWrapper={false}
-          containerStyle={styles.tabButtonsContainer}
-        />
-      )}
+      {showTabButtons &&
+        tabOptions.length > 0 &&
+        selectedTabKey &&
+        onTabSelect && (
+          <TabButtons
+            options={tabOptions}
+            selectedKey={selectedTabKey}
+            onSelect={onTabSelect}
+            showWrapper={false}
+            containerStyle={styles.tabButtonsContainer}
+          />
+        )}
 
       {showResultsCount && resultsCount !== undefined && (
         <View style={styles.resultsHeader}>
@@ -91,9 +101,12 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 24,
     paddingVertical: 16,
+    width: '100%',
+    overflow: 'hidden',
   },
   tabButtonsContainer: {
-    marginTop: 0,
+    marginTop: 12,
+    width: '100%',
   },
   resultsHeader: {
     marginTop: 12,
@@ -103,4 +116,3 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
   },
 });
-

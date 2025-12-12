@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,8 @@ import {
   TextInput,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
+import { Calendar, Clock } from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { Header } from '@/components/ui/Header';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -37,16 +38,20 @@ import { Step4Categories } from './components/Step4Categories';
 import { Step5Availability } from './components/Step5Availability';
 import { Step6Finish } from './components/Step6Finish';
 import { daysOptions, timeOptions } from './constants';
-import { validateAvailability, getFilteredTimeOptions, compareTimes } from './utils';
+import {
+  validateAvailability,
+  getFilteredTimeOptions,
+  compareTimes,
+} from './utils';
 
 // Local types (only what's not in database.types.ts)
 interface Availability {
   id: string;
-  availableAt: 'every' | 'specific';
+  availableAt: 'every' | 'specific' | 'urgent';
   days?: string[];
   date?: Date;
-  startHour: string;
-  endHour: string;
+  startHour?: string; // Optional for urgent calls
+  endHour?: string; // Optional for urgent calls
   pricePerMinute: string;
 }
 
@@ -56,11 +61,8 @@ export default function BecomeProfessionalScreen() {
   const { theme } = useTheme();
   const { profileData, isLoading: profileLoading } = useProfile();
   const toast = useToast();
-  const params = useLocalSearchParams();
-  const isEditMode = params.mode === 'edit';
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [loadingProfessional, setLoadingProfessional] = useState(false);
   const [progressAnim] = useState(new Animated.Value(16.67)); // 100/6 = 16.67%
 
   // Step 1 - Information
@@ -86,138 +88,41 @@ export default function BecomeProfessionalScreen() {
   // Step 5 - Availability
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
-  const [editingAvailability, setEditingAvailability] = useState<Availability | null>(null);
-  const [availabilityFormData, setAvailabilityFormData] = useState<Partial<Availability>>({
+  const [editingAvailability, setEditingAvailability] =
+    useState<Availability | null>(null);
+  const [availabilityFormData, setAvailabilityFormData] = useState<
+    Partial<Availability>
+  >({
     availableAt: 'every',
     days: [],
     startHour: '',
     endHour: '',
     pricePerMinute: '',
   });
-  const [showTimePicker, setShowTimePicker] = useState<'start' | 'end' | null>(null);
+  const [showTimePicker, setShowTimePicker] = useState<'start' | 'end' | null>(
+    null
+  );
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(
+    null
+  );
 
   // Step 6 - Finish
   const [isAvailable, setIsAvailable] = useState(true);
   const [isPublic, setIsPublic] = useState(true);
 
-  // Load profile data (only in create mode, not edit mode to prevent flash)
+  // Load profile data for initial form population
+  // Use a ref to track if we've already loaded initial data
+  const hasLoadedInitialData = useRef(false);
+  
   useEffect(() => {
-    if (!isEditMode && profileData && !profileLoading) {
+    if (profileData && !profileLoading && !hasLoadedInitialData.current) {
       setFullName(profileData.user.name || '');
       setEmail(profileData.user.primary_email || '');
       setBio(profileData.user.bio || '');
+      hasLoadedInitialData.current = true;
     }
-  }, [profileData, profileLoading, isEditMode]);
-
-  // Load professional data for edit mode
-  useEffect(() => {
-    if (isEditMode && profileData?.user?.id && !profileLoading) {
-      const loadProfessionalData = async () => {
-        setLoadingProfessional(true);
-        try {
-          const result = await professionalsService.getProfessionalByUserId(
-            profileData.user.id
-          );
-          
-          if (result.success && result.professional) {
-            const prof = result.professional;
-            
-            console.log('[Edit Mode] Professional data loaded:', {
-              educations: prof.educations,
-              experiences: prof.experiences,
-              categories: prof.categories,
-              availabilities: prof.availabilities,
-            });
-            
-            // Step 1
-            setFullName(profileData.user.name || '');
-            setEmail(profileData.user.primary_email || '');
-            setBio(prof.bio || '');
-            
-            // Step 2
-            setSpecialties(prof.specialties || []);
-            setLanguages(prof.languages || []);
-            setSkillsCertifications(prof.skills_certifications || []);
-            
-            // Step 3 - Convert educations
-            if (prof.educations && Array.isArray(prof.educations) && prof.educations.length > 0) {
-              const educationsData: EducationFormData[] = prof.educations.map((edu: any) => ({
-                degree_level: edu.degree_level,
-                institution: edu.institution || undefined,
-                field_of_study: edu.field_of_study || undefined,
-                start_year: edu.start_year?.toString() || undefined,
-                end_year: edu.end_year?.toString() || undefined,
-                is_current: edu.is_current || false,
-              }));
-              console.log('[Edit Mode] Setting educations:', educationsData);
-              setEducations(educationsData);
-            } else {
-              console.log('[Edit Mode] No educations found or empty array');
-              setEducations([]);
-            }
-            
-            // Step 3 - Convert experiences
-            if (prof.experiences && Array.isArray(prof.experiences) && prof.experiences.length > 0) {
-              const experiencesData: ExperienceFormData[] = prof.experiences.map((exp: any) => {
-                // Extract year from start_date (format: "YYYY-01-01")
-                const startYear = exp.start_date ? exp.start_date.split('-')[0] : undefined;
-                const endYear = exp.end_date ? exp.end_date.split('-')[0] : undefined;
-                
-                return {
-                  title: exp.title || undefined,
-                  company: exp.company || undefined,
-                  location: exp.location || undefined,
-                  start_year: startYear,
-                  end_year: endYear,
-                  is_current: exp.is_current || false,
-                };
-              });
-              console.log('[Edit Mode] Setting experiences:', experiencesData);
-              setExperiences(experiencesData);
-            } else {
-              console.log('[Edit Mode] No experiences found or empty array');
-              setExperiences([]);
-            }
-            
-            // Step 4 - Categories
-            if (prof.categories && prof.categories.length > 0) {
-              setSelectedCategories(prof.categories.map((cat: any) => cat.id));
-            }
-            
-            // Step 5 - Availabilities
-            if (prof.availabilities && prof.availabilities.length > 0) {
-              const availabilitiesData: Availability[] = prof.availabilities.map((av: any) => ({
-                id: av.id,
-                availableAt: av.available_at,
-                days: av.days || [],
-                date: av.date ? new Date(av.date) : undefined,
-                startHour: av.start_hour,
-                endHour: av.end_hour,
-                pricePerMinute: av.price_per_minute?.toString() || '0',
-              }));
-              setAvailabilities(availabilitiesData);
-            }
-            
-            // Step 6
-            setIsAvailable(prof.is_available ?? true);
-            setIsPublic(prof.is_public ?? true);
-          }
-        } catch (error) {
-          console.error('Error loading professional data:', error);
-          toast.error({
-            title: 'Error',
-            message: 'Failed to load professional data',
-          });
-        } finally {
-          setLoadingProfessional(false);
-        }
-      };
-      
-      loadProfessionalData();
-    }
-  }, [isEditMode, profileData, profileLoading]);
+  }, [profileData, profileLoading]);
 
   // Animate progress bar
   useEffect(() => {
@@ -267,8 +172,8 @@ export default function BecomeProfessionalScreen() {
           title: 'Missing Information',
           message: 'Please enter your full name and email address',
         });
-      return;
-    }
+        return;
+      }
       if (!bio.trim() || bio.length < 50) {
         toast.error({
           title: 'Bio Too Short',
@@ -286,8 +191,8 @@ export default function BecomeProfessionalScreen() {
           title: 'Language Required',
           message: 'Please add at least one language you can communicate in',
         });
-      return;
-    }
+        return;
+      }
     }
 
     // Step 3 validation (all optional)
@@ -300,7 +205,7 @@ export default function BecomeProfessionalScreen() {
           title: 'Category Required',
           message:
             'Please select at least one category that matches your expertise',
-    });
+        });
         return;
       }
     }
@@ -344,7 +249,7 @@ export default function BecomeProfessionalScreen() {
       return;
     }
 
-      setLoading(true);
+    setLoading(true);
 
     try {
       // Prepare professional data
@@ -367,18 +272,22 @@ export default function BecomeProfessionalScreen() {
           start_year: edu.start_year ? Number(edu.start_year) : null,
           end_year: edu.end_year ? Number(edu.end_year) : null,
           is_current: edu.is_current || false,
-          description: edu.description || null,
+          description: (edu as any).description || null,
           sort_order: 0,
         })),
         experiences: experiences.map((exp) => {
           // Convert start_year and end_year to start_date and end_date (year-only format)
           const startYear = exp.start_year ? String(exp.start_year) : null;
           const endYear = exp.end_year ? String(exp.end_year) : null;
-          
+
           // Create date strings in format "YYYY-01-01" for year-only dates
           const startDate = startYear ? `${startYear}-01-01` : null;
-          const endDate = exp.is_current ? null : (endYear ? `${endYear}-12-31` : null);
-          
+          const endDate = exp.is_current
+            ? null
+            : endYear
+            ? `${endYear}-12-31`
+            : null;
+
           return {
             title: exp.title || null,
             company: exp.company || null,
@@ -386,7 +295,7 @@ export default function BecomeProfessionalScreen() {
             start_date: startDate,
             end_date: endDate,
             is_current: exp.is_current || false,
-            description: exp.description || null,
+            description: (exp as any).description || null,
             sort_order: 0,
           };
         }),
@@ -397,10 +306,15 @@ export default function BecomeProfessionalScreen() {
         // Step 5
         availabilities: availabilities.map((av) => ({
           available_at: av.availableAt,
-          days: av.days || null,
-          date: av.date ? av.date.toISOString().split('T')[0] : null,
-          start_hour: av.startHour,
-          end_hour: av.endHour,
+          days: av.availableAt === 'urgent' ? null : av.days || null,
+          date:
+            av.availableAt === 'urgent'
+              ? null
+              : av.date
+              ? av.date.toISOString().split('T')[0]
+              : null,
+          start_hour: av.availableAt === 'urgent' ? null : av.startHour || null,
+          end_hour: av.availableAt === 'urgent' ? null : av.endHour || null,
           currency: 'USD',
           price_per_minute: parseFloat(av.pricePerMinute) || 0,
         })),
@@ -411,20 +325,112 @@ export default function BecomeProfessionalScreen() {
       };
 
       // Log final form data before submission
-      logFormData(isEditMode ? 'Update Professional Profile (Final)' : 'Save & Become Professional (Final)');
+      logFormData('Save & Become Professional (Final)');
 
-      // Create or update professional profile
-      // Note: createProfessional handles both create and update scenarios
-      const result = await professionalsService.createProfessional(
-        professionalData
-      );
+      // Get current authenticated user
+      const { data: authUser } = await supabase.auth.getUser();
+      if (!authUser?.user?.id) {
+        toast.error({
+          title: 'Error',
+          message: 'User not authenticated',
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Get the database user ID (not auth_id)
+      const { data: dbUser, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('auth_id', authUser.user.id)
+        .single();
+
+      if (userError || !dbUser) {
+        toast.error({
+          title: 'Error',
+          message: 'User not found in database',
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Create professional record
+      const { data: newProfessional, error: createError } = await supabase
+        .from('professionals')
+        .insert({
+          user_id: dbUser.id,
+          bio: professionalData.bio,
+          category_id: professionalData.category_ids[0] || null,
+          rate_per_minute: professionalData.availabilities[0]?.price_per_minute || 0,
+          is_available: professionalData.is_available,
+          is_public: professionalData.is_public,
+        })
+        .select()
+        .single();
+
+      if (createError || !newProfessional) {
+        toast.error({
+          title: 'Error',
+          message: createError?.message || 'Failed to create professional profile',
+        });
+        setLoading(false);
+        return;
+      }
+
+      const professionalId = newProfessional.id;
+
+      // Update all sub-sections using existing methods
+      // 1. About Me
+      if (professionalData.specialties || professionalData.languages || professionalData.skills_certifications) {
+        const aboutResult = await professionalsService.updateProfessionalAboutMe(professionalId, {
+          specialties: professionalData.specialties || [],
+          languages: professionalData.languages || [],
+          skills_certifications: professionalData.skills_certifications || [],
+        });
+        if (!aboutResult.success) {
+          throw new Error(aboutResult.error || 'Failed to update about me');
+        }
+      }
+
+      // 2. Education & Experience
+      if (professionalData.educations || professionalData.experiences) {
+        const eduExpResult = await professionalsService.updateProfessionalEducationExperience(professionalId, {
+          educations: professionalData.educations || [],
+          experiences: professionalData.experiences || [],
+        });
+        if (!eduExpResult.success) {
+          throw new Error(eduExpResult.error || 'Failed to update education & experience');
+        }
+      }
+
+      // 3. Categories
+      if (professionalData.category_ids && professionalData.category_ids.length > 0) {
+        const categoriesResult = await professionalsService.updateProfessionalCategories(
+          professionalId,
+          professionalData.category_ids
+        );
+        if (!categoriesResult.success) {
+          throw new Error(categoriesResult.error || 'Failed to update categories');
+        }
+      }
+
+      // 4. Availabilities
+      if (professionalData.availabilities && professionalData.availabilities.length > 0) {
+        const availabilitiesResult = await professionalsService.updateProfessionalAvailabilities(
+          professionalId,
+          professionalData.availabilities
+        );
+        if (!availabilitiesResult.success) {
+          throw new Error(availabilitiesResult.error || 'Failed to update availabilities');
+        }
+      }
+
+      const result = { success: true };
 
       if (result.success) {
         toast.success({
-          title: isEditMode ? 'Profile Updated!' : 'Profile Created!',
-          message: isEditMode
-            ? 'Your professional profile has been updated successfully.'
-            : 'Your professional profile has been created successfully. Welcome aboard!',
+          title: 'Profile Created!',
+          message: 'Your professional profile has been created successfully. Welcome aboard!',
         });
 
         // Reset all form states after successful save/update
@@ -447,9 +453,7 @@ export default function BecomeProfessionalScreen() {
           router.replace('/(tabs)');
         }, 1000);
       } else {
-        throw new Error(
-          result.error || `Failed to ${isEditMode ? 'update' : 'create'} professional profile`
-        );
+        throw new Error('Failed to create professional profile');
       }
     } catch (error: any) {
       toast.error({
@@ -476,6 +480,7 @@ export default function BecomeProfessionalScreen() {
     setAvailabilityFormData({
       availableAt: 'every',
       days: [],
+      date: undefined,
       startHour: '',
       endHour: '',
       pricePerMinute: '',
@@ -508,16 +513,30 @@ export default function BecomeProfessionalScreen() {
     const newAvailability: Availability = {
       id: editingAvailability?.id || Date.now().toString(),
       availableAt: availabilityFormData.availableAt!,
-      days: availabilityFormData.days,
-      date: availabilityFormData.date,
-      startHour: availabilityFormData.startHour!,
-      endHour: availabilityFormData.endHour!,
+      days:
+        availabilityFormData.availableAt === 'urgent'
+          ? undefined
+          : availabilityFormData.days,
+      date:
+        availabilityFormData.availableAt === 'urgent'
+          ? undefined
+          : availabilityFormData.date,
+      startHour:
+        availabilityFormData.availableAt === 'urgent'
+          ? undefined
+          : availabilityFormData.startHour,
+      endHour:
+        availabilityFormData.availableAt === 'urgent'
+          ? undefined
+          : availabilityFormData.endHour,
       pricePerMinute: availabilityFormData.pricePerMinute!,
     };
 
     if (editingAvailability) {
       setAvailabilities((prev) =>
-        prev.map((av) => (av.id === editingAvailability.id ? newAvailability : av))
+        prev.map((av) =>
+          av.id === editingAvailability.id ? newAvailability : av
+        )
       );
       logFormData('Update Availability');
     } else {
@@ -628,10 +647,10 @@ export default function BecomeProfessionalScreen() {
             onEditAvailability={handleEditAvailability}
             onDeleteAvailability={handleDeleteAvailability}
           />
-  );
+        );
 
       case 6:
-    return (
+        return (
           <Step6Finish
             onTermsPress={() => {
               // Open terms modal or navigate
@@ -647,24 +666,6 @@ export default function BecomeProfessionalScreen() {
     }
   };
 
-  // Show loading while professional data is being loaded in edit mode
-  if (isEditMode && (loadingProfessional || profileLoading)) {
-    return (
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        <Header showBack onBackPress={() => router.back()} />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          <Text style={{ color: theme.colors.text, fontSize: 16, fontFamily: 'Inter-Medium', marginBottom: 8 }}>
-            Loading your professional profile...
-          </Text>
-          <Text style={{ color: theme.colors.textMuted, fontSize: 14, fontFamily: 'Inter-Regular' }}>
-            Please wait
-            </Text>
-          </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView
@@ -683,24 +684,24 @@ export default function BecomeProfessionalScreen() {
 
       {renderProgressBar()}
 
-            <ScrollView
+      <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
-              showsVerticalScrollIndicator={false}
-            >
+        showsVerticalScrollIndicator={false}
+      >
         {renderStepContent()}
       </ScrollView>
 
       {/* Footer with navigation buttons */}
       <View
-                          style={[
+        style={[
           styles.footer,
-                            {
+          {
             backgroundColor: '#000000',
             borderTopColor: theme.colors.border,
-                            },
-                          ]}
-                        >
+          },
+        ]}
+      >
         {currentStep < TOTAL_STEPS ? (
           <Button
             title="Continue"
@@ -709,21 +710,13 @@ export default function BecomeProfessionalScreen() {
           />
         ) : (
           <Button
-            title={
-              loading
-                ? isEditMode
-                  ? 'Updating...'
-                  : 'Creating...'
-                : isEditMode
-                ? 'Update Profile'
-                : 'Save & Become Professional'
-            }
+            title={loading ? 'Creating...' : 'Save & Become Professional'}
             onPress={handleComplete}
             style={styles.nextButtonFullWidth}
             disabled={loading}
           />
         )}
-                  </View>
+      </View>
 
       {/* Availability Modal */}
       {showAvailabilityModal && (
@@ -742,175 +735,416 @@ export default function BecomeProfessionalScreen() {
               style={[
                 availabilityModalStyles.modalContent,
                 { backgroundColor: theme.colors.surface },
-                      ]}
+              ]}
               onStartShouldSetResponder={() => true}
             >
-                      <View
-                        style={[
+              <View
+                style={[
                   availabilityModalStyles.modalHeader,
                   { borderBottomColor: theme.colors.border },
-                        ]}
-                      >
-                <Text style={[availabilityModalStyles.modalTitle, { color: theme.colors.text }]}>
-                  {editingAvailability ? 'Edit Availability' : 'Add Availability'}
-                        </Text>
-                <TouchableOpacity onPress={() => setShowAvailabilityModal(false)}>
-                  <Text style={[availabilityModalStyles.modalClose, { color: theme.colors.text }]}>
+                ]}
+              >
+                <Text
+                  style={[
+                    availabilityModalStyles.modalTitle,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  {editingAvailability
+                    ? 'Edit Availability'
+                    : 'Add Availability'}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowAvailabilityModal(false)}
+                >
+                  <Text
+                    style={[
+                      availabilityModalStyles.modalClose,
+                      { color: theme.colors.text },
+                    ]}
+                  >
                     ✕
                   </Text>
-            </TouchableOpacity>
-        </View>
+                </TouchableOpacity>
+              </View>
 
               <ScrollView
                 style={availabilityModalStyles.modalBody}
                 showsVerticalScrollIndicator={false}
               >
                 {availabilityError && (
-        <View
-          style={[
+                  <View
+                    style={[
                       availabilityModalStyles.errorContainer,
                       { backgroundColor: theme.colors.error + '10' },
-            ]}
-          >
-        <Text
-          style={[
-                        availabilityModalStyles.errorText,
-                        { color: theme.colors.error },
                     ]}
                   >
+                    <Text
+                      style={[
+                        availabilityModalStyles.errorText,
+                        { color: theme.colors.error },
+                      ]}
+                    >
                       {availabilityError}
-                  </Text>
-                </View>
+                    </Text>
+                  </View>
                 )}
 
                 {/* Availability Type */}
                 <View style={availabilityModalStyles.inputWrapper}>
-                  <Text style={[availabilityModalStyles.label, { color: theme.colors.text }]}>
+                  <Text
+                    style={[
+                      availabilityModalStyles.label,
+                      { color: theme.colors.text },
+                    ]}
+                  >
                     Availability Type
-      </Text>
-                  <View style={availabilityModalStyles.radioGroup}>
-        <TouchableOpacity
-          style={[
-                        availabilityModalStyles.radioOption,
-            {
+                  </Text>
+                  <View style={availabilityModalStyles.optionGroup}>
+                    {/* Every Week Option */}
+                    <TouchableOpacity
+                      style={[
+                        availabilityModalStyles.optionCard,
+                        {
                           backgroundColor:
                             availabilityFormData.availableAt === 'every'
-                              ? theme.colors.primary + '20'
+                              ? theme.colors.primary + '15'
                               : theme.colors.card,
                           borderColor:
                             availabilityFormData.availableAt === 'every'
                               ? theme.colors.primary
                               : theme.colors.border,
-            },
-          ]}
+                          borderWidth:
+                            availabilityFormData.availableAt === 'every' ? 2 : 1,
+                        },
+                      ]}
                       onPress={() => {
                         setAvailabilityFormData({
                           ...availabilityFormData,
                           availableAt: 'every',
                           date: undefined,
+                          startHour: '',
+                          endHour: '',
                         });
                         setAvailabilityError(null);
                       }}
+                      activeOpacity={0.7}
                     >
-            <View
-              style={[
-                          availabilityModalStyles.radioCircle,
-                {
-                            borderColor:
+                      <View style={availabilityModalStyles.optionContent}>
+                        <View
+                          style={[
+                            availabilityModalStyles.optionIconContainer,
+                            {
+                              backgroundColor:
+                                availabilityFormData.availableAt === 'every'
+                                  ? theme.colors.primary + '20'
+                                  : theme.colors.border + '20',
+                            },
+                          ]}
+                        >
+                          <Calendar
+                            size={24}
+                            color={
                               availabilityFormData.availableAt === 'every'
-                    ? theme.colors.primary
-                    : theme.colors.border,
-                },
-              ]}
-            >
-                        {availabilityFormData.availableAt === 'every' && (
-                          <View
-                style={[
-                              availabilityModalStyles.radioInner,
-                              { backgroundColor: theme.colors.primary },
-                ]}
+                                ? theme.colors.primary
+                                : theme.colors.textMuted
+                            }
+                            strokeWidth={2}
                           />
-                        )}
-            </View>
-                      <Text style={[availabilityModalStyles.radioLabel, { color: theme.colors.text }]}>
-                        Every Week
-                      </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-                        availabilityModalStyles.radioOption,
-            {
+                        </View>
+                        <View style={availabilityModalStyles.optionTextContainer}>
+                          <Text
+                            style={[
+                              availabilityModalStyles.optionTitle,
+                              {
+                                color:
+                                  availabilityFormData.availableAt === 'every'
+                                    ? theme.colors.primary
+                                    : theme.colors.text,
+                              },
+                            ]}
+                          >
+                            Every Week
+                          </Text>
+                          <Text
+                            style={[
+                              availabilityModalStyles.optionDescription,
+                              { color: theme.colors.textSecondary },
+                            ]}
+                          >
+                            Set recurring weekly schedule
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            availabilityModalStyles.optionCheckbox,
+                            {
+                              borderColor:
+                                availabilityFormData.availableAt === 'every'
+                                  ? theme.colors.primary
+                                  : theme.colors.border,
+                              backgroundColor:
+                                availabilityFormData.availableAt === 'every'
+                                  ? theme.colors.primary
+                                  : 'transparent',
+                            },
+                          ]}
+                        >
+                          {availabilityFormData.availableAt === 'every' && (
+                            <Text
+                              style={[
+                                availabilityModalStyles.optionCheckmark,
+                                { color: theme.colors.surface },
+                              ]}
+                            >
+                              ✓
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Specific Date Option */}
+                    <TouchableOpacity
+                      style={[
+                        availabilityModalStyles.optionCard,
+                        {
                           backgroundColor:
                             availabilityFormData.availableAt === 'specific'
-                              ? theme.colors.primary + '20'
+                              ? theme.colors.primary + '15'
                               : theme.colors.card,
                           borderColor:
                             availabilityFormData.availableAt === 'specific'
                               ? theme.colors.primary
                               : theme.colors.border,
-            },
-          ]}
+                          borderWidth:
+                            availabilityFormData.availableAt === 'specific' ? 2 : 1,
+                        },
+                      ]}
                       onPress={() => {
                         setAvailabilityFormData({
                           ...availabilityFormData,
                           availableAt: 'specific',
                           days: undefined,
+                          startHour: '',
+                          endHour: '',
                         });
                         setAvailabilityError(null);
                       }}
+                      activeOpacity={0.7}
                     >
-            <View
-              style={[
-                          availabilityModalStyles.radioCircle,
-                {
-                            borderColor:
+                      <View style={availabilityModalStyles.optionContent}>
+                        <View
+                          style={[
+                            availabilityModalStyles.optionIconContainer,
+                            {
+                              backgroundColor:
+                                availabilityFormData.availableAt === 'specific'
+                                  ? theme.colors.primary + '20'
+                                  : theme.colors.border + '20',
+                            },
+                          ]}
+                        >
+                          <Calendar
+                            size={24}
+                            color={
                               availabilityFormData.availableAt === 'specific'
-                    ? theme.colors.primary
-                    : theme.colors.border,
-                },
-              ]}
-            >
-                        {availabilityFormData.availableAt === 'specific' && (
-      <View
-        style={[
-                              availabilityModalStyles.radioInner,
-          { backgroundColor: theme.colors.primary },
-        ]}
-      />
-                        )}
-    </View>
-                      <Text style={[availabilityModalStyles.radioLabel, { color: theme.colors.text }]}>
-                        Specific Date
-              </Text>
-              </TouchableOpacity>
+                                ? theme.colors.primary
+                                : theme.colors.textMuted
+                            }
+                            strokeWidth={2}
+                          />
+                        </View>
+                        <View style={availabilityModalStyles.optionTextContainer}>
+                          <Text
+                            style={[
+                              availabilityModalStyles.optionTitle,
+                              {
+                                color:
+                                  availabilityFormData.availableAt === 'specific'
+                                    ? theme.colors.primary
+                                    : theme.colors.text,
+                              },
+                            ]}
+                          >
+                            Specific Date
+                          </Text>
+                          <Text
+                            style={[
+                              availabilityModalStyles.optionDescription,
+                              { color: theme.colors.textSecondary },
+                            ]}
+                          >
+                            Set availability for a specific date
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            availabilityModalStyles.optionCheckbox,
+                            {
+                              borderColor:
+                                availabilityFormData.availableAt === 'specific'
+                                  ? theme.colors.primary
+                                  : theme.colors.border,
+                              backgroundColor:
+                                availabilityFormData.availableAt === 'specific'
+                                  ? theme.colors.primary
+                                  : 'transparent',
+                            },
+                          ]}
+                        >
+                          {availabilityFormData.availableAt === 'specific' && (
+                            <Text
+                              style={[
+                                availabilityModalStyles.optionCheckmark,
+                                { color: theme.colors.surface },
+                              ]}
+                            >
+                              ✓
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Urgent Call Option */}
+                    <TouchableOpacity
+                      style={[
+                        availabilityModalStyles.optionCard,
+                        {
+                          backgroundColor:
+                            availabilityFormData.availableAt === 'urgent'
+                              ? '#F59E0B' + '15'
+                              : theme.colors.card,
+                          borderColor:
+                            availabilityFormData.availableAt === 'urgent'
+                              ? '#F59E0B'
+                              : theme.colors.border,
+                          borderWidth:
+                            availabilityFormData.availableAt === 'urgent' ? 2 : 1,
+                        },
+                      ]}
+                      onPress={() => {
+                        setAvailabilityFormData({
+                          ...availabilityFormData,
+                          availableAt: 'urgent',
+                          days: undefined,
+                          date: undefined,
+                          startHour: undefined,
+                          endHour: undefined,
+                        });
+                        setAvailabilityError(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={availabilityModalStyles.optionContent}>
+                        <View
+                          style={[
+                            availabilityModalStyles.optionIconContainer,
+                            {
+                              backgroundColor:
+                                availabilityFormData.availableAt === 'urgent'
+                                  ? '#F59E0B' + '20'
+                                  : theme.colors.border + '20',
+                            },
+                          ]}
+                        >
+                          <Clock
+                            size={24}
+                            color={
+                              availabilityFormData.availableAt === 'urgent'
+                                ? '#F59E0B'
+                                : theme.colors.textMuted
+                            }
+                            strokeWidth={2}
+                          />
+                        </View>
+                        <View style={availabilityModalStyles.optionTextContainer}>
+                          <Text
+                            style={[
+                              availabilityModalStyles.optionTitle,
+                              {
+                                color:
+                                  availabilityFormData.availableAt === 'urgent'
+                                    ? '#F59E0B'
+                                    : theme.colors.text,
+                              },
+                            ]}
+                          >
+                            Urgent Call
+                          </Text>
+                          <Text
+                            style={[
+                              availabilityModalStyles.optionDescription,
+                              { color: theme.colors.textSecondary },
+                            ]}
+                          >
+                            Available when online, anytime
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            availabilityModalStyles.optionCheckbox,
+                            {
+                              borderColor:
+                                availabilityFormData.availableAt === 'urgent'
+                                  ? '#F59E0B'
+                                  : theme.colors.border,
+                              backgroundColor:
+                                availabilityFormData.availableAt === 'urgent'
+                                  ? '#F59E0B'
+                                  : 'transparent',
+                            },
+                          ]}
+                        >
+                          {availabilityFormData.availableAt === 'urgent' && (
+                            <Text
+                              style={[
+                                availabilityModalStyles.optionCheckmark,
+                                { color: theme.colors.surface },
+                              ]}
+                            >
+                              ✓
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
 
                 {/* Days Selection (for every) */}
-              {availabilityFormData.availableAt === 'every' && (
+                {availabilityFormData.availableAt === 'every' && (
                   <View style={availabilityModalStyles.inputWrapper}>
-                    <Text style={[availabilityModalStyles.label, { color: theme.colors.text }]}>
+                    <Text
+                      style={[
+                        availabilityModalStyles.label,
+                        { color: theme.colors.text },
+                      ]}
+                    >
                       Select Days *
-                  </Text>
+                    </Text>
                     <View style={availabilityModalStyles.daysContainer}>
                       {daysOptions.map((day) => {
-                        const isSelected = availabilityFormData.days?.includes(day);
+                        const isSelected =
+                          availabilityFormData.days?.includes(day);
                         return (
-                      <TouchableOpacity
-                        key={day}
-                        style={[
+                          <TouchableOpacity
+                            key={day}
+                            style={[
                               availabilityModalStyles.dayButton,
-                          {
+                              {
                                 backgroundColor: isSelected
-                                ? theme.colors.primary + '20'
+                                  ? theme.colors.primary + '20'
                                   : theme.colors.card,
                                 borderColor: isSelected
                                   ? theme.colors.primary
                                   : theme.colors.border,
-                          },
+                              },
                             ]}
                             onPress={() => {
-                              const currentDays = availabilityFormData.days || [];
+                              const currentDays =
+                                availabilityFormData.days || [];
                               const newDays = isSelected
                                 ? currentDays.filter((d) => d !== day)
                                 : [...currentDays, day];
@@ -920,74 +1154,84 @@ export default function BecomeProfessionalScreen() {
                               });
                               setAvailabilityError(null);
                             }}
-                      >
-                        <Text
-                          style={[
+                          >
+                            <Text
+                              style={[
                                 availabilityModalStyles.dayButtonText,
                                 {
                                   color: isSelected
                                     ? theme.colors.primary
                                     : theme.colors.text,
-                            },
-                          ]}
-                        >
-                          {day.substring(0, 3)}
-                        </Text>
-                      </TouchableOpacity>
+                                },
+                              ]}
+                            >
+                              {day.substring(0, 3)}
+                            </Text>
+                          </TouchableOpacity>
                         );
                       })}
+                    </View>
                   </View>
-                </View>
-              )}
+                )}
 
                 {/* Date Picker (for specific) */}
-              {availabilityFormData.availableAt === 'specific' && (
+                {availabilityFormData.availableAt === 'specific' && (
                   <View style={availabilityModalStyles.inputWrapper}>
-                    <Text style={[availabilityModalStyles.label, { color: theme.colors.text }]}>
-                      Select Date *
-                  </Text>
-                  <TouchableOpacity
-                    style={[
-                        availabilityModalStyles.dateButton,
-                      {
-                          backgroundColor: theme.colors.card,
-                        borderColor: theme.colors.border,
-                      },
-                    ]}
-                      onPress={() => setShowDatePicker(true)}
-                  >
                     <Text
+                      style={[
+                        availabilityModalStyles.label,
+                        { color: theme.colors.text },
+                      ]}
+                    >
+                      Select Date *
+                    </Text>
+                    <TouchableOpacity
+                      style={[
+                        availabilityModalStyles.dateButton,
+                        {
+                          backgroundColor: theme.colors.card,
+                          borderColor: theme.colors.border,
+                        },
+                      ]}
+                      onPress={() => setShowDatePicker(true)}
+                    >
+                      <Text
                         style={[
                           availabilityModalStyles.dateButtonText,
                           {
-                        color: availabilityFormData.date
-                          ? theme.colors.text
-                          : theme.colors.textMuted,
+                            color: availabilityFormData.date
+                              ? theme.colors.text
+                              : theme.colors.textMuted,
                           },
                         ]}
-                    >
-                      {availabilityFormData.date
-                          ? availabilityFormData.date.toLocaleDateString('en-US', {
-                              weekday: 'long',
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric',
-                            })
+                      >
+                        {availabilityFormData.date
+                          ? availabilityFormData.date.toLocaleDateString(
+                              'en-US',
+                              {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                              }
+                            )
                           : 'Select a date'}
-                    </Text>
-                  </TouchableOpacity>
-                    {showDatePicker && (
-                      Platform.OS === 'web' ? (
+                      </Text>
+                    </TouchableOpacity>
+                    {showDatePicker &&
+                      (Platform.OS === 'web' ? (
                         <input
                           type="date"
                           min={new Date().toISOString().split('T')[0]}
                           value={
                             availabilityFormData.date
-                              ? availabilityFormData.date.toISOString().split('T')[0]
+                              ? availabilityFormData.date
+                                  .toISOString()
+                                  .split('T')[0]
                               : ''
                           }
-                          onChange={(e) => {
-                            if (e.target.value) {
+                          onChange={(e: any) => {
+                            if (e.target?.value) {
                               setAvailabilityFormData({
                                 ...availabilityFormData,
                                 date: new Date(e.target.value),
@@ -1020,183 +1264,237 @@ export default function BecomeProfessionalScreen() {
                             }
                           }}
                         />
-                      )
-                    )}
-                </View>
-              )}
+                      ))}
+                  </View>
+                )}
 
-                {/* Time Selection */}
-                <View style={availabilityModalStyles.inputWrapper}>
-                  <Text style={[availabilityModalStyles.label, { color: theme.colors.text }]}>
-                    Time Range *
-                </Text>
-                  <View style={availabilityModalStyles.timeRow}>
-                    <TouchableOpacity
+                {/* Time Selection (not for urgent calls) */}
+                {availabilityFormData.availableAt !== 'urgent' && (
+                  <View style={availabilityModalStyles.inputWrapper}>
+                    <Text
                       style={[
-                        availabilityModalStyles.timeButton,
-                        {
-                          backgroundColor: theme.colors.card,
-                          borderColor: theme.colors.border,
-                        },
+                        availabilityModalStyles.label,
+                        { color: theme.colors.text },
                       ]}
-                      onPress={() => setShowTimePicker('start')}
                     >
-                      <Text
-                        style={[
-                          availabilityModalStyles.timeButtonText,
-                          {
-                            color: availabilityFormData.startHour
-                              ? theme.colors.text
-                              : theme.colors.textMuted,
-                          },
-                        ]}
-                      >
-                        {availabilityFormData.startHour || 'Start'}
-                      </Text>
-                    </TouchableOpacity>
-                    <Text style={[availabilityModalStyles.timeSeparator, { color: theme.colors.text }]}>
-                      -
+                      Time Range *
                     </Text>
-                    <TouchableOpacity
+                    <View style={availabilityModalStyles.timeRow}>
+                      <TouchableOpacity
+                        style={[
+                          availabilityModalStyles.timeButton,
+                          {
+                            backgroundColor: theme.colors.card,
+                            borderColor: theme.colors.border,
+                          },
+                        ]}
+                        onPress={() => setShowTimePicker('start')}
+                      >
+                        <Text
+                          style={[
+                            availabilityModalStyles.timeButtonText,
+                            {
+                              color: availabilityFormData.startHour
+                                ? theme.colors.text
+                                : theme.colors.textMuted,
+                            },
+                          ]}
+                        >
+                          {availabilityFormData.startHour || 'Start'}
+                        </Text>
+                      </TouchableOpacity>
+                      <Text
+                        style={[
+                          availabilityModalStyles.timeSeparator,
+                          { color: theme.colors.text },
+                        ]}
+                      >
+                        -
+                      </Text>
+                      <TouchableOpacity
+                        style={[
+                          availabilityModalStyles.timeButton,
+                          {
+                            backgroundColor: theme.colors.card,
+                            borderColor: theme.colors.border,
+                          },
+                        ]}
+                        onPress={() => setShowTimePicker('end')}
+                      >
+                        <Text
+                          style={[
+                            availabilityModalStyles.timeButtonText,
+                            {
+                              color: availabilityFormData.endHour
+                                ? theme.colors.text
+                                : theme.colors.textMuted,
+                            },
+                          ]}
+                        >
+                          {availabilityFormData.endHour || 'End'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                {/* Urgent Call Info (only for urgent) */}
+                {availabilityFormData.availableAt === 'urgent' && (
+                  <View style={availabilityModalStyles.inputWrapper}>
+                    <View
                       style={[
-                        availabilityModalStyles.timeButton,
+                        availabilityModalStyles.infoBox,
                         {
-                          backgroundColor: theme.colors.card,
-                          borderColor: theme.colors.border,
+                          backgroundColor: '#F59E0B' + '15',
+                          borderColor: '#F59E0B' + '40',
                         },
                       ]}
-                      onPress={() => setShowTimePicker('end')}
                     >
                       <Text
                         style={[
-                          availabilityModalStyles.timeButtonText,
-                          {
-                            color: availabilityFormData.endHour
-                              ? theme.colors.text
-                              : theme.colors.textMuted,
-                          },
+                          availabilityModalStyles.infoText,
+                          { color: '#F59E0B' },
                         ]}
                       >
-                        {availabilityFormData.endHour || 'End'}
+                        Urgent calls are always available when you're online,
+                        regardless of scheduled hours. Users can call you
+                        anytime you're online at the price you set below.
                       </Text>
-                    </TouchableOpacity>
-                </View>
-              </View>
+                    </View>
+                  </View>
+                )}
 
                 {/* Time Picker Modal */}
                 {showTimePicker && (
-      <Modal
+                  <Modal
                     visible={true}
                     transparent
-        animationType="fade"
+                    animationType="fade"
                     onRequestClose={() => setShowTimePicker(null)}
-      >
+                  >
                     <View style={availabilityModalStyles.timePickerOverlay}>
-        <Pressable
+                      <Pressable
                         style={StyleSheet.absoluteFill}
                         onPress={() => setShowTimePicker(null)}
-                />
-              <View
-                style={[
+                      />
+                      <View
+                        style={[
                           availabilityModalStyles.timePickerContent,
                           { backgroundColor: theme.colors.surface },
-            ]}
+                        ]}
                         onStartShouldSetResponder={() => true}
-          >
-            <View
-              style={[
+                      >
+                        <View
+                          style={[
                             availabilityModalStyles.timePickerHeader,
-                { borderBottomColor: theme.colors.border },
-              ]}
-                    >
-                      <Text
-                        style={[
+                            { borderBottomColor: theme.colors.border },
+                          ]}
+                        >
+                          <Text
+                            style={[
                               availabilityModalStyles.timePickerTitle,
                               { color: theme.colors.text },
-                        ]}
-                      >
-                            Select {showTimePicker === 'start' ? 'Start' : 'End'} Time
-                      </Text>
-                          <TouchableOpacity onPress={() => setShowTimePicker(null)}>
-                  <Text
-                    style={[
+                            ]}
+                          >
+                            Select{' '}
+                            {showTimePicker === 'start' ? 'Start' : 'End'} Time
+                          </Text>
+                          <TouchableOpacity
+                            onPress={() => setShowTimePicker(null)}
+                          >
+                            <Text
+                              style={[
                                 availabilityModalStyles.modalClose,
-                  { color: theme.colors.text },
-                ]}
-              >
+                                { color: theme.colors.text },
+                              ]}
+                            >
                               ✕
-              </Text>
-                </TouchableOpacity>
-            </View>
-                        <ScrollView style={availabilityModalStyles.timePickerBody}>
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                        <ScrollView
+                          style={availabilityModalStyles.timePickerBody}
+                        >
                           {getFilteredTimeOptions(
                             showTimePicker,
                             availabilityFormData.startHour,
                             availabilityFormData.endHour
                           ).map((time) => (
-                  <TouchableOpacity
-                    key={time.value}
-                    style={[
+                            <TouchableOpacity
+                              key={time.value}
+                              style={[
                                 availabilityModalStyles.timeOption,
-                      {
+                                {
                                   backgroundColor:
                                     (showTimePicker === 'start' &&
-                                      availabilityFormData.startHour === time.value) ||
+                                      availabilityFormData.startHour ===
+                                        time.value) ||
                                     (showTimePicker === 'end' &&
-                                      availabilityFormData.endHour === time.value)
+                                      availabilityFormData.endHour ===
+                                        time.value)
                                       ? theme.colors.primary + '20'
-                          : 'transparent',
-                        borderBottomColor: theme.colors.border,
-                      },
-                    ]}
-                    onPress={() => {
+                                      : 'transparent',
+                                  borderBottomColor: theme.colors.border,
+                                },
+                              ]}
+                              onPress={() => {
                                 if (showTimePicker === 'start') {
-                        setAvailabilityFormData({
-                          ...availabilityFormData,
-                          startHour: time.value,
+                                  setAvailabilityFormData({
+                                    ...availabilityFormData,
+                                    startHour: time.value,
                                     endHour:
                                       availabilityFormData.endHour &&
-                                      compareTimes(time.value, availabilityFormData.endHour) >= 0
+                                      compareTimes(
+                                        time.value,
+                                        availabilityFormData.endHour
+                                      ) >= 0
                                         ? ''
                                         : availabilityFormData.endHour,
-                        });
-                      } else {
-                        setAvailabilityFormData({
-                          ...availabilityFormData,
-                          endHour: time.value,
-                        });
-                      }
+                                  });
+                                } else {
+                                  setAvailabilityFormData({
+                                    ...availabilityFormData,
+                                    endHour: time.value,
+                                  });
+                                }
                                 setShowTimePicker(null);
                                 setAvailabilityError(null);
-                    }}
-                  >
-                    <Text
-                      style={[
+                              }}
+                            >
+                              <Text
+                                style={[
                                   availabilityModalStyles.timeOptionText,
-                        {
+                                  {
                                     color:
                                       (showTimePicker === 'start' &&
-                                        availabilityFormData.startHour === time.value) ||
+                                        availabilityFormData.startHour ===
+                                          time.value) ||
                                       (showTimePicker === 'end' &&
-                                        availabilityFormData.endHour === time.value)
+                                        availabilityFormData.endHour ===
+                                          time.value)
                                         ? theme.colors.primary
-                            : theme.colors.text,
-                        },
-                      ]}
-                    >
-                      {time.label}
-                    </Text>
-                  </TouchableOpacity>
+                                        : theme.colors.text,
+                                  },
+                                ]}
+                              >
+                                {time.label}
+                              </Text>
+                            </TouchableOpacity>
                           ))}
-            </ScrollView>
+                        </ScrollView>
                       </View>
                     </View>
-      </Modal>
+                  </Modal>
                 )}
 
                 {/* Price Per Minute */}
                 <View style={availabilityModalStyles.inputWrapper}>
-                  <Text style={[availabilityModalStyles.label, { color: theme.colors.text }]}>
+                  <Text
+                    style={[
+                      availabilityModalStyles.label,
+                      { color: theme.colors.text },
+                    ]}
+                  >
                     Price Per Minute ($) *
                   </Text>
                   <TextInput
@@ -1212,14 +1510,14 @@ export default function BecomeProfessionalScreen() {
                     placeholder="0.00"
                     placeholderTextColor={theme.colors.textMuted}
                     keyboardType="decimal-pad"
-            style={[
+                    style={[
                       availabilityModalStyles.priceInput,
-              {
+                      {
                         backgroundColor: theme.colors.card,
                         borderColor: theme.colors.border,
                         color: theme.colors.text,
-                },
-              ]}
+                      },
+                    ]}
                   />
                 </View>
               </ScrollView>
@@ -1238,7 +1536,7 @@ export default function BecomeProfessionalScreen() {
               </View>
             </View>
           </View>
-      </Modal>
+        </Modal>
       )}
     </SafeAreaView>
   );
@@ -1351,35 +1649,50 @@ const availabilityModalStyles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
     textAlign: 'center',
   },
-  radioGroup: {
-    flexDirection: 'row',
+  optionGroup: {
     gap: 12,
   },
-  radioOption: {
-    flex: 1,
+  optionCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 0,
+  },
+  optionContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 8,
+    gap: 12,
   },
-  radioCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+  optionIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionTextContainer: {
+    flex: 1,
+  },
+  optionTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 4,
+  },
+  optionDescription: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    lineHeight: 18,
+  },
+  optionCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  radioLabel: {
+  optionCheckmark: {
     fontSize: 14,
-    fontFamily: 'Inter-Medium',
+    fontFamily: 'Inter-Bold',
   },
   daysContainer: {
     flexDirection: 'row',
@@ -1473,5 +1786,16 @@ const availabilityModalStyles = StyleSheet.create({
       outlineWidth: 0,
       outlineColor: 'transparent',
     }),
+  },
+  infoBox: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 8,
+  },
+  infoText: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    lineHeight: 18,
   },
 });

@@ -67,7 +67,22 @@ export const getFilteredTimeOptions = (
 export const validateAvailability = (
   formData: Partial<Availability>
 ): string | null => {
-  // Validate availability type
+  // Validate price (required for all types)
+  if (!formData.pricePerMinute || formData.pricePerMinute.trim() === '') {
+    return 'Please enter price per minute';
+  }
+
+  const price = parseFloat(formData.pricePerMinute);
+  if (isNaN(price) || price <= 0) {
+    return 'Please enter a valid price (greater than 0)';
+  }
+
+  // For urgent calls, only price is required
+  if (formData.availableAt === 'urgent') {
+    return null;
+  }
+
+  // Validate availability type for scheduled availabilities
   if (
     formData.availableAt === 'every' &&
     (!formData.days || formData.days.length === 0)
@@ -81,12 +96,8 @@ export const validateAvailability = (
     return 'Please select a date';
   }
 
-  // Validate required fields
-  if (
-    !formData.startHour ||
-    !formData.endHour ||
-    !formData.pricePerMinute
-  ) {
+  // Validate time fields for scheduled availabilities
+  if (!formData.startHour || !formData.endHour) {
     return 'Please fill in all required fields';
   }
 

@@ -50,14 +50,66 @@ export default function AuthCallbackScreen() {
         const oauthEmail = session.user.email;
         const oauthPhone = session.user.phone;
 
-        // Check if user profile exists
+        // Check if user profile exists (including deleted accounts)
         const { data: existingUser } = await supabase
           .from('users')
-          .select('id, oauth_providers, oauth_emails')
+          .select('id, oauth_providers, oauth_emails, deleted_at, name, primary_email')
           .eq('auth_id', session.user.id)
           .single();
 
         if (existingUser) {
+          // ✅ User exists - Check if account was deleted and restore if needed
+          const { accountRestorationService } = await import(
+            '@/services/supabase/accountRestoration.service'
+          );
+
+          const oauthName =
+            session.user.user_metadata?.name ||
+            session.user.user_metadata?.full_name ||
+            oauthEmail?.split('@')[0] ||
+            'OAuth User';
+          const oauthAvatar =
+            session.user.user_metadata?.avatar_url ||
+            session.user.user_metadata?.picture ||
+            null;
+
+          // Check if account is deleted (deleted_at is not null)
+          if (existingUser.deleted_at) {
+            console.log('🔄 [callback] Found deleted account, restoring...', {
+              userId: existingUser.id,
+              deletedAt: existingUser.deleted_at,
+            });
+
+            // Account was deleted, restore it
+            const restored = await accountRestorationService.restoreDeletedAccount(
+              session.user.id,
+              oauthEmail || '',
+              oauthName,
+              oauthAvatar || undefined
+            );
+
+            if (restored) {
+              console.log('✅ [callback] Account restored successfully');
+              toast.show({
+                type: 'success',
+                title: 'Welcome Back!',
+                message: 'Your account has been restored',
+              });
+              // Update existingUser reference to restored user
+              existingUser.deleted_at = null;
+              existingUser.name = restored.name;
+              existingUser.primary_email = restored.primary_email;
+            } else {
+              console.error('❌ [callback] Failed to restore account');
+              toast.error({
+                title: 'Restoration Failed',
+                message: 'Failed to restore your account. Please contact support.',
+              });
+              router.replace('/auth/login');
+              return;
+            }
+          }
+
           // ✅ User exists - Check if provider already linked
           const providers = existingUser.oauth_providers || [];
           const emails = existingUser.oauth_emails || {};
@@ -99,77 +151,97 @@ export default function AuthCallbackScreen() {
             }
           }, 200);
         } else {
-          // ✅ New OAuth user - Create profile with smart defaults
-          // 🎨 Get smart defaults from device
-          const defaultTheme = UserPreferencesService.getDefaultTheme();
-          const defaultLanguage = UserPreferencesService.getDefaultLanguage();
+          // ✅ Check if there's a deleted account to restore
+          const { accountRestorationService } = await import(
+            '@/services/supabase/accountRestoration.service'
+          );
 
-          const { data: newUser, error: profileError } = await supabase
-            .from('users')
-            .insert({
-              auth_id: session.user.id,
-              phone: oauthPhone || null,
-              primary_email: oauthEmail,
-              name:
-                session.user.user_metadata?.name ||
-                session.user.user_metadata?.full_name ||
-                oauthEmail?.split('@')[0] ||
-                'OAuth User',
-              avatar_url:
-                session.user.user_metadata?.avatar_url ||
-                session.user.user_metadata?.picture ||
-                null,
-              oauth_providers: [provider],
-              oauth_emails: { [provider]: oauthEmail },
+          const oauthName =
+            session.user.user_metadata?.name ||
+            session.user.user_metadata?.full_name ||
+            oauthEmail?.split('@')[0] ||
+            'OAuth User';
+          const oauthAvatar =
+            session.user.user_metadata?.avatar_url ||
+            session.user.user_metadata?.picture ||
+            null;
 
-              // 🎨 Smart defaults based on device settings
-              theme_preference: defaultTheme,
-              language_preference: defaultLanguage,
+          // Try to restore deleted account first
+          const restoredUser = await accountRestorationService.restoreDeletedAccount(
+            session.user.id,
+            oauthEmail || '',
+            oauthName,
+            oauthAvatar || undefined
+          );
 
-              role: 'user',
-            })
-            .select()
-            .single();
-
-          if (profileError) {
-            // Check for RLS policy violation (42501)
-            if (
-              profileError.code === '42501' ||
-              profileError.message.includes('row-level security')
-            ) {
-              toast.error({
-                title: 'Permission Error',
-                message:
-                  'Database security policy error. Please contact support.',
-              });
-
-              router.replace('/auth/login');
-              return;
-            }
-
-            // Check if it's a unique constraint error (account might exist with different auth_id)
-            if (
-              profileError.message.includes('unique') ||
-              profileError.message.includes('duplicate')
-            ) {
-              toast.error({
-                title: 'Account Exists',
-                message:
-                  'An account with this email or phone already exists. Please sign in with your original method.',
-              });
-              router.replace('/auth/login');
-              return;
-            }
-
-            toast.error({
-              title: 'Profile Creation Failed',
-              message:
-                profileError.message ||
-                'Failed to create your profile. Please try again.',
+          let newUser;
+          if (restoredUser) {
+            // Account was restored
+            newUser = restoredUser;
+            console.log('✅ [callback] Account restored:', restoredUser.id);
+            toast.show({
+              type: 'success',
+              title: 'Welcome Back!',
+              message: 'Your account has been restored',
             });
-            router.replace('/auth/login');
-            return;
-          }
+          } else {
+            // ✅ New OAuth user - Create profile with smart defaults
+            // 🎨 Get smart defaults from device
+            const defaultTheme = UserPreferencesService.getDefaultTheme();
+            const defaultLanguage = UserPreferencesService.getDefaultLanguage();
+
+            const { data: insertedUser, error: profileError } = await supabase
+              .from('users')
+              .insert({
+                auth_id: session.user.id,
+                phone: oauthPhone || null,
+                primary_email: oauthEmail,
+                name: oauthName,
+                avatar_url: oauthAvatar,
+                oauth_providers: [provider],
+                oauth_emails: { [provider]: oauthEmail },
+
+                // 🎨 Smart defaults based on device settings
+                theme_preference: defaultTheme,
+                language_preference: defaultLanguage,
+
+                role: 'user',
+              })
+              .select()
+              .single();
+
+              if (profileError) {
+                // Check for unique constraint violation (might be a deleted account)
+                if (profileError.code === '23505') {
+                  // Unique constraint violation - might be a deleted account
+                  // Try to restore it
+                  const restored = await accountRestorationService.restoreDeletedAccount(
+                    session.user.id,
+                    oauthEmail || '',
+                    oauthName,
+                    oauthAvatar || undefined
+                  );
+
+                  if (restored) {
+                    newUser = restored;
+                    console.log('✅ [callback] Account restored after unique constraint error');
+                  } else {
+                    throw new Error(
+                      'Account already exists. Please try logging in instead of signing up.'
+                    );
+                  }
+                } else {
+                  // Other errors
+                  throw profileError;
+                }
+              } else {
+                newUser = insertedUser;
+              }
+            }
+
+            if (!newUser) {
+              throw new Error('Failed to create or restore user account');
+            }
 
           toast.success({
             title: 'Welcome!',

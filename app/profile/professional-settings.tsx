@@ -27,7 +27,7 @@ export default function ProfessionalSettings() {
       id: 'edit',
       title: 'Edit Professional Profile',
       icon: User,
-      route: '/become-professional?mode=edit',
+      route: '/professional-settings',
     },
     {
       id: 'basic',

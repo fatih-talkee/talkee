@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ViewStyle,
+  ScrollView,
 } from 'react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -47,7 +48,12 @@ export function TabButtons({
     theme.name === 'dark' ? 'rgba(255, 255, 255, 0.3)' : theme.colors.border;
 
   const renderButtons = () => (
-    <View style={[styles.filters, containerStyle]}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={[styles.filters, containerStyle]}
+      style={styles.scrollContainer}
+    >
       {options.map((option) => {
         const isSelected = selectedKey === option.key;
 
@@ -77,12 +83,14 @@ export function TabButtons({
               ]}
             >
               {option.label}
-              {option.count !== undefined && option.count !== null && ` (${option.count.toString()})`}
+              {option.count !== undefined &&
+                option.count !== null &&
+                ` (${option.count.toString()})`}
             </Text>
           </TouchableOpacity>
         );
       })}
-    </View>
+    </ScrollView>
   );
 
   if (showWrapper) {
@@ -107,9 +115,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 16,
   },
+  scrollContainer: {
+    flexGrow: 0,
+  },
   filters: {
     flexDirection: 'row',
     gap: 8,
+    paddingRight: 24,
   },
   tabButton: {
     paddingHorizontal: 16,
@@ -118,6 +130,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   tabText: {
     fontSize: 12,

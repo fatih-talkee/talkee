@@ -1,5 +1,9 @@
 // hooks/useProfessionals.ts
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useQuery,
+  useInfiniteQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { professionalsService } from '@/services/supabase/professionals.service';
 import { ProfessionalWithRelations } from '@/types/database.types';
 
@@ -72,6 +76,67 @@ export function useSearchProfessionals(query: string) {
   return useQuery<ProfessionalWithRelations[]>({
     queryKey: ['professionals', 'search', query],
     queryFn: () => professionalsService.searchProfessionals(query),
+    enabled: query.length > 0,
+    staleTime: 1000 * 60, // 1 minute
+    gcTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
+/**
+ * Get professionals with infinite scroll
+ * ✅ Orders by is_featured first, then total_calls
+ * ✅ Supports pagination
+ */
+export function useInfiniteProfessionals(categoryId?: string) {
+  const PAGE_SIZE = 20;
+
+  return useInfiniteQuery<ProfessionalWithRelations[]>({
+    queryKey: ['professionals', 'infinite', categoryId],
+    queryFn: ({ pageParam = 0 }) => {
+      return professionalsService.getProfessionals(
+        categoryId,
+        PAGE_SIZE,
+        pageParam * PAGE_SIZE
+      );
+    },
+    getNextPageParam: (lastPage, allPages) => {
+      // If last page has fewer items than PAGE_SIZE, we've reached the end
+      if (lastPage.length < PAGE_SIZE) {
+        return undefined;
+      }
+      return allPages.length;
+    },
+    initialPageParam: 0,
+    staleTime: 1000 * 60 * 2, // 2 minutes
+    gcTime: 1000 * 60 * 10, // 10 minutes
+  });
+}
+
+/**
+ * Search professionals with infinite scroll
+ * ✅ Orders by is_featured first, then total_calls
+ * ✅ Supports pagination
+ */
+export function useInfiniteSearchProfessionals(query: string) {
+  const PAGE_SIZE = 20;
+
+  return useInfiniteQuery<ProfessionalWithRelations[]>({
+    queryKey: ['professionals', 'search-infinite', query],
+    queryFn: ({ pageParam = 0 }) => {
+      return professionalsService.searchProfessionals(
+        query,
+        PAGE_SIZE,
+        pageParam * PAGE_SIZE
+      );
+    },
+    getNextPageParam: (lastPage, allPages) => {
+      // If last page has fewer items than PAGE_SIZE, we've reached the end
+      if (lastPage.length < PAGE_SIZE) {
+        return undefined;
+      }
+      return allPages.length;
+    },
+    initialPageParam: 0,
     enabled: query.length > 0,
     staleTime: 1000 * 60, // 1 minute
     gcTime: 1000 * 60 * 5, // 5 minutes

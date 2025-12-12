@@ -1,10 +1,10 @@
 export interface Availability {
   id: string;
-  availableAt: 'every' | 'specific';
+  availableAt: 'every' | 'specific' | 'urgent';
   days?: string[];
   date?: Date;
-  startHour: string;
-  endHour: string;
+  startHour?: string; // Optional for urgent calls
+  endHour?: string; // Optional for urgent calls
   pricePerMinute: string;
 }
 

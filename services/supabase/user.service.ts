@@ -1,5 +1,10 @@
 import { supabase } from '../../lib/supabase';
-import type { User, UserUpdate, Transaction } from '../../types/database.types';
+import type {
+  User,
+  UserUpdate,
+  Transaction,
+  ProfessionalWithRelations,
+} from '../../types/database.types';
 
 class UsersService {
   /**
@@ -21,7 +26,6 @@ class UsersService {
         .from('users')
         .select('*')
         .eq('auth_id', authUser.id)
-        .eq('is_deleted', false)
         .single();
 
       if (error) {
@@ -397,7 +401,12 @@ class UsersService {
       const userId = currentUser.id;
       const authId = currentUser.auth_id;
 
-      console.log('🗑️  Starting SOFT DELETE (anonymization) for user:', userId, 'auth_id:', authId);
+      console.log(
+        '🗑️  Starting SOFT DELETE (anonymization) for user:',
+        userId,
+        'auth_id:',
+        authId
+      );
 
       // ========================================================================
       // STEP 1: Get professional ID if user is a professional
@@ -419,9 +428,11 @@ class UsersService {
       // STEP 2: Use SQL function for soft delete (anonymization)
       // ========================================================================
       console.log('🗑️  Starting soft delete (anonymization)...');
-      const serviceRoleKey = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const serviceRoleKey =
+        process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY ||
+        process.env.SUPABASE_SERVICE_ROLE_KEY;
       let adminClient: any = null;
-      
+
       if (serviceRoleKey) {
         // Use admin client to bypass RLS
         try {
@@ -435,17 +446,15 @@ class UsersService {
           });
 
           // Try soft delete SQL function first (if it exists)
-          const { data: softDeleteResult, error: rpcError } = await adminClient.rpc(
-            'soft_delete_user_account',
-            {
+          const { data: softDeleteResult, error: rpcError } =
+            await adminClient.rpc('soft_delete_user_account', {
               user_id_to_delete: userId,
-            }
-          );
+            });
 
           if (rpcError) {
             // Function might not exist, do manual soft delete
             console.log('SQL function not found, using manual soft delete');
-            
+
             // Deactivate professional if exists
             if (professionalId) {
               const { error: profError } = await adminClient
@@ -462,21 +471,17 @@ class UsersService {
               }
             }
 
-            // Anonymize user data
+            // Anonymize user data and mark as deleted
+            // Note: We keep auth_id so account can be restored if user signs in again
             const { error: anonymizeError } = await adminClient
               .from('users')
               .update({
                 name: 'Deleted User',
-                email: null,
                 primary_email: null,
                 phone: null,
                 avatar_url: null,
                 bio: null,
-                oauth_emails: {},
-                oauth_providers: [],
-                linked_accounts: [],
-                is_deleted: true,
-                deleted_at: new Date().toISOString(),
+                deleted_at: new Date().toISOString(), // Mark as deleted
                 updated_at: new Date().toISOString(),
               })
               .eq('id', userId);
@@ -492,7 +497,8 @@ class UsersService {
             console.error('SQL function returned error:', softDeleteResult);
             return {
               success: false,
-              error: softDeleteResult.error || 'Failed to soft delete user account',
+              error:
+                softDeleteResult.error || 'Failed to soft delete user account',
             };
           } else {
             console.log('✅ User anonymized via SQL function');
@@ -505,7 +511,7 @@ class UsersService {
           };
         }
       } else {
-        // No service role key, try SQL function with regular client
+        // No service role key, try SQL function with regular client first
         const { data: softDeleteResult, error: dbError } = await supabase.rpc(
           'soft_delete_user_account',
           {
@@ -514,17 +520,58 @@ class UsersService {
         );
 
         if (dbError) {
-          console.error('Error soft deleting user via SQL function:', dbError);
-          return {
-            success: false,
-            error: `Failed to soft delete user: ${dbError.message}. Please run the SQL migration: docs/sql/soft_delete_user_account.sql and ensure you have service role key configured.`,
-          };
+          // Function might not exist, do manual soft delete with regular client
+          console.log(
+            'SQL function not found, using manual soft delete with regular client'
+          );
+
+          // Deactivate professional if exists
+          if (professionalId) {
+            const { error: profError } = await supabase
+              .from('professionals')
+              .update({
+                is_available: false,
+                is_active: false,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', professionalId);
+
+            if (profError) {
+              console.warn('Error deactivating professional:', profError);
+            }
+          }
+
+          // Anonymize user data and mark as deleted
+          // Note: We keep auth_id so account can be restored if user signs in again
+          const { error: anonymizeError } = await supabase
+            .from('users')
+            .update({
+              name: 'Deleted User',
+              primary_email: null,
+              phone: null,
+              avatar_url: null,
+              bio: null,
+              deleted_at: new Date().toISOString(), // Mark as deleted
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', userId);
+
+          if (anonymizeError) {
+            console.error('Error anonymizing user:', anonymizeError);
+            return {
+              success: false,
+              error: `Failed to anonymize user: ${anonymizeError.message}. Please ensure RLS policies allow users to update their own data.`,
+            };
+          }
         } else if (softDeleteResult && !softDeleteResult.success) {
           console.error('SQL function returned error:', softDeleteResult);
           return {
             success: false,
-            error: softDeleteResult.error || 'Failed to soft delete user account',
+            error:
+              softDeleteResult.error || 'Failed to soft delete user account',
           };
+        } else {
+          console.log('✅ User anonymized via SQL function');
         }
       }
 
@@ -534,10 +581,11 @@ class UsersService {
       // STEP 6: Delete auth user (requires service role key)
       // ========================================================================
       // Reuse serviceRoleKey from step 5
-      
+
       if (serviceRoleKey && adminClient) {
         try {
-          const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(authId);
+          const { error: authDeleteError } =
+            await adminClient.auth.admin.deleteUser(authId);
 
           if (authDeleteError) {
             console.warn('Error deleting auth user:', authDeleteError);
@@ -546,11 +594,16 @@ class UsersService {
             console.log('✅ Auth user deleted');
           }
         } catch (authError) {
-          console.warn('Error creating admin client for auth deletion:', authError);
+          console.warn(
+            'Error creating admin client for auth deletion:',
+            authError
+          );
           // Continue anyway
         }
       } else {
-        console.warn('⚠️  Service role key not found. Auth user will remain but user data is deleted.');
+        console.warn(
+          '⚠️  Service role key not found. Auth user will remain but user data is deleted.'
+        );
       }
 
       // ========================================================================
@@ -604,6 +657,166 @@ class UsersService {
       return data as User;
     } catch (error) {
       console.error('Error in createUserProfile:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get blocked users for current user
+   * Returns blocked users with their profile information
+   */
+  async getBlockedUsers(): Promise<
+    Array<{
+      id: string;
+      blocked_id: string;
+      created_at: string;
+      professional: ProfessionalWithRelations | null;
+    }>
+  > {
+    try {
+      const currentUser = await this.getCurrentUser();
+
+      if (!currentUser) {
+        throw new Error('Not authenticated');
+      }
+
+      // Get blocked users with user info
+      // Use inner join to get user details
+      const { data: blockedData, error } = await supabase
+        .from('blocked_users')
+        .select(
+          `
+          id,
+          blocked_id,
+          created_at,
+          blocked_user:users!blocked_users_blocked_id_fkey(
+            id,
+            name,
+            avatar_url,
+            is_verified
+          )
+        `
+        )
+        .eq('blocker_id', currentUser.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching blocked users:', error);
+        throw new Error(`Failed to fetch blocked users: ${error.message}`);
+      }
+
+      if (!blockedData || blockedData.length === 0) {
+        return [];
+      }
+
+      // Get full professional info for blocked users
+      const blockedUserIds = blockedData.map((b) => b.blocked_id);
+      const { data: professionalsData, error: professionalsError } =
+        await supabase
+          .from('professionals')
+          .select(
+            `
+          *,
+          users(id, name, avatar_url, is_verified),
+          categories(id, name, slug, icon_name)
+        `
+          )
+          .in('user_id', blockedUserIds);
+
+      if (professionalsError) {
+        console.error(
+          'Error fetching professionals for blocked users:',
+          professionalsError
+        );
+        throw new Error(
+          `Failed to fetch professionals: ${professionalsError.message}`
+        );
+      }
+
+      // Create a map of user_id -> professional
+      const professionalMap = new Map(
+        (professionalsData || []).map((p) => [
+          p.user_id,
+          p as ProfessionalWithRelations,
+        ])
+      );
+
+      // Transform the data to include full professional info
+      return blockedData.map((block) => {
+        const professional = professionalMap.get(block.blocked_id);
+        return {
+          id: block.id,
+          blocked_id: block.blocked_id,
+          created_at: block.created_at,
+          professional: professional || null,
+        };
+      });
+    } catch (error) {
+      console.error('Error in getBlockedUsers:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Block a user
+   */
+  async blockUser(userIdToBlock: string): Promise<void> {
+    try {
+      const currentUser = await this.getCurrentUser();
+
+      if (!currentUser) {
+        throw new Error('Not authenticated');
+      }
+
+      // Prevent self-blocking
+      if (currentUser.id === userIdToBlock) {
+        throw new Error('Cannot block yourself');
+      }
+
+      const { error } = await supabase.from('blocked_users').insert({
+        blocker_id: currentUser.id,
+        blocked_id: userIdToBlock,
+      });
+
+      if (error) {
+        // If already blocked, ignore the error (idempotent)
+        if (error.code === '23505') {
+          // Unique constraint violation - already blocked
+          console.log('User already blocked');
+          return;
+        }
+        console.error('Error blocking user:', error);
+        throw new Error(`Failed to block user: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Error in blockUser:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Unblock a user
+   */
+  async unblockUser(userIdToUnblock: string): Promise<void> {
+    try {
+      const currentUser = await this.getCurrentUser();
+
+      if (!currentUser) {
+        throw new Error('Not authenticated');
+      }
+
+      const { error } = await supabase
+        .from('blocked_users')
+        .delete()
+        .eq('blocker_id', currentUser.id)
+        .eq('blocked_id', userIdToUnblock);
+
+      if (error) {
+        console.error('Error unblocking user:', error);
+        throw new Error(`Failed to unblock user: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Error in unblockUser:', error);
       throw error;
     }
   }

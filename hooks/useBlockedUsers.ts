@@ -5,7 +5,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { handleError } from '@/lib/errorHandler';
 import { logger } from '@/lib/logger';
 import { usersService } from '@/services/supabase';
-import type { BlockedUser } from '@/types';
+
+type BlockedUserWithDetails = Awaited<
+  ReturnType<typeof usersService.getBlockedUsers>
+>[number];
 
 /**
  * Get blocked users
@@ -13,7 +16,7 @@ import type { BlockedUser } from '@/types';
 export function useBlockedUsers() {
   return useQuery({
     queryKey: ['blocked-users'],
-    queryFn: async (): Promise<BlockedUser[]> => {
+    queryFn: async (): Promise<BlockedUserWithDetails[]> => {
       try {
         const blockedUsers = await usersService.getBlockedUsers();
         return blockedUsers;

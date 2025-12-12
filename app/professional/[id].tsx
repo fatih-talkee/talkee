@@ -27,6 +27,7 @@ import {
   GraduationCap,
   Award,
   Pin,
+  AlertCircle,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { TabButtons } from '@/components/ui/TabButtons';
@@ -46,7 +47,10 @@ import { useQuery } from '@tanstack/react-query';
 import type { Availability } from '@/types/database.types';
 
 // ✅ TYPE ADAPTERS (not needed here, we use ProfessionalWithRelations directly)
-import { ProfessionalWithRelations } from '@/types/database.types';
+import {
+  ProfessionalWithRelations,
+  getDegreeLevelLabel,
+} from '@/types/database.types';
 
 type TabType = 'feed' | 'about' | 'availability' | 'cv';
 
@@ -54,6 +58,9 @@ export default function ProfessionalProfileScreen() {
   const { id } = useLocalSearchParams();
   const { theme } = useTheme();
   const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [voiceModalVisible, setVoiceModalVisible] = useState(false);
+  const [videoModalVisible, setVideoModalVisible] = useState(false);
+  const [urgentCallModalVisible, setUrgentCallModalVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('about'); // Start with 'about' since feed is not implemented yet
 
   // ✅ Fetch professional data
@@ -135,10 +142,22 @@ export default function ProfessionalProfileScreen() {
     };
 
     for (const avail of availabilitiesData) {
-      if (
+      if (avail.available_at === 'urgent') {
+        // Urgent call is always available when professional is online
+        // No time restrictions, just check if professional is online
+        // We'll check is_available in the component level
+        // Return with null remainingMinutes (always available)
+        return {
+          availability: avail,
+          remainingMinutes: null, // Always available, no time limit
+          isActive: true,
+        };
+      } else if (
         avail.available_at === 'every' &&
         avail.days &&
-        avail.days.length > 0
+        avail.days.length > 0 &&
+        avail.start_hour &&
+        avail.end_hour
       ) {
         // Check if current day is in the days array
         const dayMatch = avail.days.some(
@@ -170,7 +189,12 @@ export default function ProfessionalProfileScreen() {
             };
           }
         }
-      } else if (avail.available_at === 'specific' && avail.date) {
+      } else if (
+        avail.available_at === 'specific' &&
+        avail.date &&
+        avail.start_hour &&
+        avail.end_hour
+      ) {
         if (avail.date === currentDate) {
           // Check if current time is within the availability window
           const timeComparisonStart = compareTimes(
@@ -214,30 +238,49 @@ export default function ProfessionalProfileScreen() {
     }
   }, [currentAvailability]);
 
-  // Update remaining time every minute
+  // Update remaining time every minute (only for scheduled availabilities, not urgent)
   useEffect(() => {
     if (!currentAvailability) {
+      setRemainingTime(null);
+      return;
+    }
+
+    // Don't update time for urgent calls (always available)
+    if (currentAvailability.availability.available_at === 'urgent') {
+      setRemainingTime(null);
+      return;
+    }
+
+    // Don't update if end_hour is null (shouldn't happen for scheduled, but safety check)
+    if (!currentAvailability.availability.end_hour) {
+      setRemainingTime(null);
       return;
     }
 
     const interval = setInterval(() => {
-      const now = new Date();
-      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now
-        .getMinutes()
-        .toString()
-        .padStart(2, '0')}`;
-      const [endHour, endMin] = currentAvailability.availability.end_hour
-        .split(':')
-        .map(Number);
-      const [currentHour, currentMin] = currentTime.split(':').map(Number);
-      const endMinutes = endHour * 60 + endMin;
-      const currentMinutes = currentHour * 60 + currentMin;
-      const remaining = endMinutes - currentMinutes;
+      if (
+        currentAvailability &&
+        currentAvailability.remainingMinutes !== null &&
+        currentAvailability.availability.end_hour
+      ) {
+        const [endHour, endMin] = currentAvailability.availability.end_hour
+          .split(':')
+          .map(Number);
+        const now = new Date();
+        const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now
+          .getMinutes()
+          .toString()
+          .padStart(2, '0')}`;
+        const [currentHour, currentMin] = currentTime.split(':').map(Number);
+        const endMinutes = endHour * 60 + endMin;
+        const currentMinutes = currentHour * 60 + currentMin;
+        const remaining = endMinutes - currentMinutes;
 
-      if (remaining > 0) {
-        setRemainingTime(remaining);
-      } else {
-        setRemainingTime(null);
+        if (remaining > 0) {
+          setRemainingTime(remaining);
+        } else {
+          setRemainingTime(null);
+        }
       }
     }, 60000); // Update every minute
 
@@ -271,18 +314,43 @@ export default function ProfessionalProfileScreen() {
     }
   };
 
-  const handleCallNow = (type: 'voice' | 'video') => {
-    router.push(
-      `/schedule-call/${id}?type=${type}` as Href<
-        | `/schedule-call/${string}?type=video`
-        | `/schedule-call/${string}?type=voice`
-      >
-    );
+  const handleVoiceCall = () => {
+    setVoiceModalVisible(true);
+  };
+
+  const handleVideoCall = () => {
+    setVideoModalVisible(true);
+  };
+
+  const handleUrgentCall = () => {
+    setUrgentCallModalVisible(true);
   };
 
   const handleScheduleCall = () => {
     router.push(`/schedule-call/${id}`);
   };
+
+  // Determine button states
+  const isAvailable = currentAvailability !== null;
+  const isOnline = professional?.is_available || false;
+  const isUrgentCallAvailability =
+    currentAvailability?.availability.available_at === 'urgent';
+
+  // Show urgent call button if:
+  // 1. No scheduled availability but professional is online, OR
+  // 2. Urgent call availability exists and professional is online
+  const showUrgentCall =
+    (!isAvailable && isOnline) || (isUrgentCallAvailability && isOnline);
+
+  // Show voice/video buttons if scheduled availability exists (not urgent)
+  const showVoiceVideo = isAvailable && !isUrgentCallAvailability;
+
+  // Buttons enabled if:
+  // 1. Scheduled availability + online, OR
+  // 2. Urgent call availability + online
+  const buttonsEnabled =
+    (isAvailable && isOnline && !isUrgentCallAvailability) ||
+    (isUrgentCallAvailability && isOnline);
 
   if (isLoading) {
     return (
@@ -698,58 +766,119 @@ export default function ProfessionalProfileScreen() {
             {currentAvailability &&
             remainingTime !== null &&
             remainingTime > 0 ? (
-              <Card
-                style={[
-                  styles.currentAvailabilityBanner,
-                  {
-                    backgroundColor: '#10B981' + '15',
-                    borderColor: '#10B981' + '40',
-                  },
-                ]}
-              >
-                <View style={styles.currentAvailabilityContent}>
-                  <View
-                    style={[
-                      styles.currentAvailabilityIconContainer,
-                      { backgroundColor: '#10B981' + '20' },
-                    ]}
-                  >
-                    <Clock size={20} color="#10B981" strokeWidth={2.5} />
-                  </View>
-                  <View style={styles.currentAvailabilityTextContainer}>
-                    <Text
+              professional.is_available ? (
+                // Available + Online → Green
+                <Card
+                  style={[
+                    styles.currentAvailabilityBanner,
+                    {
+                      backgroundColor: '#10B981' + '15',
+                      borderColor: '#10B981' + '40',
+                    },
+                  ]}
+                >
+                  <View style={styles.currentAvailabilityContent}>
+                    <View
                       style={[
-                        styles.currentAvailabilityTitle,
-                        { color: '#10B981' },
+                        styles.currentAvailabilityIconContainer,
+                        { backgroundColor: '#10B981' + '20' },
                       ]}
                     >
-                      Available Now
-                    </Text>
-                    <Text
+                      <Clock size={20} color="#10B981" strokeWidth={2.5} />
+                    </View>
+                    <View style={styles.currentAvailabilityTextContainer}>
+                      <Text
+                        style={[
+                          styles.currentAvailabilityTitle,
+                          { color: '#10B981' },
+                        ]}
+                      >
+                        Available Now
+                      </Text>
+                      <Text
+                        style={[
+                          styles.currentAvailabilitySubtitle,
+                          { color: theme.colors.textSecondary },
+                        ]}
+                      >
+                        {formatRemainingTime(remainingTime)}
+                      </Text>
+                    </View>
+                    <View style={styles.currentAvailabilityPriceContainer}>
+                      <DollarSign size={18} color="#10B981" strokeWidth={2.5} />
+                      <Text
+                        style={[
+                          styles.currentAvailabilityPrice,
+                          { color: '#10B981' },
+                        ]}
+                      >
+                        {currentAvailability.availability.price_per_minute.toFixed(
+                          2
+                        )}
+                        /min
+                      </Text>
+                    </View>
+                  </View>
+                </Card>
+              ) : (
+                // Available but Offline → Orange/Warning
+                <Card
+                  style={[
+                    styles.currentAvailabilityBanner,
+                    {
+                      backgroundColor: '#F59E0B' + '15',
+                      borderColor: '#F59E0B' + '40',
+                    },
+                  ]}
+                >
+                  <View style={styles.currentAvailabilityContent}>
+                    <View
                       style={[
-                        styles.currentAvailabilitySubtitle,
-                        { color: theme.colors.textSecondary },
+                        styles.currentAvailabilityIconContainer,
+                        { backgroundColor: '#F59E0B' + '20' },
                       ]}
                     >
-                      {formatRemainingTime(remainingTime)}
-                    </Text>
+                      <AlertCircle
+                        size={20}
+                        color="#F59E0B"
+                        strokeWidth={2.5}
+                      />
+                    </View>
+                    <View style={styles.currentAvailabilityTextContainer}>
+                      <Text
+                        style={[
+                          styles.currentAvailabilityTitle,
+                          { color: '#F59E0B' },
+                        ]}
+                      >
+                        Available but Offline
+                      </Text>
+                      <Text
+                        style={[
+                          styles.currentAvailabilitySubtitle,
+                          { color: theme.colors.textSecondary },
+                        ]}
+                      >
+                        {formatRemainingTime(remainingTime)} left
+                      </Text>
+                    </View>
+                    <View style={styles.currentAvailabilityPriceContainer}>
+                      <DollarSign size={18} color="#F59E0B" strokeWidth={2.5} />
+                      <Text
+                        style={[
+                          styles.currentAvailabilityPrice,
+                          { color: '#F59E0B' },
+                        ]}
+                      >
+                        {currentAvailability.availability.price_per_minute.toFixed(
+                          2
+                        )}
+                        /min
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.currentAvailabilityPriceContainer}>
-                    <DollarSign size={18} color="#10B981" strokeWidth={2.5} />
-                    <Text
-                      style={[
-                        styles.currentAvailabilityPrice,
-                        { color: '#10B981' },
-                      ]}
-                    >
-                      {currentAvailability.availability.price_per_minute.toFixed(
-                        2
-                      )}
-                      /min
-                    </Text>
-                  </View>
-                </View>
-              </Card>
+                </Card>
+              )
             ) : null}
 
             {groupedAvailabilities.map((group, groupIndex) => {
@@ -879,23 +1008,302 @@ export default function ProfessionalProfileScreen() {
         );
 
       case 'cv':
+        if (!professional) {
+          return (
+            <View style={styles.cvContainer}>
+              <View style={styles.emptyState}>
+                <Briefcase
+                  size={48}
+                  color={theme.colors.textMuted}
+                  strokeWidth={1.5}
+                />
+                <Text
+                  style={[
+                    styles.emptyStateText,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  No data available
+                </Text>
+              </View>
+            </View>
+          );
+        }
+
+        const educations = professional.educations || [];
+        const experiences = professional.experiences || [];
+        const skills = professional.skills_certifications || [];
+
+        // Check if we have any data
+        const hasData =
+          educations.length > 0 || experiences.length > 0 || skills.length > 0;
+
+        if (!hasData) {
+          return (
+            <View style={styles.cvContainer}>
+              <View style={styles.emptyState}>
+                <Briefcase
+                  size={48}
+                  color={theme.colors.textMuted}
+                  strokeWidth={1.5}
+                />
+                <Text
+                  style={[
+                    styles.emptyStateText,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  No data available
+                </Text>
+              </View>
+            </View>
+          );
+        }
+
         return (
           <View style={styles.cvContainer}>
-            <View style={styles.emptyState}>
-              <Briefcase
-                size={48}
-                color={theme.colors.textMuted}
-                strokeWidth={1.5}
-              />
-              <Text
+            {/* Experience Section */}
+            {experiences.length > 0 && (
+              <Card
                 style={[
-                  styles.emptyStateText,
-                  { color: theme.colors.textMuted },
+                  styles.cvSectionCard,
+                  {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.border,
+                  },
                 ]}
               >
-                CV feature coming soon
-              </Text>
-            </View>
+                <View style={styles.cvSectionHeader}>
+                  <View
+                    style={[
+                      styles.cvSectionIconContainer,
+                      { backgroundColor: '#3B82F6' + '15' },
+                    ]}
+                  >
+                    <Briefcase size={20} color="#3B82F6" strokeWidth={2.5} />
+                  </View>
+                  <Text
+                    style={[
+                      styles.cvSectionTitle,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    Experience
+                  </Text>
+                </View>
+                {experiences.map((exp, index) => {
+                  const startDate = exp.start_date
+                    ? new Date(exp.start_date).getFullYear()
+                    : null;
+                  const endDate = exp.is_current
+                    ? 'Present'
+                    : exp.end_date
+                    ? new Date(exp.end_date).getFullYear()
+                    : null;
+                  const dateRange =
+                    startDate && endDate
+                      ? `${startDate} - ${endDate}`
+                      : startDate
+                      ? `${startDate}`
+                      : '';
+
+                  return (
+                    <View key={exp.id || index} style={styles.cvEntry}>
+                      <View style={styles.cvEntryLeftBorder} />
+                      <View style={styles.cvEntryContent}>
+                        {exp.title && (
+                          <Text
+                            style={[styles.cvEntryTitle, { color: '#3B82F6' }]}
+                          >
+                            {exp.title}
+                          </Text>
+                        )}
+                        {exp.company && (
+                          <Text
+                            style={[
+                              styles.cvEntrySubtitle,
+                              { color: theme.colors.text },
+                            ]}
+                          >
+                            {exp.company}
+                          </Text>
+                        )}
+                        {dateRange && (
+                          <Text
+                            style={[
+                              styles.cvEntryDate,
+                              { color: theme.colors.textSecondary },
+                            ]}
+                          >
+                            {dateRange}
+                          </Text>
+                        )}
+                        {exp.description && (
+                          <Text
+                            style={[
+                              styles.cvEntryDescription,
+                              { color: theme.colors.textSecondary },
+                            ]}
+                          >
+                            {exp.description}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </Card>
+            )}
+
+            {/* Education Section */}
+            {educations.length > 0 && (
+              <Card
+                style={[
+                  styles.cvSectionCard,
+                  {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.cvSectionHeader}>
+                  <View
+                    style={[
+                      styles.cvSectionIconContainer,
+                      { backgroundColor: '#3B82F6' + '15' },
+                    ]}
+                  >
+                    <GraduationCap
+                      size={20}
+                      color="#3B82F6"
+                      strokeWidth={2.5}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.cvSectionTitle,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    Education
+                  </Text>
+                </View>
+                {educations.map((edu, index) => {
+                  const degreeLabel = getDegreeLevelLabel(edu.degree_level);
+                  const fieldOfStudy = edu.field_of_study
+                    ? ` in ${edu.field_of_study}`
+                    : '';
+                  const degreeText = `${degreeLabel}${fieldOfStudy}`;
+                  const startYear = edu.start_year;
+                  const endYear = edu.is_current
+                    ? 'Present'
+                    : edu.end_year
+                    ? edu.end_year
+                    : null;
+                  const dateRange =
+                    startYear && endYear
+                      ? `${startYear} - ${endYear}`
+                      : startYear
+                      ? `${startYear}`
+                      : '';
+
+                  return (
+                    <View key={edu.id || index} style={styles.cvEntry}>
+                      <View style={styles.cvEntryLeftBorder} />
+                      <View style={styles.cvEntryContent}>
+                        <Text
+                          style={[styles.cvEntryTitle, { color: '#3B82F6' }]}
+                        >
+                          {degreeText}
+                        </Text>
+                        {edu.institution && (
+                          <Text
+                            style={[
+                              styles.cvEntrySubtitle,
+                              { color: theme.colors.text },
+                            ]}
+                          >
+                            {edu.institution}
+                          </Text>
+                        )}
+                        {dateRange && (
+                          <Text
+                            style={[
+                              styles.cvEntryDate,
+                              { color: theme.colors.textSecondary },
+                            ]}
+                          >
+                            {dateRange}
+                          </Text>
+                        )}
+                        {edu.description && (
+                          <Text
+                            style={[
+                              styles.cvEntryDescription,
+                              { color: theme.colors.textSecondary },
+                            ]}
+                          >
+                            {edu.description}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </Card>
+            )}
+
+            {/* Skills & Certifications Section */}
+            {skills.length > 0 && (
+              <Card
+                style={[
+                  styles.cvSectionCard,
+                  {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.cvSectionHeader}>
+                  <View
+                    style={[
+                      styles.cvSectionIconContainer,
+                      { backgroundColor: '#3B82F6' + '15' },
+                    ]}
+                  >
+                    <Award size={20} color="#3B82F6" strokeWidth={2.5} />
+                  </View>
+                  <Text
+                    style={[
+                      styles.cvSectionTitle,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    Skills & Certifications
+                  </Text>
+                </View>
+                <View style={styles.skillsContainer}>
+                  {skills.map((skill, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.skillBadge,
+                        {
+                          backgroundColor: theme.colors.background,
+                          borderColor: '#3B82F6',
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.skillText, { color: theme.colors.text }]}
+                      >
+                        {skill}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </Card>
+            )}
           </View>
         );
 
@@ -992,9 +1400,16 @@ export default function ProfessionalProfileScreen() {
                 <Heart size={12} color="#FFFFFF" fill="#FFFFFF" />
               </View>
             )}
-            {professional.is_available && (
-              <View style={styles.onlineIndicator} />
-            )}
+            <View
+              style={[
+                styles.onlineIndicator,
+                {
+                  backgroundColor: professional.is_available
+                    ? '#10B981'
+                    : '#EF4444',
+                },
+              ]}
+            />
           </View>
           <View style={styles.nameContainer}>
             <View style={styles.nameRow}>
@@ -1194,36 +1609,90 @@ export default function ProfessionalProfileScreen() {
             {currentAvailability &&
             remainingTime !== null &&
             remainingTime > 0 ? (
-              <>
-                <View style={styles.footerAvailabilityBadge}>
-                  <Clock size={14} color="#10B981" strokeWidth={2.5} />
+              // Available time slot is active
+              professional.is_available ? (
+                // Available + Online → Green "Available Now"
+                <>
+                  <View style={styles.footerAvailabilityBadge}>
+                    <Clock size={14} color="#10B981" strokeWidth={2.5} />
+                    <Text
+                      style={[
+                        styles.footerAvailabilityText,
+                        { color: '#10B981' },
+                      ]}
+                    >
+                      Available Now
+                    </Text>
+                  </View>
+                  <DollarSign size={18} color="#10B981" />
+                  <Text style={[styles.priceText, { color: '#10B981' }]}>
+                    {currentAvailability.availability.price_per_minute.toFixed(
+                      2
+                    )}
+                  </Text>
                   <Text
                     style={[
-                      styles.footerAvailabilityText,
-                      { color: '#10B981' },
+                      styles.priceUnit,
+                      { color: theme.colors.textMuted },
                     ]}
                   >
-                    Available Now
+                    /min
                   </Text>
-                </View>
-                <DollarSign size={18} color="#10B981" />
-                <Text style={[styles.priceText, { color: '#10B981' }]}>
-                  {currentAvailability.availability.price_per_minute.toFixed(2)}
-                </Text>
-                <Text
-                  style={[styles.priceUnit, { color: theme.colors.textMuted }]}
-                >
-                  /min
-                </Text>
-                <Text
-                  style={[
-                    styles.footerRemainingTime,
-                    { color: theme.colors.textMuted },
-                  ]}
-                >
-                  • {formatRemainingTime(remainingTime)}
-                </Text>
-              </>
+                  <Text
+                    style={[
+                      styles.footerRemainingTime,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    • {formatRemainingTime(remainingTime)}
+                  </Text>
+                </>
+              ) : (
+                // Available but Offline → Orange/Warning
+                <>
+                  <View
+                    style={[
+                      styles.footerAvailabilityBadge,
+                      {
+                        backgroundColor: '#F59E0B' + '15',
+                        borderColor: '#F59E0B' + '40',
+                      },
+                    ]}
+                  >
+                    <AlertCircle size={14} color="#F59E0B" strokeWidth={2.5} />
+                    <Text
+                      style={[
+                        styles.footerAvailabilityText,
+                        { color: '#F59E0B' },
+                      ]}
+                    >
+                      Available but Offline
+                    </Text>
+                  </View>
+                  <DollarSign size={18} color="#F59E0B" />
+                  <Text style={[styles.priceText, { color: '#F59E0B' }]}>
+                    {currentAvailability.availability.price_per_minute.toFixed(
+                      2
+                    )}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.priceUnit,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    /min
+                  </Text>
+                  <Text
+                    style={[
+                      styles.footerRemainingTime,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    • {formatRemainingTime(remainingTime)}
+                  </Text>
+                </>
+              )
             ) : (
               <>
                 <DollarSign size={18} color="#10B981" />
@@ -1248,7 +1717,18 @@ export default function ProfessionalProfileScreen() {
 
                     // First, try to find currently active availability
                     for (const avail of availabilitiesData) {
-                      if (avail.available_at === 'every' && avail.days) {
+                      if (avail.available_at === 'urgent') {
+                        // Urgent call is always available when online
+                        // Return urgent call price if professional is online
+                        if (professional.is_available) {
+                          return avail.price_per_minute.toFixed(2);
+                        }
+                      } else if (
+                        avail.available_at === 'every' &&
+                        avail.days &&
+                        avail.start_hour &&
+                        avail.end_hour
+                      ) {
                         if (avail.days.includes(currentDay)) {
                           if (
                             currentTime >= avail.start_hour &&
@@ -1259,7 +1739,9 @@ export default function ProfessionalProfileScreen() {
                         }
                       } else if (
                         avail.available_at === 'specific' &&
-                        avail.date
+                        avail.date &&
+                        avail.start_hour &&
+                        avail.end_hour
                       ) {
                         if (avail.date === currentDate) {
                           if (
@@ -1277,7 +1759,16 @@ export default function ProfessionalProfileScreen() {
                     let minDateDiff = Infinity;
 
                     for (const avail of availabilitiesData) {
-                      if (avail.available_at === 'every' && avail.days) {
+                      // Skip urgent calls for next availability search
+                      if (avail.available_at === 'urgent') {
+                        continue;
+                      }
+
+                      if (
+                        avail.available_at === 'every' &&
+                        avail.days &&
+                        avail.end_hour
+                      ) {
                         // For recurring, if today is in list but time passed, or if future day
                         if (
                           avail.days.includes(currentDay) &&
@@ -1339,39 +1830,445 @@ export default function ProfessionalProfileScreen() {
             )}
           </View>
           <View style={styles.callButtonsRow}>
-            <TouchableOpacity
-              style={[
-                styles.callTypeButton,
-                styles.scheduleCallButton,
-                {
-                  borderColor: theme.colors.primary,
-                  backgroundColor: theme.colors.surface,
-                },
-              ]}
-              onPress={handleScheduleCall}
-            >
-              <Calendar size={20} color={theme.colors.primary} />
-              <Text
-                style={[styles.callTypeText, { color: theme.colors.primary }]}
+            {showUrgentCall ? (
+              // Available değil ama Online → Urgent Call (sarı)
+              <TouchableOpacity
+                style={[
+                  styles.callTypeButton,
+                  { backgroundColor: '#F59E0B', flex: 1 },
+                ]}
+                onPress={handleUrgentCall}
               >
-                Schedule
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+                <Zap size={20} color="#FFFFFF" />
+                <Text style={[styles.callTypeText, { color: '#FFFFFF' }]}>
+                  Urgent Call
+                </Text>
+              </TouchableOpacity>
+            ) : showVoiceVideo ? (
+              // Available → Voice ve Video butonları
+              <>
+                <TouchableOpacity
+                  style={[
+                    styles.callTypeButton,
+                    {
+                      backgroundColor: buttonsEnabled
+                        ? theme.colors.primary
+                        : theme.colors.border,
+                      flex: 1,
+                      opacity: buttonsEnabled ? 1 : 0.5,
+                    },
+                  ]}
+                  onPress={handleVoiceCall}
+                  disabled={!buttonsEnabled}
+                >
+                  <Phone
+                    size={20}
+                    color={buttonsEnabled ? '#FFFFFF' : theme.colors.textMuted}
+                  />
+                  <Text
+                    style={[
+                      styles.callTypeText,
+                      {
+                        color: buttonsEnabled
+                          ? '#FFFFFF'
+                          : theme.colors.textMuted,
+                      },
+                    ]}
+                  >
+                    Voice
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.callTypeButton,
+                    {
+                      backgroundColor: buttonsEnabled
+                        ? theme.colors.primary
+                        : theme.colors.border,
+                      flex: 1,
+                      opacity: buttonsEnabled ? 1 : 0.5,
+                    },
+                  ]}
+                  onPress={handleVideoCall}
+                  disabled={!buttonsEnabled}
+                >
+                  <Video
+                    size={20}
+                    color={buttonsEnabled ? '#FFFFFF' : theme.colors.textMuted}
+                  />
+                  <Text
+                    style={[
+                      styles.callTypeText,
+                      {
+                        color: buttonsEnabled
+                          ? '#FFFFFF'
+                          : theme.colors.textMuted,
+                      },
+                    ]}
+                  >
+                    Video
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              // Available değil ve Online değil → Schedule butonu
+              <TouchableOpacity
+                style={[
+                  styles.callTypeButton,
+                  styles.scheduleCallButton,
+                  {
+                    borderColor: theme.colors.primary,
+                    backgroundColor: theme.colors.surface,
+                    flex: 1,
+                  },
+                ]}
+                onPress={handleScheduleCall}
+              >
+                <Calendar size={20} color={theme.colors.primary} />
+                <Text
+                  style={[styles.callTypeText, { color: theme.colors.primary }]}
+                >
+                  Schedule
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
+
+      {/* Dummy Modals for Voice/Video/Urgent Call */}
+      {voiceModalVisible && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme.colors.card,
+              padding: 24,
+              borderRadius: 16,
+              margin: 20,
+            }}
+          >
+            <Text
               style={[
-                styles.callTypeButton,
-                { backgroundColor: theme.colors.primary },
+                { fontSize: 18, fontFamily: 'Inter-Bold', marginBottom: 12 },
+                { color: theme.colors.text },
               ]}
-              onPress={() => handleCallNow('voice')}
             >
-              <Phone size={20} color="#FFFFFF" />
-              <Text style={[styles.callTypeText, { color: '#FFFFFF' }]}>
-                Call Now
+              Voice Call
+            </Text>
+            <Text
+              style={[
+                { fontSize: 14, fontFamily: 'Inter-Regular', marginBottom: 20 },
+                { color: theme.colors.textSecondary },
+              ]}
+            >
+              Twilio integration will be implemented here
+            </Text>
+            <TouchableOpacity
+              style={{
+                backgroundColor: theme.colors.primary,
+                padding: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+              }}
+              onPress={() => setVoiceModalVisible(false)}
+            >
+              <Text style={{ color: '#FFFFFF', fontFamily: 'Inter-Medium' }}>
+                Close
               </Text>
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      )}
+
+      {videoModalVisible && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme.colors.card,
+              padding: 24,
+              borderRadius: 16,
+              margin: 20,
+            }}
+          >
+            <Text
+              style={[
+                { fontSize: 18, fontFamily: 'Inter-Bold', marginBottom: 12 },
+                { color: theme.colors.text },
+              ]}
+            >
+              Video Call
+            </Text>
+            <Text
+              style={[
+                { fontSize: 14, fontFamily: 'Inter-Regular', marginBottom: 20 },
+                { color: theme.colors.textSecondary },
+              ]}
+            >
+              Twilio integration will be implemented here
+            </Text>
+            <TouchableOpacity
+              style={{
+                backgroundColor: theme.colors.primary,
+                padding: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+              }}
+              onPress={() => setVideoModalVisible(false)}
+            >
+              <Text style={{ color: '#FFFFFF', fontFamily: 'Inter-Medium' }}>
+                Close
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {urgentCallModalVisible && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme.colors.card,
+              padding: 24,
+              borderRadius: 16,
+              margin: 20,
+            }}
+          >
+            <Text
+              style={[
+                { fontSize: 18, fontFamily: 'Inter-Bold', marginBottom: 12 },
+                { color: theme.colors.text },
+              ]}
+            >
+              Urgent Call
+            </Text>
+            <Text
+              style={[
+                { fontSize: 14, fontFamily: 'Inter-Regular', marginBottom: 20 },
+                { color: theme.colors.textSecondary },
+              ]}
+            >
+              Professional is online but not in their scheduled availability.
+              Twilio integration will be implemented here.
+            </Text>
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#F59E0B',
+                padding: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+              }}
+              onPress={() => setUrgentCallModalVisible(false)}
+            >
+              <Text style={{ color: '#FFFFFF', fontFamily: 'Inter-Medium' }}>
+                Close
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Dummy Modals for Voice/Video/Urgent Call */}
+      {voiceModalVisible && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme.colors.card,
+              padding: 24,
+              borderRadius: 16,
+              margin: 20,
+            }}
+          >
+            <Text
+              style={[
+                { fontSize: 18, fontFamily: 'Inter-Bold', marginBottom: 12 },
+                { color: theme.colors.text },
+              ]}
+            >
+              Voice Call
+            </Text>
+            <Text
+              style={[
+                { fontSize: 14, fontFamily: 'Inter-Regular', marginBottom: 20 },
+                { color: theme.colors.textSecondary },
+              ]}
+            >
+              Twilio integration will be implemented here
+            </Text>
+            <TouchableOpacity
+              style={{
+                backgroundColor: theme.colors.primary,
+                padding: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+              }}
+              onPress={() => setVoiceModalVisible(false)}
+            >
+              <Text style={{ color: '#FFFFFF', fontFamily: 'Inter-Medium' }}>
+                Close
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {videoModalVisible && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme.colors.card,
+              padding: 24,
+              borderRadius: 16,
+              margin: 20,
+            }}
+          >
+            <Text
+              style={[
+                { fontSize: 18, fontFamily: 'Inter-Bold', marginBottom: 12 },
+                { color: theme.colors.text },
+              ]}
+            >
+              Video Call
+            </Text>
+            <Text
+              style={[
+                { fontSize: 14, fontFamily: 'Inter-Regular', marginBottom: 20 },
+                { color: theme.colors.textSecondary },
+              ]}
+            >
+              Twilio integration will be implemented here
+            </Text>
+            <TouchableOpacity
+              style={{
+                backgroundColor: theme.colors.primary,
+                padding: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+              }}
+              onPress={() => setVideoModalVisible(false)}
+            >
+              <Text style={{ color: '#FFFFFF', fontFamily: 'Inter-Medium' }}>
+                Close
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {urgentCallModalVisible && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme.colors.card,
+              padding: 24,
+              borderRadius: 16,
+              margin: 20,
+            }}
+          >
+            <Text
+              style={[
+                { fontSize: 18, fontFamily: 'Inter-Bold', marginBottom: 12 },
+                { color: theme.colors.text },
+              ]}
+            >
+              Urgent Call
+            </Text>
+            <Text
+              style={[
+                { fontSize: 14, fontFamily: 'Inter-Regular', marginBottom: 20 },
+                { color: theme.colors.textSecondary },
+              ]}
+            >
+              Professional is online but not in their scheduled availability.
+              Twilio integration will be implemented here.
+            </Text>
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#F59E0B',
+                padding: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+              }}
+              onPress={() => setUrgentCallModalVisible(false)}
+            >
+              <Text style={{ color: '#FFFFFF', fontFamily: 'Inter-Medium' }}>
+                Close
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       <ShareProfileModal
         visible={shareModalVisible}
@@ -1907,6 +2804,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
     backgroundColor: '#10B981' + '15',
+    borderWidth: 1,
+    borderColor: '#10B981' + '40',
   },
   footerAvailabilityText: {
     fontSize: 12,
@@ -1936,5 +2835,82 @@ const styles = StyleSheet.create({
   callTypeText: {
     fontSize: 15,
     fontFamily: 'Inter-Bold',
+  },
+  cvSection: {
+    marginBottom: 24,
+  },
+  cvSectionCard: {
+    marginBottom: 16,
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  cvSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  cvSectionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  cvSectionTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter-Bold',
+    flex: 1,
+  },
+  cvEntry: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    paddingLeft: 16,
+  },
+  cvEntryLeftBorder: {
+    width: 3,
+    backgroundColor: '#3B82F6',
+    borderRadius: 2,
+    marginRight: 16,
+  },
+  cvEntryContent: {
+    flex: 1,
+    paddingBottom: 4,
+  },
+  cvEntryTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 4,
+  },
+  cvEntrySubtitle: {
+    fontSize: 15,
+    fontFamily: 'Inter-Medium',
+    marginBottom: 4,
+  },
+  cvEntryDate: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    marginBottom: 8,
+  },
+  cvEntryDescription: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    lineHeight: 20,
+  },
+  skillsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  skillBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  skillText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
   },
 });

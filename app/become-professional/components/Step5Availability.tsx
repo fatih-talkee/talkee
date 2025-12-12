@@ -43,7 +43,36 @@ function AvailabilityCard({
             <Calendar size={24} color={theme.colors.primary} />
           </View>
           <View style={styles.cardInfo}>
-            {item.availableAt === 'every' ? (
+            {item.availableAt === 'urgent' ? (
+              <>
+                <View style={styles.infoRow}>
+                  <Text
+                    style={[
+                      styles.scheduleBadge,
+                      {
+                        backgroundColor: '#F59E0B' + '20',
+                        color: '#F59E0B',
+                      },
+                    ]}
+                  >
+                    Urgent Call
+                  </Text>
+                </View>
+                <View style={[styles.infoRow, { marginTop: 8 }]}>
+                  <Text
+                    style={[
+                      styles.infoValue,
+                      {
+                        color: theme.colors.textMuted,
+                        fontFamily: 'Inter-Regular',
+                      },
+                    ]}
+                  >
+                    Always available when online
+                  </Text>
+                </View>
+              </>
+            ) : item.availableAt === 'every' ? (
               <>
                 <View style={styles.infoRow}>
                   <Text
@@ -81,49 +110,68 @@ function AvailabilityCard({
                     </View>
                   ))}
                 </View>
+                <View style={[styles.infoRow, { marginTop: 8 }]}>
+                  <Text
+                    style={[
+                      styles.infoValue,
+                      {
+                        color: theme.colors.textMuted,
+                        fontFamily: 'Inter-Regular',
+                      },
+                    ]}
+                  >
+                    Repeats every week
+                  </Text>
+                </View>
+                <View style={[styles.timeContainer, { marginTop: 8 }]}>
+                  <Clock size={14} color={theme.colors.textMuted} />
+                  <Text style={[styles.timeText, { color: theme.colors.text }]}>
+                    {item.startHour} - {item.endHour}
+                  </Text>
+                </View>
               </>
             ) : (
-              <View style={styles.infoRow}>
-                <Text
-                  style={[
-                    styles.scheduleBadge,
-                    {
-                      backgroundColor: theme.colors.accent + '20',
-                      color: theme.colors.accent,
-                    },
-                  ]}
-                >
-                  One-time
-                </Text>
-              </View>
+              <>
+                <View style={styles.infoRow}>
+                  <Text
+                    style={[
+                      styles.scheduleBadge,
+                      {
+                        backgroundColor: theme.colors.accent + '20',
+                        color: theme.colors.accent,
+                      },
+                    ]}
+                  >
+                    One-time
+                  </Text>
+                </View>
+                <View style={[styles.infoRow, { marginTop: 8 }]}>
+                  <Text
+                    style={[
+                      styles.infoValue,
+                      {
+                        color: theme.colors.textMuted,
+                        fontFamily: 'Inter-Regular',
+                      },
+                    ]}
+                  >
+                    {item.date
+                      ? (item.date as Date).toLocaleDateString('en-US', {
+                          weekday: 'long',
+                          month: 'long',
+                          day: 'numeric',
+                        })
+                      : ''}
+                  </Text>
+                </View>
+                <View style={[styles.timeContainer, { marginTop: 8 }]}>
+                  <Clock size={14} color={theme.colors.textMuted} />
+                  <Text style={[styles.timeText, { color: theme.colors.text }]}>
+                    {item.startHour} - {item.endHour}
+                  </Text>
+                </View>
+              </>
             )}
-            <View style={[styles.infoRow, { marginTop: 8 }]}>
-              <Text
-                style={[
-                  styles.infoValue,
-                  {
-                    color: theme.colors.textMuted,
-                    fontFamily: 'Inter-Regular',
-                  },
-                ]}
-              >
-                {item.availableAt === 'every'
-                  ? 'Repeats every week'
-                  : item.date
-                  ? (item.date as Date).toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      month: 'long',
-                      day: 'numeric',
-                    })
-                  : ''}
-              </Text>
-            </View>
-            <View style={[styles.timeContainer, { marginTop: 8 }]}>
-              <Clock size={14} color={theme.colors.textMuted} />
-              <Text style={[styles.timeText, { color: theme.colors.text }]}>
-                {item.startHour} - {item.endHour}
-              </Text>
-            </View>
           </View>
         </View>
         <View style={styles.cardActions}>

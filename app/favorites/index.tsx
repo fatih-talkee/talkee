@@ -18,8 +18,8 @@ import { useToast } from '@/lib/toastService';
 // ✅ API HOOKS
 import { useFavorites, useRemoveFavorite } from '@/hooks/useFavorites';
 
-// ✅ TYPE ADAPTERS
-import { adaptProfessionals, type UIProfessional } from '@/utils/typeAdapters';
+// ✅ TYPES
+import type { ProfessionalWithRelations } from '@/types/database.types';
 
 export default function FavoritesScreen() {
   const { theme } = useTheme();
@@ -27,42 +27,32 @@ export default function FavoritesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
 
   // ✅ Fetch favorites from API
-  const { data: rawFavorites = [], isLoading, error } = useFavorites();
+  const { data: favorites = [], isLoading, error } = useFavorites();
 
   // ✅ Remove favorite mutation
   const removeFavoriteMutation = useRemoveFavorite();
 
-  // ✅ Convert to UI format
-  const favoritesProfessionals = useMemo(() => {
-    console.log('🔄 Converting favorites to UI format...');
-    console.log('Raw favorites data:', rawFavorites);
-
-    // adaptProfessionals expects an array
-    if (!Array.isArray(rawFavorites) || rawFavorites.length === 0) {
-      console.log('⚠️ No favorites or invalid data');
-      return [];
-    }
-
-    // Adapt all professionals
-    const adapted = adaptProfessionals(favoritesData);
-    console.log('✅ Adapted favorites:', adapted.length);
-
-    return adapted;
-  }, [rawFavorites]);
-
   // ✅ Client-side search filter
   const filteredFavorites = useMemo(() => {
-    if (!searchQuery) return favoritesProfessionals;
+    if (!searchQuery) return favorites;
 
     const query = searchQuery.toLowerCase();
-    return favoritesProfessionals.filter(
-      (professional: UIProfessional) =>
-        professional.name?.toLowerCase().includes(query) ||
-        professional.title?.toLowerCase().includes(query) ||
-        professional.category?.toLowerCase().includes(query) ||
-        professional.specialties?.some((s) => s.toLowerCase().includes(query))
+    return favorites.filter(
+      (professional: ProfessionalWithRelations) => {
+        const userName = professional.users?.name || '';
+        const title = professional.title || '';
+        const categoryName = professional.categories?.name || '';
+        const specialties = professional.specialties || [];
+
+        return (
+          userName.toLowerCase().includes(query) ||
+          title.toLowerCase().includes(query) ||
+          categoryName.toLowerCase().includes(query) ||
+          specialties.some((s) => s.toLowerCase().includes(query))
+        );
+      }
     );
-  }, [favoritesProfessionals, searchQuery]);
+  }, [favorites, searchQuery]);
 
   const handleUnfavorite = async (professionalId: string) => {
     if (!professionalId) {
@@ -86,7 +76,7 @@ export default function FavoritesScreen() {
   };
 
   // ✅ Render individual item
-  const renderItem = ({ item }: { item: UIProfessional }) => {
+  const renderItem = ({ item }: { item: ProfessionalWithRelations }) => {
     // Validate item has required fields
     if (!item?.id) {
       console.error('❌ Invalid professional item:', item);

@@ -255,15 +255,16 @@ export interface ProfessionalCategoryInsert
 
 /**
  * Availabilities table - Professional availability schedules
+ * UPDATED: Added 'urgent' type for urgent calls (always available when online)
  */
 export interface Availability {
   id: string;
   professional_id: string;
-  available_at: 'every' | 'specific';
+  available_at: 'every' | 'specific' | 'urgent';
   days: string[] | null;
   date: string | null;
-  start_hour: string;
-  end_hour: string;
+  start_hour: string | null; // NULL for urgent calls
+  end_hour: string | null; // NULL for urgent calls
   currency: string;
   price_per_minute: number;
   created_at: string;

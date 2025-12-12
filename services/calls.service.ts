@@ -113,6 +113,107 @@ class CallsService {
   }
 
   /**
+   * Get call history for current user
+   * Returns calls where user is the caller
+   */
+  async getCallHistory(
+    filters?: CallFilters,
+    limit: number = 20,
+    offset: number = 0
+  ): Promise<CallWithRelations[]> {
+    try {
+      const currentUser = await usersService.getCurrentUser();
+
+      if (!currentUser) {
+        throw new Error('Not authenticated');
+      }
+
+      let query = supabase
+        .from('calls')
+        .select(
+          `
+          *,
+          caller:users!caller_id(id, name, avatar_url),
+          professional:professionals!professional_id(
+            id,
+            user_id,
+            rate_per_minute,
+            users!inner(id, name, avatar_url, is_verified),
+            categories!inner(id, name, icon_name)
+          )
+        `
+        )
+        .eq('caller_id', currentUser.id)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      // Apply filters
+      if (filters?.status) {
+        query = query.eq('status', filters.status);
+      }
+
+      if (filters?.callType) {
+        query = query.eq('call_type', filters.callType);
+      }
+
+      if (filters?.startDate) {
+        query = query.gte('created_at', filters.startDate);
+      }
+
+      if (filters?.endDate) {
+        query = query.lte('created_at', filters.endDate);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error fetching call history:', error);
+        throw new Error(`Failed to fetch call history: ${error.message}`);
+      }
+
+      return (data || []) as CallWithRelations[];
+    } catch (error) {
+      console.error('Error in getCallHistory:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a single call by ID
+   */
+  async getCall(callId: string): Promise<CallWithRelations | null> {
+    try {
+      const { data, error } = await supabase
+        .from('calls')
+        .select(
+          `
+          *,
+          caller:users!caller_id(id, name, avatar_url),
+          professional:professionals!professional_id(
+            id,
+            user_id,
+            rate_per_minute,
+            users!inner(id, name, avatar_url, is_verified),
+            categories!inner(id, name, icon_name)
+          )
+        `
+        )
+        .eq('id', callId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching call:', error);
+        throw new Error(`Failed to fetch call: ${error.message}`);
+      }
+
+      return data as CallWithRelations | null;
+    } catch (error) {
+      console.error('Error in getCall:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get call statistics for user
    */
   async getCallStats(): Promise<CallStats> {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,9 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
+  ActivityIndicator,
+  Linking,
+  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import {
@@ -22,161 +25,121 @@ import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { useTheme } from '@/contexts/ThemeContext';
 import { SearchBar } from '@/components/ui/SearchBar';
+import { useInvoices } from '@/hooks/useInvoices';
+import type {
+  InvoiceWithRelations,
+  InvoiceStatus,
+} from '@/types/database.types';
 
-interface Invoice {
-  id: string;
-  invoiceNumber: string;
-  professionalId: string;
-  professional: {
-    name: string;
-    avatar: string;
-    title: string;
-  };
-  date: string;
-  dueDate: string;
-  amount: number;
-  status: 'paid' | 'pending' | 'overdue' | 'cancelled';
-  description: string;
-  callDuration?: number; // in minutes
-  callDate?: string;
-}
-
-const mockInvoices: Invoice[] = [
-  {
-    id: '1',
-    invoiceNumber: 'INV-2024-001',
-    professionalId: '1',
-    professional: {
-      name: 'Dr. Sarah Johnson',
-      avatar:
-        'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=400',
-      title: 'Business Consultant',
-    },
-    date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    dueDate: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(),
-    amount: 45.0,
-    status: 'paid',
-    description: 'Voice call consultation',
-    callDuration: 30,
-    callDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '2',
-    invoiceNumber: 'INV-2024-002',
-    professionalId: '2',
-    professional: {
-      name: 'Michael Chen',
-      avatar:
-        'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=400',
-      title: 'Tech Advisor',
-    },
-    date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    dueDate: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString(),
-    amount: 75.5,
-    status: 'pending',
-    description: 'Video call consultation',
-    callDuration: 45,
-    callDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '3',
-    invoiceNumber: 'INV-2024-003',
-    professionalId: '3',
-    professional: {
-      name: 'Emma Wilson',
-      avatar:
-        'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=400',
-      title: 'Life Coach',
-    },
-    date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-    dueDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-    amount: 35.0,
-    status: 'overdue',
-    description: 'Voice call session',
-    callDuration: 25,
-    callDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '4',
-    invoiceNumber: 'INV-2024-004',
-    professionalId: '4',
-    professional: {
-      name: 'James Anderson',
-      avatar:
-        'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=400',
-      title: 'Financial Advisor',
-    },
-    date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-    dueDate: new Date(Date.now() + 23 * 24 * 60 * 60 * 1000).toISOString(),
-    amount: 120.0,
-    status: 'paid',
-    description: 'Video call consultation',
-    callDuration: 60,
-    callDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '5',
-    invoiceNumber: 'INV-2024-005',
-    professionalId: '5',
-    professional: {
-      name: 'Lisa Martinez',
-      avatar:
-        'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=400',
-      title: 'Career Counselor',
-    },
-    date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-    dueDate: new Date(Date.now() + 29 * 24 * 60 * 60 * 1000).toISOString(),
-    amount: 50.0,
-    status: 'cancelled',
-    description: 'Voice call consultation',
-    callDuration: 0,
-    callDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-];
+type FilterStatus = 'all' | 'paid' | 'pending' | 'overdue' | 'cancelled';
 
 export default function InvoicesScreen() {
   const { theme } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState<
-    'all' | 'paid' | 'pending' | 'overdue' | 'cancelled'
-  >('all');
+  const [selectedFilter, setSelectedFilter] = useState<FilterStatus>('all');
+  const { invoices = [], isLoading, error } = useInvoices('caller');
 
-  const filteredInvoices = mockInvoices.filter((invoice) => {
-    const matchesSearch =
-      invoice.professional.name
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase()) ||
-      invoice.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter =
-      selectedFilter === 'all' || invoice.status === selectedFilter;
-    return matchesSearch && matchesFilter;
-  });
+  // Helper function to determine if invoice is overdue
+  const isOverdue = (invoice: InvoiceWithRelations): boolean => {
+    if (invoice.status.toLowerCase() === 'paid') return false;
+    if (invoice.status.toLowerCase() === 'cancelled') return false;
+    if (invoice.status.toLowerCase() === 'refunded') return false;
+    if (!invoice.due_date) return false;
+
+    const dueDate = new Date(invoice.due_date);
+    const now = new Date();
+    return dueDate < now;
+  };
+
+  // Filter invoices by search query and status
+  const filteredInvoices = useMemo(() => {
+    let filtered = invoices;
+
+    // Filter by status
+    if (selectedFilter !== 'all') {
+      filtered = filtered.filter((invoice) => {
+        const status = invoice.status.toLowerCase();
+        if (selectedFilter === 'paid') {
+          return status === 'paid';
+        }
+        if (selectedFilter === 'pending') {
+          return status === 'pending' && !isOverdue(invoice);
+        }
+        if (selectedFilter === 'overdue') {
+          return isOverdue(invoice);
+        }
+        if (selectedFilter === 'cancelled') {
+          return status === 'cancelled' || status === 'refunded';
+        }
+        return true;
+      });
+    }
+
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((invoice) => {
+        const professionalName =
+          invoice.professional?.users?.name?.toLowerCase() || '';
+        const invoiceNumber = invoice.invoice_number?.toLowerCase() || '';
+        const professionalTitle =
+          invoice.professional?.categories?.name?.toLowerCase() || '';
+
+        return (
+          professionalName.includes(query) ||
+          invoiceNumber.includes(query) ||
+          professionalTitle.includes(query)
+        );
+      });
+    }
+
+    return filtered;
+  }, [invoices, selectedFilter, searchQuery]);
+
+  // Calculate filter counts
+  const filterCounts = useMemo(() => {
+    const all = invoices.length;
+    const paid = invoices.filter(
+      (i) => i.status.toLowerCase() === 'paid'
+    ).length;
+    const pending = invoices.filter(
+      (i) => i.status.toLowerCase() === 'pending' && !isOverdue(i)
+    ).length;
+    const overdue = invoices.filter((i) => isOverdue(i)).length;
+    const cancelled = invoices.filter(
+      (i) =>
+        i.status.toLowerCase() === 'cancelled' ||
+        i.status.toLowerCase() === 'refunded'
+    ).length;
+
+    return { all, paid, pending, overdue, cancelled };
+  }, [invoices]);
 
   const filters = [
     {
       key: 'all',
       label: 'All',
-      count: mockInvoices.length,
+      count: filterCounts.all,
     },
     {
       key: 'paid',
       label: 'Paid',
-      count: mockInvoices.filter((i) => i.status === 'paid').length,
+      count: filterCounts.paid,
     },
     {
       key: 'pending',
       label: 'Pending',
-      count: mockInvoices.filter((i) => i.status === 'pending').length,
+      count: filterCounts.pending,
     },
     {
       key: 'overdue',
       label: 'Overdue',
-      count: mockInvoices.filter((i) => i.status === 'overdue').length,
+      count: filterCounts.overdue,
     },
     {
       key: 'cancelled',
       label: 'Cancelled',
-      count: mockInvoices.filter((i) => i.status === 'cancelled').length,
+      count: filterCounts.cancelled,
     },
   ];
 
@@ -189,181 +152,337 @@ export default function InvoicesScreen() {
     });
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
+  const getStatusColor = (invoice: InvoiceWithRelations) => {
+    if (isOverdue(invoice)) {
+      return theme.colors.error;
+    }
+    const statusLower = invoice.status.toLowerCase();
+    switch (statusLower) {
       case 'paid':
         return theme.colors.success;
       case 'pending':
         return theme.colors.accent;
-      case 'overdue':
-        return theme.colors.error;
       case 'cancelled':
+      case 'refunded':
         return theme.colors.textMuted;
       default:
         return theme.colors.textMuted;
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
+  const getStatusIcon = (invoice: InvoiceWithRelations) => {
+    if (isOverdue(invoice)) {
+      return <XCircle size={16} color={theme.colors.error} />;
+    }
+    const statusLower = invoice.status.toLowerCase();
+    switch (statusLower) {
       case 'paid':
         return <CheckCircle size={16} color={theme.colors.success} />;
       case 'pending':
         return <Clock size={16} color={theme.colors.accent} />;
-      case 'overdue':
-        return <XCircle size={16} color={theme.colors.error} />;
       case 'cancelled':
+      case 'refunded':
         return <XCircle size={16} color={theme.colors.textMuted} />;
       default:
         return null;
     }
   };
 
-  const handleDownloadInvoice = (invoiceId: string) => {
-    // Handle invoice download
+  const getStatusLabel = (invoice: InvoiceWithRelations) => {
+    if (isOverdue(invoice)) {
+      return 'Overdue';
+    }
+    const statusLower = invoice.status.toLowerCase();
+    return statusLower.charAt(0).toUpperCase() + statusLower.slice(1);
   };
 
-  const renderInvoiceItem = ({ item }: { item: Invoice }) => (
-    <Card
-      style={[
-        styles.invoiceCard,
-        {
-          backgroundColor:
-            theme.name === 'dark' ? '#000000' : theme.colors.card,
-          borderColor:
-            theme.name === 'dark'
-              ? 'rgba(255, 255, 255, 0.3)'
-              : theme.colors.border,
-          borderWidth: 1.5,
-        },
-      ]}
-    >
-      <TouchableOpacity
-        style={styles.invoiceContainer}
-        onPress={() => router.push(`/professional/${item.professionalId}`)}
+  const handleDownloadInvoice = async (invoice: InvoiceWithRelations) => {
+    if (invoice.pdf_url) {
+      try {
+        const canOpen = await Linking.canOpenURL(invoice.pdf_url);
+        if (canOpen) {
+          await Linking.openURL(invoice.pdf_url);
+        } else {
+          Alert.alert('Error', 'Cannot open this URL');
+        }
+      } catch (error) {
+        console.error('Error opening PDF URL:', error);
+        Alert.alert('Error', 'Failed to open invoice PDF');
+      }
+    }
+  };
+
+  const handleViewInvoice = async (invoice: InvoiceWithRelations) => {
+    // Debug: Log metadata to see structure
+    console.log('Invoice metadata:', invoice.metadata);
+
+    // Try different possible keys for hosted URL
+    const viewUrl =
+      invoice.metadata?.hosted_url ||
+      invoice.metadata?.hostedUrl ||
+      invoice.metadata?.url ||
+      invoice.metadata?.view_url ||
+      invoice.metadata?.viewUrl;
+
+    if (!viewUrl) {
+      console.log('No hosted URL found in metadata:', invoice.metadata);
+      Alert.alert(
+        'Invoice URL Not Available',
+        'The invoice view URL is not available. Please contact support if this issue persists.'
+      );
+      return;
+    }
+
+    try {
+      const canOpen = await Linking.canOpenURL(viewUrl);
+      if (canOpen) {
+        await Linking.openURL(viewUrl);
+      } else {
+        Alert.alert('Error', 'Cannot open this URL');
+      }
+    } catch (error) {
+      console.error('Error opening invoice URL:', error);
+      Alert.alert('Error', 'Failed to open invoice');
+    }
+  };
+
+  const renderInvoiceItem = ({ item }: { item: InvoiceWithRelations }) => {
+    const professionalName =
+      item.professional?.users?.name || 'Unknown Professional';
+    const professionalAvatar =
+      item.professional?.users?.avatar_url || 'https://via.placeholder.com/150';
+    const professionalTitle =
+      item.professional?.categories?.name ||
+      item.professional?.users?.name ||
+      'Professional';
+
+    return (
+      <Card
+        style={[
+          styles.invoiceCard,
+          {
+            backgroundColor:
+              theme.name === 'dark' ? '#000000' : theme.colors.card,
+            borderColor:
+              theme.name === 'dark'
+                ? 'rgba(255, 255, 255, 0.3)'
+                : theme.colors.border,
+            borderWidth: 1.5,
+          },
+        ]}
       >
-        <View style={styles.invoiceHeader}>
-          <View style={styles.professionalInfo}>
-            <Image
-              source={{ uri: item.professional.avatar }}
-              style={styles.avatar}
-            />
-            <View style={styles.professionalDetails}>
-              <Text
-                style={[styles.professionalName, { color: theme.colors.text }]}
-              >
-                {item.professional.name}
-              </Text>
-              <Text
-                style={[
-                  styles.professionalTitle,
-                  { color: theme.colors.textMuted },
-                ]}
-              >
-                {item.professional.title}
-              </Text>
+        <TouchableOpacity
+          style={styles.invoiceContainer}
+          onPress={() => router.push(`/professional/${item.professional_id}`)}
+        >
+          <View style={styles.invoiceHeader}>
+            <View style={styles.professionalInfo}>
+              <Image
+                source={{ uri: professionalAvatar }}
+                style={styles.avatar}
+              />
+              <View style={styles.professionalDetails}>
+                <Text
+                  style={[
+                    styles.professionalName,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  {professionalName}
+                </Text>
+                <Text
+                  style={[
+                    styles.professionalTitle,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  {professionalTitle}
+                </Text>
+              </View>
             </View>
-          </View>
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: getStatusColor(item.status) + '20' },
-            ]}
-          >
-            {getStatusIcon(item.status)}
-            <Text
+            <View
               style={[
-                styles.statusText,
-                { color: getStatusColor(item.status) },
+                styles.statusBadge,
+                { backgroundColor: getStatusColor(item) + '20' },
               ]}
             >
-              {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.invoiceDetails}>
-          <View style={styles.invoiceRow}>
-            <Text style={[styles.label, { color: theme.colors.textMuted }]}>
-              Invoice #
-            </Text>
-            <Text style={[styles.invoiceNumber, { color: theme.colors.text }]}>
-              {item.invoiceNumber}
-            </Text>
-          </View>
-
-          <View style={styles.invoiceRow}>
-            <Text style={[styles.label, { color: theme.colors.textMuted }]}>
-              Date
-            </Text>
-            <View style={styles.dateRow}>
-              <Calendar size={14} color={theme.colors.textMuted} />
-              <Text style={[styles.dateText, { color: theme.colors.text }]}>
-                {formatDate(item.date)}
+              {getStatusIcon(item)}
+              <Text
+                style={[styles.statusText, { color: getStatusColor(item) }]}
+              >
+                {getStatusLabel(item)}
               </Text>
             </View>
           </View>
 
-          {item.callDuration != null && item.callDuration > 0 && (
+          <View style={styles.invoiceDetails}>
             <View style={styles.invoiceRow}>
               <Text style={[styles.label, { color: theme.colors.textMuted }]}>
-                Duration
+                Invoice #
               </Text>
-              <Text style={[styles.durationText, { color: theme.colors.text }]}>
-                {item.callDuration.toString()} min
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.invoiceRow}>
-            <Text style={[styles.label, { color: theme.colors.textMuted }]}>
-              Description
-            </Text>
-            <Text
-              style={[styles.descriptionText, { color: theme.colors.text }]}
-            >
-              {item.description}
-            </Text>
-          </View>
-
-          <View
-            style={[styles.amountRow, { borderTopColor: theme.colors.border }]}
-          >
-            <Text style={[styles.amountLabel, { color: theme.colors.text }]}>
-              Amount
-            </Text>
-            <View style={styles.amountContainer}>
-              <DollarSign size={20} color={theme.colors.primary} />
               <Text
-                style={[styles.amountValue, { color: theme.colors.primary }]}
+                style={[styles.invoiceNumber, { color: theme.colors.text }]}
               >
-                {item.amount.toFixed(2)}
+                {item.invoice_number}
               </Text>
             </View>
-          </View>
-        </View>
 
-        <TouchableOpacity
-          style={[
-            styles.downloadButton,
-            { backgroundColor: theme.colors.surface },
-          ]}
-          onPress={() => handleDownloadInvoice(item.id)}
-        >
-          <Download size={16} color={theme.colors.primary} />
-          <Text style={[styles.downloadText, { color: theme.colors.primary }]}>
-            Download
-          </Text>
+            <View style={styles.invoiceRow}>
+              <Text style={[styles.label, { color: theme.colors.textMuted }]}>
+                Date
+              </Text>
+              <View style={styles.dateRow}>
+                <Calendar size={14} color={theme.colors.textMuted} />
+                <Text style={[styles.dateText, { color: theme.colors.text }]}>
+                  {formatDate(item.invoice_date)}
+                </Text>
+              </View>
+            </View>
+
+            {item.call_duration_minutes != null &&
+              item.call_duration_minutes > 0 && (
+                <View style={styles.invoiceRow}>
+                  <Text
+                    style={[styles.label, { color: theme.colors.textMuted }]}
+                  >
+                    Duration
+                  </Text>
+                  <Text
+                    style={[styles.durationText, { color: theme.colors.text }]}
+                  >
+                    {item.call_duration_minutes} min
+                  </Text>
+                </View>
+              )}
+
+            {item.notes && (
+              <View style={styles.invoiceRow}>
+                <Text style={[styles.label, { color: theme.colors.textMuted }]}>
+                  Notes
+                </Text>
+                <Text
+                  style={[styles.descriptionText, { color: theme.colors.text }]}
+                >
+                  {item.notes}
+                </Text>
+              </View>
+            )}
+
+            <View
+              style={[
+                styles.amountRow,
+                { borderTopColor: theme.colors.border },
+              ]}
+            >
+              <Text style={[styles.amountLabel, { color: theme.colors.text }]}>
+                Amount
+              </Text>
+              <View style={styles.amountContainer}>
+                <DollarSign size={20} color={theme.colors.primary} />
+                <Text
+                  style={[styles.amountValue, { color: theme.colors.primary }]}
+                >
+                  {item.total_amount.toFixed(2)}
+                </Text>
+              </View>
+            </View>
+          </View>
         </TouchableOpacity>
-      </TouchableOpacity>
-    </Card>
-  );
+
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={[
+              styles.viewButton,
+              {
+                backgroundColor:
+                  theme.name === 'light'
+                    ? theme.colors.primary
+                    : theme.colors.primaryLight,
+                opacity: item.metadata?.hosted_url ? 1 : 0.6,
+              },
+            ]}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleViewInvoice(item);
+            }}
+            disabled={!item.metadata?.hosted_url}
+          >
+            <FileText size={16} color={theme.colors.surface} />
+            <Text
+              style={[styles.viewButtonText, { color: theme.colors.surface }]}
+            >
+              View Invoice
+            </Text>
+          </TouchableOpacity>
+          {item.pdf_url && (
+            <TouchableOpacity
+              style={[
+                styles.downloadButton,
+                {
+                  backgroundColor:
+                    theme.name === 'light'
+                      ? theme.colors.surface
+                      : theme.colors.card,
+                  borderColor: theme.colors.border,
+                  borderWidth: 1,
+                },
+              ]}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleDownloadInvoice(item);
+              }}
+            >
+              <Download size={16} color={theme.colors.text} />
+              <Text style={[styles.downloadText, { color: theme.colors.text }]}>
+                Download
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </Card>
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <Header showLogo showBack />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
+            Loading invoices...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <Header showLogo showBack />
+        <View style={styles.emptyState}>
+          <FileText size={48} color={theme.colors.textMuted} />
+          <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+            Error Loading Invoices
+          </Text>
+          <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
+            {error instanceof Error ? error.message : 'Failed to load invoices'}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <Header showLogo showBack  />
+      <Header showLogo showBack />
 
       <SearchBar
         value={searchQuery}
@@ -372,11 +491,12 @@ export default function InvoicesScreen() {
         showTabButtons={true}
         tabOptions={filters}
         selectedTabKey={selectedFilter}
-        onTabSelect={(key: string) =>
-          setSelectedFilter(
-            key as 'all' | 'paid' | 'pending' | 'overdue' | 'cancelled'
-          )
-        }
+        onTabSelect={(key: string) => setSelectedFilter(key as FilterStatus)}
+        showResultsCount={true}
+        resultsCount={filteredInvoices.length}
+        resultsCountLabel={`${filteredInvoices.length} invoice${
+          filteredInvoices.length !== 1 ? 's' : ''
+        }`}
       />
 
       <FlatList
@@ -405,9 +525,22 @@ export default function InvoicesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
   },
   listContent: {
     padding: 24,
+    paddingBottom: 40,
   },
   invoiceCard: {
     marginBottom: 12,
@@ -513,6 +646,26 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: 'Inter-Bold',
   },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 16,
+    paddingTop: 0,
+  },
+  viewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    flex: 1,
+  },
+  viewButtonText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+  },
   downloadButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -521,6 +674,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 12,
+    flex: 1,
   },
   downloadText: {
     fontSize: 14,
@@ -530,6 +684,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 80,
+    paddingHorizontal: 40,
   },
   emptyTitle: {
     fontSize: 20,
@@ -542,6 +697,5 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     textAlign: 'center',
     lineHeight: 20,
-    paddingHorizontal: 40,
   },
 });

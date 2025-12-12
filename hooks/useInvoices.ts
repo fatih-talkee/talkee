@@ -1,30 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
 import { ProfileService } from '@/services/supabase/profile.service';
-import { supabase } from '@/lib/supabase';
+import { usersService } from '@/services/supabase';
 import { useEffect, useState } from 'react';
 
 export function useInvoices(role: 'caller' | 'professional' = 'caller') {
   const [userId, setUserId] = useState<string | null>(null);
 
-  // Get current user from Supabase session
+  // Get current user from users table (not auth_id)
   useEffect(() => {
     const getCurrentUser = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      setUserId(session?.user?.id || null);
+      const user = await usersService.getCurrentUser();
+      setUserId(user?.id || null);
     };
 
     getCurrentUser();
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserId(session?.user?.id || null);
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
 
   const {

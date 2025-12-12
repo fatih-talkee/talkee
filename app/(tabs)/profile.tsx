@@ -62,7 +62,8 @@ export default function ProfileScreen() {
   const toast = useToast();
 
   // ✅ Use real profile data
-  const { user, stats, isProfessional, professional, isLoading, profileData } = useProfile();
+  const { user, stats, isProfessional, professional, isLoading, profileData } =
+    useProfile();
 
   // ✅ Format date helper
   const formatMemberSince = (date: string) => {
@@ -158,10 +159,10 @@ export default function ProfileScreen() {
       }
 
       // ✅ Success feedback
-        toast.success({
-          title: 'Signed Out',
+      toast.success({
+        title: 'Signed Out',
         message: 'See you soon!',
-        });
+      });
 
       // ✅ Navigate to login screen
       // Use setTimeout to ensure toast is visible before navigation
@@ -369,73 +370,71 @@ export default function ProfileScreen() {
         {/* Professional Section - Conditional */}
         {isProfessional ? (
           // If professional - show settings
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            I'm a Professional
-          </Text>
-          <Card
-            style={[
-              styles.professionalCard,
-              { backgroundColor: theme.colors.card },
-            ]}
-          >
-            <View style={styles.professionalLayout}>
-              <View style={styles.qrContainer}>
-                <QrCode size={45} color={theme.colors.text} />
-              </View>
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              I'm a Professional
+            </Text>
+            <Card
+              style={[
+                styles.professionalCard,
+                { backgroundColor: theme.colors.card },
+              ]}
+            >
+              <View style={styles.professionalLayout}>
+                <View style={styles.qrContainer}>
+                  <QrCode size={45} color={theme.colors.text} />
+                </View>
 
-              <View
-                style={[
-                  styles.verticalDivider,
-                  { backgroundColor: theme.colors.divider },
-                ]}
-              />
-
-              <View style={styles.buttonsContainer}>
-                <TouchableOpacity
+                <View
                   style={[
-                    styles.professionalSettingsButton,
-                    {
-                      backgroundColor: theme.colors.background,
-                      borderColor: theme.colors.border,
-                    },
+                    styles.verticalDivider,
+                    { backgroundColor: theme.colors.divider },
                   ]}
-                    onPress={() =>
-                      router.push('/become-professional?mode=edit')
-                    }
-                >
-                  <Settings size={16} color={theme.colors.text} />
-                  <Text
-                    style={[
-                      styles.professionalSettingsText,
-                      { color: theme.colors.text },
-                    ]}
-                  >
-                    Professional Settings
-                  </Text>
-                </TouchableOpacity>
+                />
 
-                <TouchableOpacity
-                  style={[
-                    styles.shareProfileButton,
-                    { backgroundColor: theme.colors.primary + '20' },
-                  ]}
-                  onPress={() => setShareModalVisible(true)}
-                >
-                  <Share2 size={14} color={theme.colors.primary} />
-                  <Text
+                <View style={styles.buttonsContainer}>
+                  <TouchableOpacity
                     style={[
-                      styles.shareProfileText,
-                      { color: theme.colors.primary },
+                      styles.professionalSettingsButton,
+                      {
+                        backgroundColor: theme.colors.background,
+                        borderColor: theme.colors.border,
+                      },
                     ]}
+                    onPress={() => router.push('/professional-settings')}
                   >
-                    Share Profile
-                  </Text>
-                </TouchableOpacity>
+                    <Settings size={16} color={theme.colors.text} />
+                    <Text
+                      style={[
+                        styles.professionalSettingsText,
+                        { color: theme.colors.text },
+                      ]}
+                    >
+                      Professional Settings
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.shareProfileButton,
+                      { backgroundColor: theme.colors.primary + '20' },
+                    ]}
+                    onPress={() => setShareModalVisible(true)}
+                  >
+                    <Share2 size={14} color={theme.colors.primary} />
+                    <Text
+                      style={[
+                        styles.shareProfileText,
+                        { color: theme.colors.primary },
+                      ]}
+                    >
+                      Share Profile
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-          </Card>
-        </View>
+            </Card>
+          </View>
         ) : (
           // If not professional - show become professional button
           <View style={styles.section}>

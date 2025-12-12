@@ -8,16 +8,30 @@ import {
   Platform,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Star, ShieldCheck, Heart } from 'lucide-react-native';
+import {
+  Star,
+  ShieldCheck,
+  Heart,
+  UserCheck,
+  UserX,
+} from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useIsFavorite } from '@/hooks/useFavorites';
 import type { ProfessionalWithRelations } from '@/types/database.types';
 
 interface ProfessionalCardProps {
   professional: ProfessionalWithRelations;
+  showUnblockButton?: boolean;
+  onUnblock?: () => void;
+  isUnblocking?: boolean;
 }
 
-export function ProfessionalCard({ professional }: ProfessionalCardProps) {
+export function ProfessionalCard({
+  professional,
+  showUnblockButton = false,
+  onUnblock,
+  isUnblocking = false,
+}: ProfessionalCardProps) {
   const { theme } = useTheme();
 
   // Check if favorited
@@ -47,6 +61,13 @@ export function ProfessionalCard({ professional }: ProfessionalCardProps) {
   const handleProfilePress = (event: any) => {
     event.stopPropagation();
     router.push(`/professional/${professional.id}`);
+  };
+
+  const handleUnblockPress = (event: any) => {
+    event.stopPropagation();
+    if (onUnblock) {
+      onUnblock();
+    }
   };
 
   return (
@@ -83,16 +104,16 @@ export function ProfessionalCard({ professional }: ProfessionalCardProps) {
                 <Heart size={10} color="#FFFFFF" fill="#FFFFFF" />
               </View>
             )}
-            {isOnline && (
-              <View
-                style={[
-                  styles.onlineIndicator,
-                  {
-                    backgroundColor: theme.colors.success,
-                  },
-                ]}
-              />
-            )}
+            <View
+              style={[
+                styles.onlineIndicator,
+                {
+                  backgroundColor: isOnline
+                    ? theme.colors.success
+                    : theme.colors.error,
+                },
+              ]}
+            />
           </View>
           <View style={styles.headerInfo}>
             <View style={styles.nameRow}>
@@ -171,35 +192,69 @@ export function ProfessionalCard({ professional }: ProfessionalCardProps) {
               /min
             </Text>
           </View>
-          <TouchableOpacity
-            style={[
-              styles.profileButton,
-              {
-                backgroundColor:
-                  theme.name === 'light'
-                    ? theme.colors.surface
-                    : theme.colors.primaryLight,
-                borderColor:
-                  theme.name === 'light' ? theme.colors.primary : 'transparent',
-                borderWidth: theme.name === 'light' ? 1 : 0,
-              },
-            ]}
-            onPress={handleProfilePress}
-          >
-            <Text
+          <View style={styles.footerButtons}>
+            {showUnblockButton && onUnblock && (
+              <TouchableOpacity
+                style={[
+                  styles.unblockButton,
+                  {
+                    backgroundColor:
+                      theme.name === 'light'
+                        ? theme.colors.success + '15'
+                        : theme.colors.success + '20',
+                    borderColor: theme.colors.success,
+                    borderWidth: 1,
+                    opacity: isUnblocking ? 0.6 : 1,
+                  },
+                ]}
+                onPress={handleUnblockPress}
+                disabled={isUnblocking}
+              >
+                <UserCheck size={14} color={theme.colors.success} />
+                <Text
+                  style={[
+                    styles.unblockButtonText,
+                    {
+                      color: theme.colors.success,
+                    },
+                  ]}
+                >
+                  Unblock
+                </Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
               style={[
-                styles.profileButtonText,
+                styles.profileButton,
                 {
-                  color:
+                  backgroundColor:
+                    theme.name === 'light'
+                      ? theme.colors.surface
+                      : theme.colors.primaryLight,
+                  borderColor:
                     theme.name === 'light'
                       ? theme.colors.primary
-                      : theme.colors.surface,
+                      : 'transparent',
+                  borderWidth: theme.name === 'light' ? 1 : 0,
                 },
               ]}
+              onPress={handleProfilePress}
             >
-              Profile Page
-            </Text>
-          </TouchableOpacity>
+              <Text
+                style={[
+                  styles.profileButtonText,
+                  {
+                    color:
+                      theme.name === 'light'
+                        ? theme.colors.primary
+                        : theme.colors.surface,
+                  },
+                ]}
+              >
+                Profile Page
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </TouchableOpacity>
@@ -306,6 +361,26 @@ const styles = StyleSheet.create({
   priceUnit: {
     fontSize: 13,
     fontFamily: 'Inter-Regular',
+  },
+  footerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  unblockButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  unblockButtonText: {
+    fontSize: 13,
+    fontFamily: 'Inter-Medium',
+    textAlign: 'center',
   },
   profileButton: {
     paddingHorizontal: 16,

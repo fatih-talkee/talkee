@@ -6,6 +6,7 @@ import {
   Image,
   ViewStyle,
   Platform,
+  Text,
 } from 'react-native';
 import { ArrowLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,6 +26,7 @@ interface PrimaryHeaderProps {
   showBack?: boolean;
   backRoute?: string;
   onBackPress?: () => void;
+  title?: string;
 }
 
 export function PrimaryHeader({
@@ -35,6 +37,7 @@ export function PrimaryHeader({
   showBack = false,
   backRoute,
   onBackPress,
+  title,
 }: PrimaryHeaderProps) {
   const { theme } = useTheme();
   const router = useRouter();
@@ -99,7 +102,7 @@ export function PrimaryHeader({
       ]}
     >
       <View style={styles.leftSection}>
-        {showLogo ? (
+        {showLogo && (
           <TouchableOpacity 
             disabled={!onLogoPress} 
             onPress={onLogoPress}
@@ -113,10 +116,19 @@ export function PrimaryHeader({
               accessibilityLabel="Talkee Logo"
             />
           </TouchableOpacity>
-        ) : null}
+        )}
       </View>
 
-      <View style={styles.centerSection} />
+      <View style={styles.centerSection}>
+        {title && (
+          <Text
+            style={[styles.title, { color: theme.colors.text }]}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+        )}
+      </View>
 
       <View style={styles.rightSection}>
         {renderRight.map((btn, idx) => (
@@ -172,6 +184,13 @@ const styles = StyleSheet.create({
   },
   centerSection: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 18,
+    fontFamily: 'Inter-Bold',
+    textAlign: 'center',
   },
   rightSection: {
     flex: 2,
