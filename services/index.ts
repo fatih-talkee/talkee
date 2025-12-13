@@ -7,5 +7,4 @@ export * from './supabase';
 // Export other service types and functions
 // Note: calls, reviews, notifications services may need to be implemented or moved to supabase/
 export * from './calls.service';
-export * from './reviews.service';
 export * from './notifications.service';

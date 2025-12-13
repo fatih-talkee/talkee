@@ -19,6 +19,7 @@ import { logger } from '../lib/logger';
 import { setupGlobalErrorHandlers } from '../lib/globalErrorHandler';
 import * as Sentry from '@sentry/react-native';
 import { SentryAdapter } from '../lib/sentryAdapter';
+import { notificationsService } from '../services';
 
 // Initialize Sentry
 Sentry.init({
@@ -79,6 +80,28 @@ export default function RootLayout() {
 
     // Setup global error handlers
     setupGlobalErrorHandlers();
+
+    // Initialize notifications service
+    (async () => {
+      try {
+        // Setup notification listeners first
+        notificationsService.setupListeners();
+
+        // Then initialize (request permissions and get token)
+        const token = await notificationsService.initialize();
+        if (token) {
+          logger.info('Push notifications initialized', {
+            token: token.substring(0, 20) + '...',
+          });
+        } else {
+          logger.warn(
+            'Push notifications not available (permissions denied or web platform)'
+          );
+        }
+      } catch (error) {
+        logger.error('Failed to initialize notifications', error);
+      }
+    })();
 
     // Cleanup on unmount
     return () => {
@@ -147,7 +170,6 @@ export default function RootLayout() {
             <Stack.Screen name="auth" />
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="become-professional/index" />
-            <Stack.Screen name="call-review/[id]" />
             <Stack.Screen name="credit-selection" />
             <Stack.Screen name="purchase" />
             <Stack.Screen name="notifications/index" />
@@ -163,7 +185,6 @@ export default function RootLayout() {
             <Stack.Screen name="profile/professional-settings" />
             <Stack.Screen name="profile/privacy-policy" />
             <Stack.Screen name="profile/devices" />
-            <Stack.Screen name="schedule-call/[id]" />
           </Stack>
           <StatusBar style="auto" translucent={false} />
           <ToastStack />

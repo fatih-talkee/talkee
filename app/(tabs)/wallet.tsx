@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   SafeAreaView,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
 import {
@@ -14,12 +16,15 @@ import {
   History,
   Download,
   TrendingUp,
+  TrendingDown,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { FilterModal } from '@/components/filters/FilterModal';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useWalletBalance, useWalletTransactions } from '@/hooks/useUser';
+import { logger } from '@/lib/logger';
+import { format, isToday, isYesterday, parseISO } from 'date-fns';
 
 interface CreditPackage {
   id: string;
@@ -38,18 +43,126 @@ const creditPackages: CreditPackage[] = [
 
 export default function WalletScreen() {
   const { theme } = useTheme();
-  const [currentBalance] = useState(127.5);
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
-  const [filterVisible, setFilterVisible] = useState(false);
-  const [filters, setFilters] = useState({
-    priceRange: [0, 100] as [number, number],
-    rating: 0,
-    availability: 'all' as 'all' | 'online' | 'quick-response',
-    categories: [] as string[],
-  });
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Fetch wallet balance
+  const {
+    data: currentBalance = 0,
+    isLoading: balanceLoading,
+    error: balanceError,
+    refetch: refetchBalance,
+  } = useWalletBalance();
+
+  // Fetch recent transactions
+  const {
+    data: transactions = [],
+    isLoading: transactionsLoading,
+    error: transactionsError,
+    refetch: refetchTransactions,
+  } = useWalletTransactions(5, 0);
+
+  // Calculate monthly change
+  const monthlyChange = useMemo(() => {
+    if (!transactions || transactions.length === 0) return 0;
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    return transactions
+      .filter((tx) => {
+        const txDate = parseISO(tx.created_at);
+        return txDate >= startOfMonth;
+      })
+      .reduce((sum, tx) => {
+        // Income/earning transactions add, expense transactions subtract
+        if (
+          tx.type === 'income' ||
+          tx.type === 'credit_purchase' ||
+          tx.type === 'call_earning'
+        ) {
+          return sum + tx.amount;
+        } else if (tx.type === 'expenses' || tx.type === 'call_expense') {
+          return sum - tx.amount;
+        }
+        return sum;
+      }, 0);
+  }, [transactions]);
 
   const handlePurchase = (packageId: string) => {
     setSelectedPackage(packageId);
+    router.push('/credit-selection');
+  };
+
+  const handleExport = () => {
+    // TODO: Implement export functionality
+    logger.info('Export wallet data requested');
+    // Could navigate to export screen or trigger download
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([refetchBalance(), refetchTransactions()]);
+    } catch (error) {
+      logger.error('Error refreshing wallet data', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const formatTransactionDate = (dateString: string) => {
+    try {
+      const date = parseISO(dateString);
+      if (isToday(date)) {
+        return 'Today, ' + format(date, 'h:mm a');
+      } else if (isYesterday(date)) {
+        return 'Yesterday, ' + format(date, 'h:mm a');
+      } else {
+        return format(date, 'MMM d, h:mm a');
+      }
+    } catch (error) {
+      return dateString;
+    }
+  };
+
+  const getTransactionIcon = (type: string) => {
+    switch (type) {
+      case 'income':
+      case 'credit_purchase':
+      case 'call_earning':
+        return Plus;
+      case 'expenses':
+      case 'call_expense':
+        return CreditCard;
+      default:
+        return CreditCard;
+    }
+  };
+
+  const getTransactionColor = (type: string) => {
+    switch (type) {
+      case 'income':
+      case 'credit_purchase':
+      case 'call_earning':
+        return theme.colors.success;
+      case 'expenses':
+      case 'call_expense':
+        return theme.colors.error;
+      default:
+        return theme.colors.textMuted;
+    }
+  };
+
+  const getTransactionAmount = (transaction: any) => {
+    // TransactionType enum: 'income' | 'expenses' | 'credit_purchase' | 'call_earning' | 'call_expense'
+    const isPositive =
+      transaction.type === 'income' ||
+      transaction.type === 'credit_purchase' ||
+      transaction.type === 'call_earning';
+    return `${isPositive ? '+' : '-'}$${Math.abs(transaction.amount).toFixed(
+      2
+    )}`;
   };
 
   return (
@@ -58,7 +171,13 @@ export default function WalletScreen() {
     >
       <Header showLogo={true} />
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         {/* Current Balance */}
         <Card
           style={[
@@ -78,25 +197,62 @@ export default function WalletScreen() {
             >
               Current Balance
             </Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={handleExport}>
               <Download size={20} color={theme.colors.textMuted} />
             </TouchableOpacity>
           </View>
-          <Text
-            style={[styles.balanceAmount, { color: theme.colors.primaryLight }]}
-          >
-            {'$' + currentBalance.toFixed(2)}
-          </Text>
-          <View style={styles.balanceFooter}>
-            <View style={styles.balanceInfo}>
-              <TrendingUp size={16} color={theme.colors.success} />
+          {balanceLoading ? (
+            <ActivityIndicator
+              size="large"
+              color={theme.colors.primaryLight}
+              style={{ marginVertical: 20 }}
+            />
+          ) : balanceError ? (
+            <Text
+              style={[
+                styles.balanceAmount,
+                { color: theme.colors.error, fontSize: 16 },
+              ]}
+            >
+              Error loading balance
+            </Text>
+          ) : (
+            <>
               <Text
-                style={[styles.balanceChange, { color: theme.colors.success }]}
+                style={[
+                  styles.balanceAmount,
+                  { color: theme.colors.primaryLight },
+                ]}
               >
-                +$25.00 this month
+                {'$' + currentBalance.toFixed(2)}
               </Text>
-            </View>
-          </View>
+              <View style={styles.balanceFooter}>
+                {monthlyChange !== 0 && (
+                  <View style={styles.balanceInfo}>
+                    {monthlyChange > 0 ? (
+                      <TrendingUp size={16} color={theme.colors.success} />
+                    ) : (
+                      <TrendingDown size={16} color={theme.colors.error} />
+                    )}
+                    <Text
+                      style={[
+                        styles.balanceChange,
+                        {
+                          color:
+                            monthlyChange > 0
+                              ? theme.colors.success
+                              : theme.colors.error,
+                        },
+                      ]}
+                    >
+                      {monthlyChange > 0 ? '+' : ''}
+                      {'$' + Math.abs(monthlyChange).toFixed(2)} this month
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </>
+          )}
         </Card>
 
         {/* Quick Actions */}
@@ -181,7 +337,11 @@ export default function WalletScreen() {
                 History
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.quickAction} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.quickAction}
+              activeOpacity={0.7}
+              onPress={handleExport}
+            >
               <View
                 style={[
                   styles.quickActionIcon,
@@ -345,145 +505,126 @@ export default function WalletScreen() {
 
         {/* Recent Transactions */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            Recent Activity
-          </Text>
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 8,
+            }}
+          >
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Recent Activity
+            </Text>
+            {transactions.length > 0 && (
+              <TouchableOpacity
+                onPress={() => router.push('/wallet-history')}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[styles.viewAllText, { color: theme.colors.primary }]}
+                >
+                  View All
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           <Card style={styles.transactionCard}>
-            <View style={styles.transaction}>
-              <View
-                style={[
-                  styles.transactionIcon,
-                  {
-                    backgroundColor:
-                      theme.name === 'light'
-                        ? '#fee2e2'
-                        : 'rgba(255, 69, 58, 0.2)',
-                  },
-                ]}
-              >
-                <CreditCard size={20} color={theme.colors.error} />
-              </View>
-              <View style={styles.transactionInfo}>
+            {transactionsLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
                 <Text
                   style={[
-                    styles.transactionTitle,
-                    { color: theme.colors.text },
-                  ]}
-                >
-                  Call with Dr. Sarah Chen
-                </Text>
-                <Text
-                  style={[
-                    styles.transactionDate,
+                    styles.loadingText,
                     { color: theme.colors.textMuted },
                   ]}
                 >
-                  Today, 2:30 PM
+                  Loading transactions...
                 </Text>
               </View>
-              <Text
-                style={[
-                  styles.transactionAmount,
-                  { color: theme.colors.error },
-                ]}
-              >
-                -$21.25
-              </Text>
-            </View>
+            ) : transactionsError ? (
+              <View style={styles.errorContainer}>
+                <Text style={[styles.errorText, { color: theme.colors.error }]}>
+                  Error loading transactions
+                </Text>
+                <TouchableOpacity
+                  onPress={() => refetchTransactions()}
+                  style={styles.retryButton}
+                >
+                  <Text
+                    style={[styles.retryText, { color: theme.colors.primary }]}
+                  >
+                    Retry
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : transactions.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text
+                  style={[styles.emptyText, { color: theme.colors.textMuted }]}
+                >
+                  No transactions yet
+                </Text>
+              </View>
+            ) : (
+              transactions.map((transaction) => {
+                const IconComponent = getTransactionIcon(transaction.type);
+                const iconColor = getTransactionColor(transaction.type);
+                const isPositive =
+                  transaction.type === 'income' ||
+                  transaction.type === 'credit_purchase' ||
+                  transaction.type === 'call_earning';
 
-            <View style={styles.transaction}>
-              <View
-                style={[
-                  styles.transactionIcon,
-                  {
-                    backgroundColor:
-                      theme.name === 'light'
-                        ? '#dcfce7'
-                        : 'rgba(48, 209, 88, 0.2)',
-                  },
-                ]}
-              >
-                <Plus size={20} color={theme.colors.success} />
-              </View>
-              <View style={styles.transactionInfo}>
-                <Text
-                  style={[
-                    styles.transactionTitle,
-                    { color: theme.colors.text },
-                  ]}
-                >
-                  Credits Added
-                </Text>
-                <Text
-                  style={[
-                    styles.transactionDate,
-                    { color: theme.colors.textMuted },
-                  ]}
-                >
-                  Yesterday, 4:15 PM
-                </Text>
-              </View>
-              <Text
-                style={[
-                  styles.transactionAmount,
-                  { color: theme.colors.success },
-                ]}
-              >
-                +$100.00
-              </Text>
-            </View>
-
-            <View style={styles.transaction}>
-              <View
-                style={[
-                  styles.transactionIcon,
-                  {
-                    backgroundColor:
-                      theme.name === 'light'
-                        ? '#fee2e2'
-                        : 'rgba(255, 69, 58, 0.2)',
-                  },
-                ]}
-              >
-                <CreditCard size={20} color={theme.colors.error} />
-              </View>
-              <View style={styles.transactionInfo}>
-                <Text
-                  style={[
-                    styles.transactionTitle,
-                    { color: theme.colors.text },
-                  ]}
-                >
-                  Call with Marcus Thompson
-                </Text>
-                <Text
-                  style={[
-                    styles.transactionDate,
-                    { color: theme.colors.textMuted },
-                  ]}
-                >
-                  Jan 19, 2:15 PM
-                </Text>
-              </View>
-              <Text
-                style={[
-                  styles.transactionAmount,
-                  { color: theme.colors.error },
-                ]}
-              >
-                -$180.00
-              </Text>
-            </View>
+                return (
+                  <View key={transaction.id} style={styles.transaction}>
+                    <View
+                      style={[
+                        styles.transactionIcon,
+                        {
+                          backgroundColor:
+                            theme.name === 'light'
+                              ? isPositive
+                                ? '#dcfce7'
+                                : '#fee2e2'
+                              : isPositive
+                              ? 'rgba(48, 209, 88, 0.2)'
+                              : 'rgba(255, 69, 58, 0.2)',
+                        },
+                      ]}
+                    >
+                      <IconComponent size={20} color={iconColor} />
+                    </View>
+                    <View style={styles.transactionInfo}>
+                      <Text
+                        style={[
+                          styles.transactionTitle,
+                          { color: theme.colors.text },
+                        ]}
+                      >
+                        {transaction.description || 'Transaction'}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.transactionDate,
+                          { color: theme.colors.textMuted },
+                        ]}
+                      >
+                        {formatTransactionDate(transaction.created_at)}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[styles.transactionAmount, { color: iconColor }]}
+                    >
+                      {getTransactionAmount(transaction)}
+                    </Text>
+                  </View>
+                );
+              })
+            )}
           </Card>
         </View>
       </ScrollView>
-
-      <FilterModal
-        visible={filterVisible}
-        onClose={() => setFilterVisible(false)}
-        onApply={() => {}}
-        initialFilters={filters}
-      />
     </SafeAreaView>
   );
 }
@@ -685,5 +826,47 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Bold',
     // theme.colors.error (negative) / theme.colors.success (positive)
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+  },
+  loadingContainer: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    marginTop: 8,
+  },
+  errorContainer: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    marginBottom: 12,
+  },
+  retryButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  retryText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+  },
+  emptyContainer: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
   },
 });

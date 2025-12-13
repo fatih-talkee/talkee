@@ -51,8 +51,6 @@ export function PromotionCarousel({
         let normalizedLink = promotion.ctaLink;
         if (normalizedLink === '/become-professional') {
           normalizedLink = '/become-professional/index';
-        } else if (normalizedLink === '/notifications') {
-          normalizedLink = '/notifications/index';
         }
         router.push(normalizedLink as any);
       }
@@ -79,12 +77,12 @@ export function PromotionCarousel({
       >
         <View style={styles.cardInner}>
           {/* ✅ Background Image */}
-          <Image 
-            source={{ uri: item.image }} 
+          <Image
+            source={{ uri: item.image }}
             style={styles.backgroundImage}
             resizeMode="cover"
           />
-          
+
           {/* ✅ Semi-transparent Gradient Overlay */}
           <LinearGradient
             colors={gradientColors as [ColorValue, ColorValue, ...ColorValue[]]}
@@ -186,9 +184,9 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'web'
       ? { textShadow: '-1px 1px 10px rgba(0, 0, 0, 0.75)' }
       : {
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: -1, height: 1 },
-    textShadowRadius: 10,
+          textShadowColor: 'rgba(0, 0, 0, 0.75)',
+          textShadowOffset: { width: -1, height: 1 },
+          textShadowRadius: 10,
         }),
   },
   subtitle: {
@@ -200,9 +198,9 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'web'
       ? { textShadow: '-1px 1px 10px rgba(0, 0, 0, 0.75)' }
       : {
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: -1, height: 1 },
-    textShadowRadius: 10,
+          textShadowColor: 'rgba(0, 0, 0, 0.75)',
+          textShadowOffset: { width: -1, height: 1 },
+          textShadowRadius: 10,
         }),
   },
   ctaContainer: {

@@ -71,10 +71,52 @@ class ProfessionalFeedsService {
         category_emoji: feed.professional.category?.emoji || null,
       };
 
+      // Notify followers (users who favorited this professional)
+      this.notifyFollowers(professionalId, feedWithDetails.professional_name, feedWithDetails.id);
+
       return { success: true, feed: feedWithDetails };
     } catch (error: any) {
       console.error('❌ Error in createFeed:', error);
       return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Notify users who favorited the professional about a new post
+   */
+  private async notifyFollowers(professionalId: string, professionalName: string, feedId: string) {
+    try {
+      const { notificationsService } = await import('../notifications.service');
+
+      // 1. Get all users who favorited this professional
+      const { data: favorites, error } = await supabase
+        .from('professional_favorites')
+        .select('user_id')
+        .eq('professional_id', professionalId);
+
+      if (error || !favorites || favorites.length === 0) {
+        return;
+      }
+
+      const userIds = favorites.map(f => f.user_id);
+
+      // 2. Send batch notification
+      await notificationsService.sendBatchPushNotifications(
+        userIds,
+        `New Post from ${professionalName}`,
+        `${professionalName} just shared a new update. Check it out!`,
+        { 
+            type: 'feed_post', 
+            professional_id: professionalId,
+            feed_id: feedId,
+            action_url: `talkee://feed/${feedId}`
+        }
+      );
+      
+      console.log(`✅ Sent filtered notifications to ${userIds.length} followers`);
+
+    } catch (error) {
+      console.error('⚠️ Error notifying followers:', error);
     }
   }
 

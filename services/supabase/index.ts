@@ -5,9 +5,11 @@ export * from './professionals.service';
 export * from './categories.service';
 export * from './favorites.service';
 export * from './user.service';
+export * from './stripe.service';
 
 // Export service instances (for convenience)
 export { professionalsService } from './professionals.service';
 export { usersService } from './user.service';
 export { categoriesService } from './categories.service';
 export { favoritesService } from './favorites.service';
+export { stripeService } from './stripe.service';

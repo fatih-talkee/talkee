@@ -12,9 +12,7 @@ import {
   TouchableOpacity,
   TextInput,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { router } from 'expo-router';
-import { Calendar, Clock } from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { Header } from '@/components/ui/Header';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -22,6 +20,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { professionalsService } from '@/services/supabase/professionals.service';
 import { useToast } from '@/lib/toastService';
 import { supabase } from '@/lib/supabase';
+import { notificationsService } from '@/services/notifications.service';
 
 // Import unified types from education_experience.types.ts
 import type {
@@ -43,6 +42,8 @@ import {
   getFilteredTimeOptions,
   compareTimes,
 } from './utils';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Calendar, Clock } from 'lucide-react-native';
 
 // Local types (only what's not in database.types.ts)
 interface Availability {
@@ -95,6 +96,7 @@ export default function BecomeProfessionalScreen() {
   >({
     availableAt: 'every',
     days: [],
+    date: undefined,
     startHour: '',
     endHour: '',
     pricePerMinute: '',
@@ -458,6 +460,14 @@ export default function BecomeProfessionalScreen() {
             'Your professional profile has been created successfully. Welcome aboard!',
         });
 
+        // Send congratulatory push notification
+        await notificationsService.sendPushNotification(
+          dbUser.id,
+          'Congratulations! You are now a Professional 🌟',
+          'Your profile is live. You can now start receiving calls and earning money. Good luck!',
+          { type: 'system', action_url: 'talkee://profile' }
+        );
+
         // Reset all form states after successful save/update
         setFullName('');
         setEmail('');
@@ -741,6 +751,7 @@ export default function BecomeProfessionalScreen() {
           />
         )}
       </View>
+
 
       {/* Availability Modal */}
       {showAvailabilityModal && (
@@ -1618,6 +1629,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
 });
+
 
 const availabilityModalStyles = StyleSheet.create({
   modalOverlay: {

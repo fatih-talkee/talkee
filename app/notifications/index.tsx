@@ -1,26 +1,76 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  FlatList,
+  Image,
+  ActivityIndicator,
+} from 'react-native';
 import { router } from 'expo-router';
-import { ArrowLeft, Bell, Phone, MessageSquare, Calendar, CreditCard, Gift, Settings, Check } from 'lucide-react-native';
+import {
+  Bell,
+  Phone,
+  MessageSquare,
+  Calendar,
+  CreditCard,
+  Gift,
+  Settings,
+  Check,
+  Star,
+} from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { TabButtons } from '@/components/ui/TabButtons';
 import { useTheme } from '@/contexts/ThemeContext';
-import { mockNotifications, Notification } from '@/mockData/professionals';
 import { useToast } from '@/lib/toastService';
+import {
+  useNotifications,
+  useMarkAsRead,
+  useMarkAllAsRead,
+} from '@/hooks/useNotifications';
+import type { Notification } from '@/types/database.types';
+import { logger } from '@/lib/logger';
+
+// Extended notification type with professional info
+interface NotificationWithProfessional extends Notification {
+  professional?: {
+    id: string;
+    name: string;
+    avatar_url: string | null;
+  };
+}
 
 export default function NotificationsScreen() {
   const { theme } = useTheme();
   const toast = useToast();
-  const [notifications, setNotifications] = useState(mockNotifications);
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'unread'>('all');
-  const [expandedNotifications, setExpandedNotifications] = useState<Set<string>>(new Set());
+  const [expandedNotifications, setExpandedNotifications] = useState<
+    Set<string>
+  >(new Set());
 
-  const filteredNotifications = notifications.filter(notification => {
-    return selectedFilter === 'all' || !notification.isRead;
-  });
+  // Fetch notifications from API
+  const {
+    data: notifications = [],
+    isLoading,
+    error,
+    refetch,
+  } = useNotifications(100, 0);
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const markAsReadMutation = useMarkAsRead();
+  const markAllAsReadMutation = useMarkAllAsRead();
+
+  const filteredNotifications = useMemo(() => {
+    return notifications.filter((notification) => {
+      return selectedFilter === 'all' || !notification.is_read;
+    });
+  }, [notifications, selectedFilter]);
+
+  const unreadCount = useMemo(() => {
+    return notifications.filter((n) => !n.is_read).length;
+  }, [notifications]);
 
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -41,18 +91,18 @@ export default function NotificationsScreen() {
   const getNotificationIcon = (type: string) => {
     const iconSize = 20;
     const iconColor = theme.colors.primary;
-    
+
     switch (type) {
-      case 'call':
+      case 'call_request':
+      case 'call_started':
+      case 'call_ended':
         return <Phone size={iconSize} color={iconColor} />;
       case 'message':
         return <MessageSquare size={iconSize} color={iconColor} />;
-      case 'appointment':
-        return <Calendar size={iconSize} color={iconColor} />;
+      case 'review':
+        return <Star size={iconSize} color={iconColor} />;
       case 'payment':
         return <CreditCard size={iconSize} color={iconColor} />;
-      case 'promotion':
-        return <Gift size={iconSize} color={iconColor} />;
       case 'system':
         return <Settings size={iconSize} color={iconColor} />;
       default:
@@ -62,16 +112,16 @@ export default function NotificationsScreen() {
 
   const getNotificationColor = (type: string) => {
     switch (type) {
-      case 'call':
+      case 'call_request':
+      case 'call_started':
+      case 'call_ended':
         return theme.colors.primary;
       case 'message':
-        return theme.colors.info;
-      case 'appointment':
-        return theme.colors.accent;
+        return theme.colors.info || '#3B82F6';
+      case 'review':
+        return '#F59E0B';
       case 'payment':
-        return theme.colors.success;
-      case 'promotion':
-        return '#FF6B35';
+        return theme.colors.success || '#10B981';
       case 'system':
         return theme.colors.textMuted;
       default:
@@ -79,8 +129,32 @@ export default function NotificationsScreen() {
     }
   };
 
+  const getInitials = (name: string): string => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const getAvatarColor = (name: string): string => {
+    const colors = [
+      '#FF6B6B',
+      '#4ECDC4',
+      '#45B7D1',
+      '#FFA07A',
+      '#98D8C8',
+      '#F7DC6F',
+      '#BB8FCE',
+      '#85C1E2',
+    ];
+    const index = name.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
+
   const toggleExpand = (notificationId: string) => {
-    setExpandedNotifications(prev => {
+    setExpandedNotifications((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(notificationId)) {
         newSet.delete(notificationId);
@@ -91,85 +165,162 @@ export default function NotificationsScreen() {
     });
   };
 
-  const handleNotificationPress = (notification: Notification) => {
-    // Mark as read
-    setNotifications(prev => 
-      prev.map(n => n.id === notification.id ? { ...n, isRead: true } : n)
-    );
+  const handleNotificationPress = async (notification: Notification) => {
+    // Mark as read if not already read
+    if (!notification.is_read) {
+      try {
+        await markAsReadMutation.mutateAsync(notification.id);
+        logger.userAction('notification_read', {
+          notificationId: notification.id,
+          type: notification.type,
+        });
+      } catch (error) {
+        logger.error('Failed to mark notification as read', error);
+      }
+    }
 
-    // Navigate based on action URL
-    if (notification.actionUrl) {
-      router.push(notification.actionUrl as any);
+    // Navigate based on notification type and data
+    const professionalId = notification.data?.professional_id;
+    if (professionalId) {
+      router.push(`/professional/${professionalId}` as any);
+    } else if (notification.data?.action_url) {
+      router.push(notification.data.action_url as any);
     }
   };
 
-  const handleMarkAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-    toast.success({
-      title: 'All Read',
-      message: 'All notifications marked as read',
-    });
+  const handleMarkAllAsRead = async () => {
+    try {
+      await markAllAsReadMutation.mutateAsync();
+      toast.success({
+        title: 'All Read',
+        message: 'All notifications marked as read',
+      });
+      logger.userAction('notifications_mark_all_read');
+    } catch (error) {
+      logger.error('Failed to mark all notifications as read', error);
+      toast.error({
+        title: 'Error',
+        message: 'Failed to mark all notifications as read',
+      });
+    }
   };
 
   const isLongText = (text: string) => {
-    return text.length > 100; // Adjust threshold as needed
+    return text.length > 100;
   };
 
-  const renderNotificationItem = ({ item }: { item: Notification }) => {
+  const renderNotificationItem = ({
+    item,
+  }: {
+    item: NotificationWithProfessional;
+  }) => {
     const isExpanded = expandedNotifications.has(item.id);
     const messageIsLong = isLongText(item.message);
     const shouldShowExpand = messageIsLong && !isExpanded;
-    
+    const professional = item.professional;
+    const professionalAvatar = professional?.avatar_url;
+
     return (
-      <Card style={[styles.notificationCard, { backgroundColor: theme.colors.card }]}>
-        <TouchableOpacity 
+      <Card
+        style={[
+          styles.notificationCard,
+          { backgroundColor: theme.colors.card },
+        ]}
+      >
+        <TouchableOpacity
           style={styles.notificationItem}
           onPress={() => handleNotificationPress(item)}
         >
           {/* Icon */}
-          <View style={[styles.iconContainer, { backgroundColor: getNotificationColor(item.type) + '20' }]}>
+          <View
+            style={[
+              styles.iconContainer,
+              { backgroundColor: getNotificationColor(item.type) + '20' },
+            ]}
+          >
             {getNotificationIcon(item.type)}
           </View>
 
           {/* Content */}
           <View style={styles.contentContainer}>
             <View style={styles.headerRow}>
-              <Text style={[styles.title, { color: theme.colors.text }]}>{item.title}</Text>
-              {!item.isRead && <View style={[styles.unreadDot, { backgroundColor: theme.colors.primary }]} />}
+              <Text style={[styles.title, { color: theme.colors.text }]}>
+                {item.title}
+              </Text>
+              {!item.is_read && (
+                <View
+                  style={[
+                    styles.unreadDot,
+                    { backgroundColor: theme.colors.primary },
+                  ]}
+                />
+              )}
             </View>
-            
-            <Text 
-              style={[styles.message, { color: theme.colors.textMuted }]} 
+
+            <Text
+              style={[styles.message, { color: theme.colors.textMuted }]}
               numberOfLines={isExpanded ? undefined : 2}
             >
               {item.message}
             </Text>
 
             {shouldShowExpand && (
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={(e) => {
                   e.stopPropagation();
                   toggleExpand(item.id);
                 }}
                 style={styles.viewAllButton}
               >
-                <Text style={[styles.viewAllText, { color: theme.colors.primary }]}>
+                <Text
+                  style={[styles.viewAllText, { color: theme.colors.primary }]}
+                >
                   View all
                 </Text>
               </TouchableOpacity>
             )}
-            
+
             <Text style={[styles.timestamp, { color: theme.colors.textMuted }]}>
-              {formatTimestamp(item.timestamp)}
+              {formatTimestamp(item.created_at)}
             </Text>
           </View>
 
           {/* Professional Avatar (if applicable) */}
-          {item.professional && (
-            <Image 
-              source={{ uri: item.professional.avatar }} 
-              style={styles.avatar} 
-            />
+          {professional && (
+            <>
+              {(() => {
+                const hasValidAvatar =
+                  professionalAvatar &&
+                  typeof professionalAvatar === 'string' &&
+                  professionalAvatar.trim() !== '' &&
+                  !professionalAvatar.includes('placeholder') &&
+                  !professionalAvatar.includes('via.placeholder');
+
+                return hasValidAvatar ? (
+                  <Image
+                    source={{ uri: professionalAvatar }}
+                    style={styles.avatar}
+                    onError={() => {
+                      logger.warn('Failed to load professional avatar', {
+                        professionalId: professional.id,
+                      });
+                    }}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.avatar,
+                      styles.avatarInitials,
+                      { backgroundColor: getAvatarColor(professional.name) },
+                    ]}
+                  >
+                    <Text style={styles.avatarInitialsText}>
+                      {getInitials(professional.name)}
+                    </Text>
+                  </View>
+                );
+              })()}
+            </>
           )}
         </TouchableOpacity>
       </Card>
@@ -181,19 +332,69 @@ export default function NotificationsScreen() {
     { key: 'unread', label: 'Unread', count: unreadCount },
   ];
 
+  if (isLoading) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <Header showLogo showBack />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
+            Loading notifications...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <Header showLogo showBack />
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: theme.colors.error }]}>
+            Failed to load notifications
+          </Text>
+          <TouchableOpacity
+            onPress={() => refetch()}
+            style={[
+              styles.retryButton,
+              { backgroundColor: theme.colors.primary },
+            ]}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Header 
-        showLogo 
-        showBack 
-        
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <Header
+        showLogo
+        showBack
         rightButton={
           unreadCount > 0 && (
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={handleMarkAllAsRead}
+              disabled={markAllAsReadMutation.isPending}
               style={[
                 styles.markAllButton,
-                { backgroundColor: theme.name === 'dark' ? theme.colors.surface : theme.name === 'light' ? theme.colors.brandPink : '#000000' },
+                {
+                  backgroundColor:
+                    theme.name === 'dark'
+                      ? theme.colors.surface
+                      : theme.name === 'light'
+                      ? theme.colors.brandPink
+                      : '#000000',
+                  opacity: markAllAsReadMutation.isPending ? 0.6 : 1,
+                },
               ]}
             >
               <Check size={20} color="#FFFFFF" />
@@ -217,17 +418,20 @@ export default function NotificationsScreen() {
         renderItem={renderNotificationItem}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshing={isLoading}
+        onRefresh={refetch}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Bell size={48} color={theme.colors.textMuted} />
             <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
-              {selectedFilter === 'unread' ? 'No Unread Notifications' : 'No Notifications'}
+              {selectedFilter === 'unread'
+                ? 'No Unread Notifications'
+                : 'No Notifications'}
             </Text>
             <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
-              {selectedFilter === 'unread' 
-                ? 'You\'re all caught up!'
-                : 'Your notifications will appear here'
-              }
+              {selectedFilter === 'unread'
+                ? "You're all caught up!"
+                : 'Your notifications will appear here'}
             </Text>
           </View>
         }
@@ -239,6 +443,38 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    padding: 24,
+  },
+  errorText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    textAlign: 'center',
+  },
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
   },
   markAllButton: {
     flexDirection: 'row',
@@ -315,6 +551,15 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginLeft: 12,
   },
+  avatarInitials: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitialsText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+  },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -334,4 +579,3 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
 });
-

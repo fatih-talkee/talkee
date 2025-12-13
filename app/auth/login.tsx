@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { Link, router } from 'expo-router';
 import { Phone, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react-native';
+import { signInWithGoogle } from '@/utils/GoogleAuth';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskInput from 'react-native-mask-input';
 import { Input } from '@/components/ui/Input';
@@ -204,25 +205,46 @@ export default function LoginScreen() {
     setSocialLoading(provider);
 
     try {
-      const redirectUrl =
-        Platform.OS === 'web' && typeof window !== 'undefined'
-          ? `${window.location.origin}/auth/callback`
-          : 'talkee://auth/callback';
+      if (provider === 'google') {
+        // Use modal presentation
+        const result = await signInWithGoogle();
 
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: redirectUrl,
-        },
-      });
+        if (result.success) {
+          toast.success({
+            title: 'Welcome!',
+            message: 'Successfully logged in with Google',
+          });
+          // Navigate to home
+          router.replace('/(tabs)/');
+        } else if (result.cancelled) {
+          toast.info({
+            title: 'Cancelled',
+            message: 'Google sign-in was cancelled',
+          });
+        } else if (result.error) {
+          toast.error({
+            title: 'Login Failed',
+            message: result.error,
+          });
+        }
+      } else {
+        // Facebook & LinkedIn - existing flow
+        const redirectUrl =
+          Platform.OS === 'web' && typeof window !== 'undefined'
+            ? `${window.location.origin}/auth/callback`
+            : 'talkee://auth/callback';
 
-      if (error) {
-        toast.error({
-          title: 'Login Failed',
-          message: error.message || `Failed to login with ${provider}`,
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: redirectUrl,
+          },
         });
+
+        if (error) throw error;
       }
     } catch (error: any) {
+      console.error(`${provider} error:`, error);
       toast.error({
         title: 'Error',
         message: 'An unexpected error occurred. Please try again.',

@@ -22,6 +22,7 @@ import { useFeaturedProfessionals } from '@/hooks/useProfessionals';
 import { usePopularCategories } from '@/hooks/useCategories';
 import { useFeaturedPromotions } from '@/hooks/usePromotions';
 import { useProfile } from '@/hooks/useProfile';
+import { useUnreadCount } from '@/hooks/useNotifications';
 import { ProfessionalWithRelations } from '@/types/database.types';
 
 // ✅ TYPE ADAPTERS (not needed here, ProfessionalCard uses ProfessionalWithRelations directly)
@@ -51,8 +52,8 @@ export default function HomeScreen() {
   const categories = categoriesData;
   const promotions = promotionsData;
 
-  // ✅ Dummy unread notification count (will be replaced with real data later)
-  const unreadNotificationCount = 3;
+  // ✅ Get unread notification count from API
+  const { data: unreadNotificationCount = 0 } = useUnreadCount();
 
   return (
     <SafeAreaView

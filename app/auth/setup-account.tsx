@@ -28,6 +28,7 @@ import { Input } from '@/components/ui/Input';
 import { useTheme } from '@/contexts/ThemeContext';
 import { mockCategories } from '@/mockData/professionals';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { usersService, notificationsService } from '@/services';
 
 export default function SetupAccountScreen() {
   const { theme } = useTheme();
@@ -69,11 +70,30 @@ export default function SetupAccountScreen() {
     }
   };
 
-  const handleSkip = () => {
+  const sendWelcomeNotification = async () => {
+    try {
+      const currentUser = await usersService.getCurrentUser();
+      if (currentUser) {
+        await notificationsService.sendPushNotification(
+          currentUser.id,
+          'Welcome to Talkee! 🎉',
+          'We are excited to have you here. Start exploring professionals or become one yourself!',
+          { type: 'system', action_url: 'talkee://home' }
+        );
+      }
+    } catch (error) {
+      console.error('Error sending welcome notification', error);
+    }
+  };
+
+  const handleSkip = async () => {
+    await sendWelcomeNotification();
     router.replace('/(tabs)');
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
+    // TODO: Save user profile data (interests, bio, etc.)
+    await sendWelcomeNotification();
     router.replace('/(tabs)');
   };
 

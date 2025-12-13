@@ -1,6 +1,7 @@
 // metro.config.js — Expo projeleri için
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
+const fs = require('fs');
 
 // Get the default config
 const config = getDefaultConfig(__dirname);
@@ -45,7 +46,39 @@ config.resolver.extraNodeModules = {
   'missing-asset-registry-path': shimPath,
 };
 
-// ✅ Custom resolver for missing-asset-registry-path
+// ✅ Fix for Stripe React Native on web (native-only module)
+// Create web mock file for Stripe
+const stripeMockDir = path.resolve(projectRoot, 'lib', 'mocks');
+const stripeMockFile = path.join(stripeMockDir, 'stripe-web-mock.js');
+
+// Create mock directory if it doesn't exist
+if (!fs.existsSync(stripeMockDir)) {
+  fs.mkdirSync(stripeMockDir, { recursive: true });
+}
+
+// Create mock file if it doesn't exist
+if (!fs.existsSync(stripeMockFile)) {
+  fs.writeFileSync(
+    stripeMockFile,
+    `// Web mock for @stripe/stripe-react-native (native-only)
+// This file is used when building for web platform
+module.exports = {
+  useStripe: () => null,
+  useApplePay: () => null,
+  useGooglePay: () => null,
+  initPaymentSheet: () => Promise.resolve({ error: null }),
+  presentPaymentSheet: () => Promise.resolve({ error: null }),
+  confirmPayment: () => Promise.resolve({ error: null }),
+  createPaymentMethod: () => Promise.resolve({ error: null }),
+  retrievePaymentIntent: () => Promise.resolve({ error: null }),
+  handleURLCallback: () => Promise.resolve(false),
+  isPlatformPaySupported: () => Promise.resolve(false),
+};
+`
+  );
+}
+
+// ✅ Custom resolver for missing-asset-registry-path and Stripe
 const originalResolveRequest = config.resolver.resolveRequest;
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
@@ -55,6 +88,14 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     return {
       type: 'sourceFile',
       filePath: modulePath,
+    };
+  }
+
+  // Handle Stripe React Native on web (return mock)
+  if (platform === 'web' && moduleName === '@stripe/stripe-react-native') {
+    return {
+      type: 'sourceFile',
+      filePath: stripeMockFile,
     };
   }
 

@@ -2,6 +2,7 @@
 
 import { supabase } from '../lib/supabase';
 import { usersService } from './supabase/user.service';
+import { notificationsService } from './notifications.service';
 import type {
   Call,
   CallWithRelations,
@@ -47,7 +48,7 @@ class CallsService {
       // Get professional details to get rate
       const { data: professional, error: profError } = await supabase
         .from('professionals')
-        .select('id, rate_per_minute, is_available') // ✅ Restored is_available
+        .select('id, user_id, rate_per_minute, is_available') // ✅ Restored is_available
         .eq('id', professionalId)
         .single();
 
@@ -104,6 +105,21 @@ class CallsService {
         console.error('Error creating call:', error);
         throw new Error(`Failed to create call: ${error.message}`);
       }
+
+      // Send push notification to professional
+      // We don't await this so it doesn't block the UI
+      notificationsService.sendPushNotification(
+        professional.user_id,
+        'Incoming Call',
+        `${currentUser.name || 'Someone'} is calling you...`,
+        {
+          type: 'call_request',
+          call_id: data.id,
+          caller_id: currentUser.id,
+          caller_name: currentUser.name,
+          call_type: callType,
+        }
+      ).catch(err => console.error('Error sending call notification:', err));
 
       return data as CallWithRelations;
     } catch (error) {

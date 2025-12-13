@@ -2,13 +2,16 @@ import { supabase } from '../lib/supabase';
 import { usersService } from './supabase/user.service';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   Notification,
   NotificationInsert,
   NotificationType,
 } from '../types/database.types';
 import { NotificationBehavior } from 'expo-notifications';
+import { logger } from '../lib/logger';
 
 // NotificationSettings is already in database.types.ts
 export type { NotificationSettings } from '../types/database.types';
@@ -62,13 +65,66 @@ class NotificationsService {
 
       return token;
     } catch (error) {
-      console.error('Error initializing notifications:', error);
+      logger.error('Error initializing notifications', error);
       return null;
     }
   }
 
   /**
+   * Get or create device identifier
+   * Uses AsyncStorage to persist device ID across app sessions
+   */
+  private async getDeviceIdentifier(): Promise<string> {
+    try {
+      const storageKey = '@talkee_device_id';
+      let deviceId = await AsyncStorage.getItem(storageKey);
+
+      if (!deviceId) {
+        // Generate a unique device identifier
+        // Combine device info with a random component
+        const deviceInfo = `${Platform.OS}-${Device.modelName || 'unknown'}-${
+          Device.osName || 'unknown'
+        }-${Device.osVersion || 'unknown'}`;
+        const randomComponent = Math.random().toString(36).substring(2, 15);
+        deviceId = `${deviceInfo}-${randomComponent}`;
+
+        // Store for future use
+        await AsyncStorage.setItem(storageKey, deviceId);
+      }
+
+      return deviceId;
+    } catch (error) {
+      logger.error('Error getting device identifier', error);
+      // Fallback to a simple identifier
+      return `${Platform.OS}-${Date.now()}`;
+    }
+  }
+
+  /**
+   * Get device name for display
+   */
+  private getDeviceName(): string {
+    try {
+      const modelName = Device.modelName || 'Unknown Device';
+      const brand = Device.brand || '';
+      const osName = Device.osName || Platform.OS;
+      const osVersion = Device.osVersion || '';
+
+      if (brand && brand !== modelName) {
+        return `${brand} ${modelName} (${osName} ${osVersion})`;
+      }
+      return `${modelName} (${osName} ${osVersion})`;
+    } catch (error) {
+      return `${Platform.OS} Device`;
+    }
+  }
+
+  /**
    * Save push token to database
+   * Supports multiple devices per user:
+   * - Each device gets its own token entry
+   * - Same device with new token: updates existing or creates new entry
+   * - Old tokens for same device are marked inactive
    */
   private async savePushToken(token: string): Promise<void> {
     try {
@@ -78,21 +134,91 @@ class NotificationsService {
         return;
       }
 
-      // Note: user_devices table doesn't exist in current schema
-      // You may need to create this table or store token differently
-      await supabase.from('user_devices').upsert({
-        user_id: currentUser.id,
-        push_token: token,
-        platform: Platform.OS,
-        updated_at: new Date().toISOString(),
-      });
+      const deviceId = await this.getDeviceIdentifier();
+      const deviceName = this.getDeviceName();
+      const appVersion = Constants.expoConfig?.version || '1.0.0';
+
+      // Check if this device already has a token (same device_id)
+      const { data: existingDevices, error: fetchError } = await supabase
+        .from('user_devices')
+        .select('id, push_token, is_active')
+        .eq('user_id', currentUser.id)
+        .eq('device_id', deviceId)
+        .order('updated_at', { ascending: false });
+
+      if (fetchError) {
+        logger.error('Error fetching existing devices', fetchError);
+      }
+
+      // If same device has different token, mark old tokens as inactive
+      if (existingDevices && existingDevices.length > 0) {
+        const activeDevices = existingDevices.filter((d) => d.is_active);
+        const hasDifferentToken = activeDevices.some(
+          (d) => d.push_token !== token
+        );
+
+        if (hasDifferentToken) {
+          // Mark old tokens for this device as inactive
+          const oldTokenIds = activeDevices
+            .filter((d) => d.push_token !== token)
+            .map((d) => d.id);
+
+          if (oldTokenIds.length > 0) {
+            const { error: deactivateError } = await supabase
+              .from('user_devices')
+              .update({
+                is_active: false,
+                updated_at: new Date().toISOString(),
+              })
+              .in('id', oldTokenIds);
+
+            if (deactivateError) {
+              logger.error('Error deactivating old tokens', deactivateError);
+            } else {
+              logger.info('Deactivated old tokens for device', {
+                deviceId,
+                count: oldTokenIds.length,
+              });
+            }
+          }
+        }
+      }
+
+      // Upsert device token (update if exists, insert if new)
+      // Unique constraint: (user_id, push_token) allows multiple devices per user
+      const { error: upsertError } = await supabase.from('user_devices').upsert(
+        {
+          user_id: currentUser.id,
+          push_token: token,
+          platform: Platform.OS,
+          device_id: deviceId,
+          device_name: deviceName,
+          app_version: appVersion,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: 'user_id,push_token',
+        }
+      );
+
+      if (upsertError) {
+        logger.error('Error upserting push token', upsertError);
+        // Don't throw - token saving is not critical for app functionality
+      } else {
+        logger.info('Push token saved successfully', {
+          platform: Platform.OS,
+          deviceId,
+          userId: currentUser.id,
+        });
+      }
     } catch (error) {
-      console.error('Error saving push token:', error);
+      logger.error('Error saving push token', error);
     }
   }
 
   /**
-   * Get user's notifications
+   * Get user's notifications with professional info
    */
   async getNotifications(
     limit: number = 20,
@@ -105,6 +231,7 @@ class NotificationsService {
         return [];
       }
 
+      // Get notifications with professional info if professional_id exists in data
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
@@ -113,13 +240,73 @@ class NotificationsService {
         .range(offset, offset + limit - 1);
 
       if (error) {
-        console.error('Error fetching notifications:', error);
+        logger.error('Error fetching notifications', error);
         throw new Error(`Failed to fetch notifications: ${error.message}`);
       }
 
-      return (data || []) as Notification[];
+      if (!data || data.length === 0) {
+        return [];
+      }
+
+      // Get unique professional IDs from notification data
+      const professionalIds = new Set<string>();
+      data.forEach((notification) => {
+        const professionalId = notification.data?.professional_id;
+        if (professionalId) {
+          professionalIds.add(professionalId);
+        }
+      });
+
+      // Fetch professional info if needed
+      let professionalsMap: Map<
+        string,
+        { name: string; avatar_url: string | null }
+      > = new Map();
+
+      if (professionalIds.size > 0) {
+        const { data: professionalsData, error: professionalsError } =
+          await supabase
+            .from('professionals')
+            .select(
+              `
+            id,
+            users!inner(id, name, avatar_url)
+            `
+            )
+            .in('id', Array.from(professionalIds));
+
+        if (!professionalsError && professionalsData) {
+          professionalsData.forEach((prof: any) => {
+            if (prof.users) {
+              professionalsMap.set(prof.id, {
+                name: prof.users.name || 'Professional',
+                avatar_url: prof.users.avatar_url,
+              });
+            }
+          });
+        }
+      }
+
+      // Enrich notifications with professional info
+      const enrichedNotifications = data.map((notification) => {
+        const professionalId = notification.data?.professional_id;
+        if (professionalId && professionalsMap.has(professionalId)) {
+          const professional = professionalsMap.get(professionalId)!;
+          return {
+            ...notification,
+            professional: {
+              id: professionalId,
+              name: professional.name,
+              avatar_url: professional.avatar_url,
+            },
+          };
+        }
+        return notification;
+      });
+
+      return enrichedNotifications as Notification[];
     } catch (error) {
-      console.error('Error in getNotifications:', error);
+      logger.error('Error in getNotifications', error);
       return [];
     }
   }
@@ -142,13 +329,13 @@ class NotificationsService {
         .eq('is_read', false);
 
       if (error) {
-        console.error('Error fetching unread count:', error);
+        logger.error('Error fetching unread count', error);
         return 0;
       }
 
       return count || 0;
     } catch (error) {
-      console.error('Error in getUnreadCount:', error);
+      logger.error('Error in getUnreadCount', error);
       return 0;
     }
   }
@@ -164,13 +351,13 @@ class NotificationsService {
         .eq('id', notificationId);
 
       if (error) {
-        console.error('Error marking notification as read:', error);
+        logger.error('Error marking notification as read', error);
         throw new Error(`Failed to mark as read: ${error.message}`);
       }
 
       return true;
     } catch (error) {
-      console.error('Error in markAsRead:', error);
+      logger.error('Error in markAsRead', error);
       throw error;
     }
   }
@@ -193,13 +380,13 @@ class NotificationsService {
         .eq('is_read', false);
 
       if (error) {
-        console.error('Error marking all as read:', error);
+        logger.error('Error marking all as read', error);
         throw new Error(`Failed to mark all as read: ${error.message}`);
       }
 
       return true;
     } catch (error) {
-      console.error('Error in markAllAsRead:', error);
+      logger.error('Error in markAllAsRead', error);
       throw error;
     }
   }
@@ -222,13 +409,13 @@ class NotificationsService {
         .eq('user_id', currentUser.id);
 
       if (error) {
-        console.error('Error deleting notification:', error);
+        logger.error('Error deleting notification', error);
         throw new Error(`Failed to delete notification: ${error.message}`);
       }
 
       return true;
     } catch (error) {
-      console.error('Error in deleteNotification:', error);
+      logger.error('Error in deleteNotification', error);
       throw error;
     }
   }
@@ -250,13 +437,13 @@ class NotificationsService {
         .eq('user_id', currentUser.id);
 
       if (error) {
-        console.error('Error deleting all notifications:', error);
+        logger.error('Error deleting all notifications', error);
         throw new Error(`Failed to delete all notifications: ${error.message}`);
       }
 
       return true;
     } catch (error) {
-      console.error('Error in deleteAllNotifications:', error);
+      logger.error('Error in deleteAllNotifications', error);
       throw error;
     }
   }
@@ -284,7 +471,7 @@ class NotificationsService {
         trigger: null, // Send immediately
       });
     } catch (error) {
-      console.error('Error sending local notification:', error);
+      logger.error('Error sending local notification', error);
     }
   }
 
@@ -314,7 +501,7 @@ class NotificationsService {
         promotional_notifications: false,
       };
     } catch (error) {
-      console.error('Error in getSettings:', error);
+      logger.error('Error in getSettings', error);
       return {
         push_enabled: true,
         call_notifications: true,
@@ -343,7 +530,7 @@ class NotificationsService {
       // TODO: Implement when notification_settings table is created
       return true;
     } catch (error) {
-      console.error('Error in updateSettings:', error);
+      logger.error('Error in updateSettings', error);
       throw error;
     }
   }
@@ -407,8 +594,50 @@ class NotificationsService {
     // Handle notification tap
     Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data;
-      // Handle navigation based on notification type
-      // TODO: Implement navigation logic
+
+      // Log notification tap
+      logger.userAction('notification_tapped', {
+        notificationId: data?.notification_id,
+        type: data?.type,
+      });
+
+      // Handle navigation based on notification data
+      // Navigation will be handled by the app using Linking API
+      // The app can listen to deep links and navigate accordingly
+      if (data?.professional_id) {
+        // Navigate to professional profile
+        const { Linking } = require('react-native');
+        Linking.openURL(`talkee://professional/${data.professional_id}`).catch(
+          (err: Error) => {
+            logger.error('Failed to open professional link', err);
+          }
+        );
+      } else if (data?.action_url) {
+        // Navigate to action URL
+        const { Linking } = require('react-native');
+        Linking.openURL(data.action_url).catch((err: Error) => {
+          logger.error('Failed to open action URL', err);
+        });
+      } else if (
+        data?.type === 'call_request' ||
+        data?.type === 'call_started'
+      ) {
+        // Navigate to call screen if call_id exists
+        if (data?.call_id) {
+          const { Linking } = require('react-native');
+          Linking.openURL(`talkee://call/${data.call_id}`).catch(
+            (err: Error) => {
+              logger.error('Failed to open call link', err);
+            }
+          );
+        }
+      } else {
+        // Default: Navigate to notifications screen
+        const { Linking } = require('react-native');
+        Linking.openURL('talkee://notifications').catch((err: Error) => {
+          logger.error('Failed to open notifications link', err);
+        });
+      }
     });
   }
 
@@ -439,14 +668,218 @@ class NotificationsService {
         .single();
 
       if (error) {
-        console.error('Error creating notification:', error);
+        logger.error('Error creating notification', error);
         throw new Error(`Failed to create notification: ${error.message}`);
       }
 
       return notification as Notification;
     } catch (error) {
-      console.error('Error in createNotification:', error);
+      logger.error('Error in createNotification', error);
       throw error;
+    }
+  }
+
+  /**
+   * Get user's active device tokens
+   * Used for sending push notifications to all user devices
+   */
+  async getUserDeviceTokens(userId: string): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from('user_devices')
+        .select('push_token')
+        .eq('user_id', userId)
+        .eq('is_active', true);
+
+      if (error) {
+        logger.error('Error fetching user device tokens', error);
+        return [];
+      }
+
+      return (data || []).map((device) => device.push_token);
+    } catch (error) {
+      logger.error('Error in getUserDeviceTokens', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get all devices for current user
+   */
+  async getUserDevices(): Promise<
+    Array<{
+      id: string;
+      push_token: string;
+      platform: string;
+      device_name: string | null;
+      device_id: string | null;
+      is_active: boolean;
+      created_at: string;
+      updated_at: string;
+    }>
+  > {
+    try {
+      const currentUser = await usersService.getCurrentUser();
+
+      if (!currentUser) {
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from('user_devices')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        logger.error('Error fetching user devices', error);
+        return [];
+      }
+
+      return (data || []) as Array<{
+        id: string;
+        push_token: string;
+        platform: string;
+        device_name: string | null;
+        device_id: string | null;
+        is_active: boolean;
+        created_at: string;
+        updated_at: string;
+      }>;
+    } catch (error) {
+      logger.error('Error in getUserDevices', error);
+      return [];
+    }
+  }
+
+  /**
+   * Remove/Deactivate a device token
+   */
+  async removeDeviceToken(deviceId: string): Promise<boolean> {
+    try {
+      const currentUser = await usersService.getCurrentUser();
+
+      if (!currentUser) {
+        throw new Error('Not authenticated');
+      }
+
+      const { error } = await supabase
+        .from('user_devices')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('id', deviceId)
+        .eq('user_id', currentUser.id);
+
+      if (error) {
+        logger.error('Error removing device token', error);
+        throw new Error(`Failed to remove device: ${error.message}`);
+      }
+
+      return true;
+    } catch (error) {
+      logger.error('Error in removeDeviceToken', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clean up inactive device tokens (older than 30 days)
+   */
+  async cleanupInactiveTokens(): Promise<boolean> {
+    try {
+      const currentUser = await usersService.getCurrentUser();
+
+      if (!currentUser) {
+        throw new Error('Not authenticated');
+      }
+
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const { error } = await supabase
+        .from('user_devices')
+        .delete()
+        .eq('user_id', currentUser.id)
+        .eq('is_active', false)
+        .lt('updated_at', thirtyDaysAgo.toISOString());
+
+      if (error) {
+        logger.error('Error cleaning up inactive tokens', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      logger.error('Error in cleanupInactiveTokens', error);
+      throw error;
+    }
+  }
+
+  /*
+   * Send push notification via Supabase Edge Function
+   */
+  async sendPushNotification(
+    userId: string,
+    title: string,
+    body: string,
+    data?: Record<string, any>,
+    channelId?: string
+  ): Promise<boolean> {
+    try {
+      const { data: response, error } = await supabase.functions.invoke(
+        'send-push',
+        {
+          body: {
+            user_id: userId,
+            title,
+            body,
+            data,
+            channelId,
+            sound: 'default',
+            priority: 'high',
+          },
+        }
+      );
+
+      if (error) {
+        logger.error('Error invoking send-push function', error);
+        return false;
+      }
+
+      if (!response?.success) {
+        logger.warn('Push notification sent with errors', response);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      logger.error('Error in sendPushNotification', error);
+      return false; // Don't throw, just return false
+    }
+  }
+
+  /**
+   * Send batch push notifications to multiple users
+   */
+  async sendBatchPushNotifications(
+    userIds: string[],
+    title: string,
+    body: string,
+    data?: Record<string, any>
+  ): Promise<boolean> {
+    try {
+      // Since our current send-push function handles one user_id at a time,
+      // we'll iterate and send individual requests for now.
+      // Ideally, the Edge Function should be updated to accept an array of user_ids for better performance.
+      
+      const promises = userIds.map(userId => 
+        this.sendPushNotification(userId, title, body, data)
+      );
+      
+      await Promise.allSettled(promises);
+      return true;
+    } catch (error) {
+      logger.error('Error in sendBatchPushNotifications', error);
+      return false;
     }
   }
 
@@ -473,13 +906,13 @@ class NotificationsService {
         .limit(limit);
 
       if (error) {
-        console.error('Error fetching notifications by type:', error);
+        logger.error('Error fetching notifications by type', error);
         return [];
       }
 
       return (data || []) as Notification[];
     } catch (error) {
-      console.error('Error in getNotificationsByType:', error);
+      logger.error('Error in getNotificationsByType', error);
       return [];
     }
   }
@@ -505,13 +938,13 @@ class NotificationsService {
         .lt('created_at', thirtyDaysAgo.toISOString());
 
       if (error) {
-        console.error('Error clearing old notifications:', error);
+        logger.error('Error clearing old notifications', error);
         throw new Error(`Failed to clear old notifications: ${error.message}`);
       }
 
       return true;
     } catch (error) {
-      console.error('Error in clearOldNotifications:', error);
+      logger.error('Error in clearOldNotifications', error);
       throw error;
     }
   }

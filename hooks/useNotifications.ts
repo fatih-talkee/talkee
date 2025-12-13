@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { handleError } from '@/lib/errorHandler';
 import { logger } from '@/lib/logger';
 import { notificationsService } from '@/services';
-import type { Notification } from '@/types';
+import type { Notification } from '@/types/database.types';
 
 /**
  * Get notifications for current user
@@ -15,7 +15,10 @@ export function useNotifications(limit: number = 50, offset: number = 0) {
     queryKey: ['notifications', limit, offset],
     queryFn: async (): Promise<Notification[]> => {
       try {
-        const notifications = await notificationsService.getNotifications(limit, offset);
+        const notifications = await notificationsService.getNotifications(
+          limit,
+          offset
+        );
         return notifications;
       } catch (error) {
         handleError(error, { title: 'Failed to fetch notifications' });
@@ -82,13 +85,57 @@ export function useMarkAllAsRead() {
       try {
         await notificationsService.markAllAsRead();
       } catch (error) {
-        handleError(error, { title: 'Failed to mark all notifications as read' });
+        handleError(error, {
+          title: 'Failed to mark all notifications as read',
+        });
         throw error;
       }
     },
+    onMutate: async () => {
+      // Cancel any outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ['notifications'] });
+
+      // Snapshot the previous value
+      const previousNotifications = queryClient.getQueryData<Notification[]>([
+        'notifications',
+      ]);
+      const previousUnreadCount = queryClient.getQueryData<number>([
+        'notifications',
+        'unread-count',
+      ]);
+
+      // Optimistically update notifications to mark all as read
+      if (previousNotifications) {
+        queryClient.setQueryData<Notification[]>(
+          ['notifications'],
+          previousNotifications.map((n) => ({ ...n, is_read: true }))
+        );
+      }
+
+      // Optimistically update unread count to 0
+      queryClient.setQueryData<number>(['notifications', 'unread-count'], 0);
+
+      return { previousNotifications, previousUnreadCount };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousNotifications) {
+        queryClient.setQueryData(
+          ['notifications'],
+          context.previousNotifications
+        );
+      }
+      if (context?.previousUnreadCount !== undefined) {
+        queryClient.setQueryData(
+          ['notifications', 'unread-count'],
+          context.previousUnreadCount
+        );
+      }
+    },
     onSuccess: () => {
-      // Invalidate notifications and unread count
+      // Invalidate and refetch to ensure consistency
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.refetchQueries({ queryKey: ['notifications'] });
     },
   });
 }
@@ -151,8 +198,9 @@ export function useUpdateNotificationSettings() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications', 'settings'] });
+      queryClient.invalidateQueries({
+        queryKey: ['notifications', 'settings'],
+      });
     },
   });
 }
-
