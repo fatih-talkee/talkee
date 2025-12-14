@@ -6,7 +6,6 @@ import {
   SafeAreaView,
   TouchableOpacity,
   FlatList,
-  ActivityIndicator,
   ScrollView,
 } from 'react-native';
 import { Search, Filter, X, Star } from 'lucide-react-native';
@@ -15,6 +14,8 @@ import { SearchBar } from '@/components/ui/SearchBar';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
 import { useTheme } from '@/contexts/ThemeContext';
 import { FilterModal } from '@/components/filters/FilterModal';
+import { PageLoading } from '@/components/ui/PageLoading';
+import { SectionLoading } from '@/components/ui/SectionLoading';
 import {
   useInfiniteProfessionals,
   useInfiniteSearchProfessionals,
@@ -249,7 +250,7 @@ export default function SearchScreen() {
 
     return (
       <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color={theme.colors.primary} />
+        <SectionLoading size="small" />
         <Text style={[styles.footerText, { color: theme.colors.textMuted }]}>
           Loading more...
         </Text>
@@ -507,12 +508,9 @@ export default function SearchScreen() {
 
       {/* Results Section */}
       {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
-            {isSearching ? 'Searching...' : 'Loading professionals...'}
-          </Text>
-        </View>
+        <PageLoading
+          message={isSearching ? 'Searching...' : 'Loading professionals...'}
+        />
       ) : filteredProfessionals.length > 0 ? (
         <FlatList
           data={filteredProfessionals}
@@ -571,16 +569,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
   },
   resultsContainer: {
     paddingHorizontal: 20,

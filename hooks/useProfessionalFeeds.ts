@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { FeedQueryParams, CreateFeedRequest, UpdateFeedRequest } from '@/types/database.types';
 import { professionalFeedsService } from '@/services/supabase/professionalFeeds.service';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
 
 // ============================================
 // QUERY KEYS
@@ -30,7 +31,7 @@ export function useFeeds(params?: FeedQueryParams) {
   return useQuery({
     queryKey: feedsKeys.list(params),
     queryFn: () => professionalFeedsService.getFeeds(params),
-    staleTime: 30 * 1000, // 30 seconds
+    ...CACHE_CONFIG.FEEDS,
   });
 }
 
@@ -44,7 +45,7 @@ export function useFeed(feedId: string) {
     queryKey: feedsKeys.detail(feedId),
     queryFn: () => professionalFeedsService.getFeedById(feedId),
     enabled: !!feedId,
-    staleTime: 1 * 60 * 1000, // 1 minute
+    ...CACHE_CONFIG.FEED_DETAIL,
   });
 }
 
@@ -65,7 +66,7 @@ export function useProfessionalFeeds(
         limit,
       }),
     enabled: !!professionalId,
-    staleTime: 30 * 1000, // 30 seconds
+    ...CACHE_CONFIG.FEEDS,
   });
 }
 
@@ -78,7 +79,7 @@ export function useTrendingFeeds(limit: number = 10) {
   return useQuery({
     queryKey: feedsKeys.trending(),
     queryFn: () => professionalFeedsService.getTrendingFeeds(limit),
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    ...CACHE_CONFIG.FEED_COUNT, // Similar to feed count, trending changes less frequently
   });
 }
 
@@ -92,7 +93,7 @@ export function useFeedCount(professionalId: string) {
     queryKey: [...feedsKeys.byProfessional(professionalId), 'count'],
     queryFn: () => professionalFeedsService.getFeedCount(professionalId),
     enabled: !!professionalId,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    ...CACHE_CONFIG.FEED_COUNT,
   });
 }
 

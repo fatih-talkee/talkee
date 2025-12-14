@@ -9,13 +9,13 @@ import {
   Alert,
   Modal,
   Pressable,
-  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { PageLoading } from '@/components/ui/PageLoading';
 import {
   User,
   FileText,
@@ -186,6 +186,17 @@ export default function ProfessionalSettingsScreen() {
       setShowDeleteModal(false);
     }
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <Header showLogo showBack onBackPress={() => router.push('/(tabs)')} />
+        <PageLoading message="Loading professional settings..." />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView

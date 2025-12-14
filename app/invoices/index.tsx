@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
-  ActivityIndicator,
   Linking,
   Alert,
 } from 'react-native';
@@ -30,6 +29,7 @@ import type {
   InvoiceWithRelations,
   InvoiceStatus,
 } from '@/types/database.types';
+import { PageLoading } from '@/components/ui/PageLoading';
 
 type FilterStatus = 'all' | 'paid' | 'pending' | 'overdue' | 'cancelled';
 
@@ -511,12 +511,7 @@ export default function InvoicesScreen() {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <Header showLogo showBack />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
-            Loading invoices...
-          </Text>
-        </View>
+        <PageLoading message="Loading invoices..." />
       </SafeAreaView>
     );
   }
@@ -589,16 +584,6 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     overflow: 'hidden',
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
   },
   listContent: {
     padding: 24,

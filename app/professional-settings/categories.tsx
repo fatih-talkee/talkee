@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   SafeAreaView,
-  ActivityIndicator,
   TextInput,
   TouchableOpacity,
   Platform,
@@ -14,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
+import { PageLoading } from '@/components/ui/PageLoading';
 import { useProfile } from '@/hooks/useProfile';
 import { professionalsService } from '@/services/supabase/professionals.service';
 import { useToast } from '@/lib/toastService';
@@ -173,12 +173,7 @@ export default function CategoriesScreen() {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <Header showLogo showBack onBackPress={() => router.back()} />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
-            Loading categories...
-          </Text>
-        </View>
+        <PageLoading message="Loading categories..." />
       </SafeAreaView>
     );
   }
@@ -384,16 +379,6 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 100,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-  },
   header: {
     marginBottom: 24,
   },
@@ -419,10 +404,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 2,
     gap: 12,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 2px 4px rgba(0,0,0,0.1)' }
+      : {
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 3,
+        }),
   },
   searchInput: {
     flex: 1,

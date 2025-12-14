@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   SafeAreaView,
-  ActivityIndicator,
   Modal,
   Pressable,
   TouchableOpacity,
@@ -18,6 +17,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { PageLoading } from '@/components/ui/PageLoading';
 import { useProfile } from '@/hooks/useProfile';
 import { professionalsService } from '@/services/supabase/professionals.service';
 import { useToast } from '@/lib/toastService';
@@ -29,13 +29,13 @@ import {
   Edit2,
   Trash2,
 } from 'lucide-react-native';
-import { daysOptions, timeOptions } from '@/app/become-professional/constants';
+import { daysOptions, timeOptions } from '@/app/become-professional/_constants';
 import {
   validateAvailability,
   getFilteredTimeOptions,
   compareTimes,
-} from '@/app/become-professional/utils';
-import type { Availability } from '@/app/become-professional/types';
+} from '@/app/become-professional/_utils';
+import type { Availability } from '@/app/become-professional/_types';
 
 export default function AvailabilityScreen() {
   const router = useRouter();
@@ -292,12 +292,7 @@ export default function AvailabilityScreen() {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <Header showLogo showBack onBackPress={() => router.back()} />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
-            Loading availabilities...
-          </Text>
-        </View>
+        <PageLoading message="Loading availabilities..." />
       </SafeAreaView>
     );
   }
@@ -1282,16 +1277,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 24,
     paddingBottom: 100,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
   },
   header: {
     marginBottom: 32,

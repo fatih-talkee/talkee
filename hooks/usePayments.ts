@@ -4,6 +4,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { handleError } from '@/lib/errorHandler';
 import { logger } from '@/lib/logger';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
 import type { SavedCard, PurchaseData, CreditPackage } from '@/types';
 
 /**
@@ -22,8 +23,7 @@ export function useSavedCards() {
         throw error;
       }
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 30, // 30 minutes
+    ...CACHE_CONFIG.SAVED_CARDS,
   });
 }
 
@@ -97,8 +97,7 @@ export function useCreditPackages() {
         throw error;
       }
     },
-    staleTime: 1000 * 60 * 60, // 1 hour (packages don't change often)
-    gcTime: 1000 * 60 * 60 * 24, // 24 hours
+    ...CACHE_CONFIG.CREDIT_PACKAGES,
   });
 }
 
@@ -130,4 +129,3 @@ export function usePurchaseCredits() {
     },
   });
 }
-

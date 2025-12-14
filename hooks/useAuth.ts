@@ -11,17 +11,26 @@ export function useAuth() {
 
   // Check authentication status
   useEffect(() => {
+    let isMounted = true;
+    let navigationTimeout: NodeJS.Timeout | null = null;
+
     const checkAuth = async () => {
       try {
         const {
           data: { session },
         } = await supabase.auth.getSession();
-        setIsAuthenticated(!!session);
+        if (isMounted) {
+          setIsAuthenticated(!!session);
+        }
       } catch (error) {
         console.error('❌ Auth check error:', error);
-        setIsAuthenticated(false);
+        if (isMounted) {
+          setIsAuthenticated(false);
+        }
       } finally {
-        setLoading(false); // ✅ Stop loading after initial check
+        if (isMounted) {
+          setLoading(false); // ✅ Stop loading after initial check
+        }
       }
     };
 
@@ -31,15 +40,34 @@ export function useAuth() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return;
+
       setIsAuthenticated(!!session);
 
-      // ✅ Auto-redirect on sign out
+      // ✅ Auto-redirect on sign out - defer navigation to prevent render loops
       if (event === 'SIGNED_OUT') {
-        router.replace('/(auth)/login' as Href<'/(auth)/login'>);
+        // Clear any pending navigation
+        if (navigationTimeout) {
+          clearTimeout(navigationTimeout);
+        }
+        // Defer navigation to next tick to avoid render loop
+        navigationTimeout = setTimeout(() => {
+          // Check if we're not already on the login page
+          const currentPath = router.pathname || '';
+          if (!currentPath.includes('/auth/login')) {
+            router.replace('/auth/login' as Href<'/auth/login'>);
+          }
+        }, 0);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      if (navigationTimeout) {
+        clearTimeout(navigationTimeout);
+      }
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
@@ -103,8 +131,13 @@ export function useAuth() {
       // onAuthStateChange will handle redirect automatically
     } catch (error) {
       console.error('❌ Sign out error:', error);
-      // Still redirect even if error
-      router.replace('/auth/login' as Href<'/(auth)/login'>);
+      // Still redirect even if error - defer to prevent render loop
+      setTimeout(() => {
+        const currentPath = router.pathname || '';
+        if (!currentPath.includes('/auth/login')) {
+          router.replace('/auth/login' as Href<'/(auth)/login'>);
+        }
+      }, 0);
       throw error;
     } finally {
       setLoading(false);

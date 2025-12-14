@@ -30,18 +30,18 @@ import type {
 } from '@/types/education_experience.types';
 
 // Import Step Components
-import { Step1Information } from './components/Step1Information';
-import { Step2AboutMe } from './components/Step2AboutMe';
-import { Step3EducationExperience } from './components/Step3EducationExperience';
-import { Step4Categories } from './components/Step4Categories';
-import { Step5Availability } from './components/Step5Availability';
-import { Step6Finish } from './components/Step6Finish';
-import { daysOptions, timeOptions } from './constants';
+import { Step1Information } from './_components/Step1Information';
+import { Step2AboutMe } from './_components/Step2AboutMe';
+import { Step3EducationExperience } from './_components/Step3EducationExperience';
+import { Step4Categories } from './_components/Step4Categories';
+import { Step5Availability } from './_components/Step5Availability';
+import { Step6Finish } from './_components/Step6Finish';
+import { daysOptions, timeOptions } from './_constants';
 import {
   validateAvailability,
   getFilteredTimeOptions,
   compareTimes,
-} from './utils';
+} from './_utils';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Calendar, Clock } from 'lucide-react-native';
 

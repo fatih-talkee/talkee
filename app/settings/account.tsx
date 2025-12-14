@@ -32,6 +32,7 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/lib/toastService';
 import { format } from 'date-fns';
 import MaskInput from 'react-native-mask-input';
+import { PageLoading } from '@/components/ui/PageLoading';
 
 // Turkish phone mask: +90 XXX XXX XX XX
 const PHONE_MASK = [
@@ -230,11 +231,7 @@ export default function AccountSettingsScreen() {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <Header showLogo showBack />
-        <View style={styles.loadingContainer}>
-          <Text style={[styles.loadingText, { color: theme.colors.text }]}>
-            Loading...
-          </Text>
-        </View>
+        <PageLoading message="Loading..." />
       </SafeAreaView>
     );
   }
@@ -245,11 +242,7 @@ export default function AccountSettingsScreen() {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <Header showLogo showBack />
-        <View style={styles.loadingContainer}>
-          <Text style={[styles.loadingText, { color: theme.colors.text }]}>
-            User not found
-          </Text>
-        </View>
+        <PageLoading message="User not found" />
       </SafeAreaView>
     );
   }
@@ -787,15 +780,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    fontFamily: 'Inter-Regular',
-  },
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -919,14 +903,18 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     borderRadius: 20,
     padding: 24,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 10,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 4px 8px rgba(0,0,0,0.3)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: {
+            width: 0,
+            height: 4,
+          },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+          elevation: 10,
+        }),
   },
   modalIconContainer: {
     alignItems: 'center',

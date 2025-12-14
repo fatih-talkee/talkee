@@ -6,7 +6,6 @@ import {
   SafeAreaView,
   FlatList,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
 import { Heart } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
@@ -14,6 +13,7 @@ import { SearchBar } from '@/components/ui/SearchBar';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
 import { useToast } from '@/lib/toastService';
+import { PageLoading } from '@/components/ui/PageLoading';
 
 // ✅ API HOOKS
 import { useFavorites, useRemoveFavorite } from '@/hooks/useFavorites';
@@ -142,12 +142,7 @@ export default function FavoritesScreen() {
       />
 
       {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
-            Loading favorites...
-          </Text>
-        </View>
+        <PageLoading message="Loading favorites..." />
       ) : error ? (
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: theme.colors.error }]}>
@@ -194,17 +189,6 @@ export default function FavoritesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    marginTop: 16,
   },
   errorContainer: {
     flex: 1,

@@ -4,6 +4,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { callsService } from '@/services';
 import type { Call } from '@/types';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
+import { handleError } from '@/lib/errorHandler';
+import { logger } from '@/lib/logger';
 
 export interface CallFilters {
   status?: Call['status'];
@@ -12,8 +15,16 @@ export interface CallFilters {
   endDate?: Date;
   professionalId?: string;
 }
-import { handleError } from '@/lib/errorHandler';
-import { logger } from '@/lib/logger';
+
+// Query Keys Factory Pattern
+export const callsKeys = {
+  all: ['calls'] as const,
+  lists: () => [...callsKeys.all, 'list'] as const,
+  history: (filters?: CallFilters, limit?: number, offset?: number) =>
+    [...callsKeys.lists(), 'history', filters, limit, offset] as const,
+  details: () => [...callsKeys.all, 'detail'] as const,
+  detail: (callId: string) => [...callsKeys.details(), callId] as const,
+};
 
 /**
  * Get call history for current user
@@ -24,18 +35,21 @@ export function useCallHistory(
   offset: number = 0
 ) {
   return useQuery({
-    queryKey: ['calls', 'history', filters, limit, offset],
+    queryKey: callsKeys.history(filters, limit, offset),
     queryFn: async () => {
       try {
-        const history = await callsService.getCallHistory(filters, limit, offset);
+        const history = await callsService.getCallHistory(
+          filters,
+          limit,
+          offset
+        );
         return history;
       } catch (error) {
         handleError(error, { title: 'Failed to fetch call history' });
         throw error;
       }
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes
-    gcTime: 1000 * 60 * 10, // 10 minutes
+    ...CACHE_CONFIG.CALLS_HISTORY,
   });
 }
 
@@ -44,7 +58,7 @@ export function useCallHistory(
  */
 export function useCall(callId: string) {
   return useQuery({
-    queryKey: ['calls', callId],
+    queryKey: callsKeys.detail(callId),
     queryFn: async () => {
       try {
         const call = await callsService.getCall(callId);
@@ -55,7 +69,7 @@ export function useCall(callId: string) {
       }
     },
     enabled: !!callId,
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    ...CACHE_CONFIG.CALL_DETAIL,
   });
 }
 
@@ -78,9 +92,9 @@ export function useStartCall() {
     onSuccess: (data) => {
       if (data) {
         // Update call in cache
-        queryClient.setQueryData(['calls', data.id], data);
+        queryClient.setQueryData(callsKeys.detail(data.id), data);
         // Invalidate call history
-        queryClient.invalidateQueries({ queryKey: ['calls', 'history'] });
+        queryClient.invalidateQueries({ queryKey: callsKeys.lists() });
       }
     },
     onError: (error) => {
@@ -108,9 +122,9 @@ export function useEndCall() {
     onSuccess: (data) => {
       if (data) {
         // Update call in cache
-        queryClient.setQueryData(['calls', data.id], data);
+        queryClient.setQueryData(callsKeys.detail(data.id), data);
         // Invalidate call history
-        queryClient.invalidateQueries({ queryKey: ['calls', 'history'] });
+        queryClient.invalidateQueries({ queryKey: callsKeys.lists() });
       }
     },
     onError: (error) => {
@@ -128,7 +142,13 @@ export function useBlockUserFromCall() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ userId, isBlocked }: { userId: string; isBlocked: boolean }) => {
+    mutationFn: async ({
+      userId,
+      isBlocked,
+    }: {
+      userId: string;
+      isBlocked: boolean;
+    }) => {
       // TODO: Implement block user service method
       // For now, this is handled locally in the component
       logger.info('Block user mutation called', { userId, isBlocked });
@@ -136,11 +156,10 @@ export function useBlockUserFromCall() {
     },
     onSuccess: () => {
       // Invalidate call history to refresh
-      queryClient.invalidateQueries({ queryKey: ['calls', 'history'] });
+      queryClient.invalidateQueries({ queryKey: callsKeys.lists() });
     },
     onError: (error) => {
       handleError(error, { title: 'Failed to update block status' });
     },
   });
 }
-

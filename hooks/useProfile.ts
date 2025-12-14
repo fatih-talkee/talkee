@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ProfileService } from '@/services/supabase/profile.service';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
 
 export function useProfile() {
   const queryClient = useQueryClient();
@@ -37,6 +38,7 @@ export function useProfile() {
     queryKey: ['profile', userId],
     queryFn: () => ProfileService.getProfileData(userId!),
     enabled: !!userId,
+    ...CACHE_CONFIG.USER_PROFILE,
   });
 
   const updatePreferences = async (preferences: {

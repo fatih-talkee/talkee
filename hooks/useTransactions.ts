@@ -12,6 +12,7 @@ import type {
   TaxInformation,
   CurrencyFormatSettings,
 } from '@/types';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
 
 /**
  * Get earnings overview data
@@ -34,8 +35,7 @@ export function useEarningsData() {
         throw error;
       }
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 30, // 30 minutes
+    ...CACHE_CONFIG.EARNINGS,
   });
 }
 
@@ -55,8 +55,7 @@ export function useBankAccounts() {
         throw error;
       }
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 30, // 30 minutes
+    ...CACHE_CONFIG.BANK_ACCOUNTS,
   });
 }
 
@@ -127,8 +126,7 @@ export function useWithdrawals() {
         throw error;
       }
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes
-    gcTime: 1000 * 60 * 10, // 10 minutes
+    ...CACHE_CONFIG.WITHDRAWALS,
   });
 }
 
@@ -186,8 +184,7 @@ export function usePayoutNotificationSettings() {
         throw error;
       }
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 30, // 30 minutes
+    ...CACHE_CONFIG.NOTIFICATION_SETTINGS,
   });
 }
 
@@ -230,8 +227,7 @@ export function useTaxInformation() {
         throw error;
       }
     },
-    staleTime: 1000 * 60 * 10, // 10 minutes
-    gcTime: 1000 * 60 * 60, // 1 hour
+    ...CACHE_CONFIG.TAX_INFORMATION,
   });
 }
 
@@ -279,8 +275,7 @@ export function useCurrencyFormatSettings() {
         throw error;
       }
     },
-    staleTime: 1000 * 60 * 10, // 10 minutes
-    gcTime: 1000 * 60 * 60, // 1 hour
+    ...CACHE_CONFIG.CURRENCY_FORMAT,
   });
 }
 

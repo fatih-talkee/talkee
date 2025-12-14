@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
-  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import {
@@ -33,6 +32,7 @@ import {
 } from '@/hooks/useNotifications';
 import type { Notification } from '@/types/database.types';
 import { logger } from '@/lib/logger';
+import { PageLoading } from '@/components/ui/PageLoading';
 
 // Extended notification type with professional info
 interface NotificationWithProfessional extends Notification {
@@ -338,12 +338,7 @@ export default function NotificationsScreen() {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <Header showLogo showBack />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
-            Loading notifications...
-          </Text>
-        </View>
+        <PageLoading message="Loading notifications..." />
       </SafeAreaView>
     );
   }
@@ -443,16 +438,6 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
   },
   errorContainer: {
     flex: 1,

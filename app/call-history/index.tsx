@@ -5,7 +5,6 @@ import {
   StyleSheet,
   SafeAreaView,
   FlatList,
-  ActivityIndicator,
 } from 'react-native';
 import { Clock } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
@@ -21,6 +20,7 @@ import { CallHistoryCard } from '@/components/listings/CallHistoryCard';
 import { useToast } from '@/lib/toastService';
 import type { CallWithRelations } from '@/types/database.types';
 import { CallStatus } from '@/types/database.types';
+import { PageLoading } from '@/components/ui/PageLoading';
 
 export default function CallHistoryScreen() {
   const { theme } = useTheme();
@@ -157,12 +157,7 @@ export default function CallHistoryScreen() {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <Header showLogo showBack />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
-            Loading call history...
-                </Text>
-        </View>
+        <PageLoading message="Loading call history..." />
       </SafeAreaView>
     );
   }
@@ -231,16 +226,6 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 40,
     flexGrow: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
   },
   errorContainer: {
     flex: 1,

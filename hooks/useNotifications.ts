@@ -6,13 +6,24 @@ import { handleError } from '@/lib/errorHandler';
 import { logger } from '@/lib/logger';
 import { notificationsService } from '@/services';
 import type { Notification } from '@/types/database.types';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
+
+// Query Keys Factory Pattern
+export const notificationsKeys = {
+  all: ['notifications'] as const,
+  lists: () => [...notificationsKeys.all, 'list'] as const,
+  list: (limit?: number, offset?: number) =>
+    [...notificationsKeys.lists(), limit, offset] as const,
+  unreadCount: () => [...notificationsKeys.all, 'unread-count'] as const,
+  settings: () => [...notificationsKeys.all, 'settings'] as const,
+};
 
 /**
  * Get notifications for current user
  */
 export function useNotifications(limit: number = 50, offset: number = 0) {
   return useQuery({
-    queryKey: ['notifications', limit, offset],
+    queryKey: notificationsKeys.list(limit, offset),
     queryFn: async (): Promise<Notification[]> => {
       try {
         const notifications = await notificationsService.getNotifications(
@@ -25,8 +36,7 @@ export function useNotifications(limit: number = 50, offset: number = 0) {
         throw error;
       }
     },
-    staleTime: 1000 * 60 * 1, // 1 minute (notifications change frequently)
-    gcTime: 1000 * 60 * 5, // 5 minutes
+    ...CACHE_CONFIG.NOTIFICATIONS,
   });
 }
 
@@ -35,7 +45,7 @@ export function useNotifications(limit: number = 50, offset: number = 0) {
  */
 export function useUnreadCount() {
   return useQuery({
-    queryKey: ['notifications', 'unread-count'],
+    queryKey: notificationsKeys.unreadCount(),
     queryFn: async (): Promise<number> => {
       try {
         const count = await notificationsService.getUnreadCount();
@@ -45,9 +55,8 @@ export function useUnreadCount() {
         throw error;
       }
     },
-    staleTime: 1000 * 30, // 30 seconds (frequently updated)
-    gcTime: 1000 * 60 * 2, // 2 minutes
-    refetchInterval: 1000 * 30, // Refetch every 30 seconds
+    ...CACHE_CONFIG.NOTIFICATIONS_UNREAD_COUNT,
+    refetchInterval: 30 * 1000, // Refetch every 30 seconds
   });
 }
 
@@ -93,27 +102,26 @@ export function useMarkAllAsRead() {
     },
     onMutate: async () => {
       // Cancel any outgoing refetches to avoid overwriting optimistic update
-      await queryClient.cancelQueries({ queryKey: ['notifications'] });
+      await queryClient.cancelQueries({ queryKey: notificationsKeys.all });
 
       // Snapshot the previous value
-      const previousNotifications = queryClient.getQueryData<Notification[]>([
-        'notifications',
-      ]);
-      const previousUnreadCount = queryClient.getQueryData<number>([
-        'notifications',
-        'unread-count',
-      ]);
+      const previousNotifications = queryClient.getQueryData<Notification[]>(
+        notificationsKeys.list()
+      );
+      const previousUnreadCount = queryClient.getQueryData<number>(
+        notificationsKeys.unreadCount()
+      );
 
       // Optimistically update notifications to mark all as read
       if (previousNotifications) {
         queryClient.setQueryData<Notification[]>(
-          ['notifications'],
+          notificationsKeys.list(),
           previousNotifications.map((n) => ({ ...n, is_read: true }))
         );
       }
 
       // Optimistically update unread count to 0
-      queryClient.setQueryData<number>(['notifications', 'unread-count'], 0);
+      queryClient.setQueryData<number>(notificationsKeys.unreadCount(), 0);
 
       return { previousNotifications, previousUnreadCount };
     },
@@ -121,21 +129,21 @@ export function useMarkAllAsRead() {
       // Rollback on error
       if (context?.previousNotifications) {
         queryClient.setQueryData(
-          ['notifications'],
+          notificationsKeys.list(),
           context.previousNotifications
         );
       }
       if (context?.previousUnreadCount !== undefined) {
         queryClient.setQueryData(
-          ['notifications', 'unread-count'],
+          notificationsKeys.unreadCount(),
           context.previousUnreadCount
         );
       }
     },
     onSuccess: () => {
       // Invalidate and refetch to ensure consistency
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      queryClient.refetchQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: notificationsKeys.all });
+      queryClient.refetchQueries({ queryKey: notificationsKeys.all });
     },
   });
 }
@@ -168,7 +176,7 @@ export function useDeleteNotification() {
  */
 export function useNotificationSettings() {
   return useQuery({
-    queryKey: ['notifications', 'settings'],
+    queryKey: notificationsKeys.settings(),
     queryFn: async () => {
       try {
         return await notificationsService.getNotificationSettings();
@@ -177,8 +185,7 @@ export function useNotificationSettings() {
         throw error;
       }
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 30, // 30 minutes
+    ...CACHE_CONFIG.NOTIFICATION_SETTINGS,
   });
 }
 
@@ -199,7 +206,7 @@ export function useUpdateNotificationSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['notifications', 'settings'],
+        queryKey: notificationsKeys.settings(),
       });
     },
   });

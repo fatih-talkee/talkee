@@ -4,6 +4,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { reviewsService, type Review } from '@/services';
 import { handleError } from '@/lib/errorHandler';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
 
 /**
  * Get reviews for a professional
@@ -32,8 +33,7 @@ export function useProfessionalReviews(
       }
     },
     enabled: !!professionalId,
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 10, // 10 minutes
+    ...CACHE_CONFIG.REVIEWS,
   });
 }
 
@@ -99,7 +99,6 @@ export function useUserReviews(limit: number = 20, offset: number = 0) {
         throw error;
       }
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes
-    gcTime: 1000 * 60 * 10, // 10 minutes
+    ...CACHE_CONFIG.USER_REVIEWS,
   });
 }

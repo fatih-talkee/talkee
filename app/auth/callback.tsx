@@ -5,11 +5,12 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/lib/toastService';
 import { UserPreferencesService } from '@/services/supabase/userPreferences.service';
+import { PageLoading } from '@/components/ui/PageLoading';
 
 export default function AuthCallbackScreen() {
   const toast = useToast();
@@ -279,9 +280,10 @@ export default function AuthCallbackScreen() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#2e2461" />
-      <Text style={styles.text}>Completing sign in...</Text>
-      <Text style={styles.subtext}>This will only take a moment</Text>
+      <PageLoading
+        message="Completing sign in..."
+        size="large"
+      />
     </View>
   );
 }
@@ -289,20 +291,6 @@ export default function AuthCallbackScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#FFFFFF',
-  },
-  text: {
-    marginTop: 16,
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
-    color: '#2e2461',
-  },
-  subtext: {
-    marginTop: 8,
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#666666',
   },
 });

@@ -4,6 +4,7 @@ import {
   promotionsService,
   Promotion,
 } from '@/services/supabase/promotions.service';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
 
 /**
  * Get all active promotions
@@ -13,8 +14,7 @@ export function usePromotions() {
   return useQuery<Promotion[]>({
     queryKey: ['promotions'],
     queryFn: () => promotionsService.getActivePromotions(),
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 15, // 15 minutes
+    ...CACHE_CONFIG.PROMOTIONS,
   });
 }
 
@@ -26,8 +26,7 @@ export function useFeaturedPromotions(limit: number = 5) {
   return useQuery<Promotion[]>({
     queryKey: ['promotions', 'featured', limit],
     queryFn: () => promotionsService.getFeaturedPromotions(limit),
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 15, // 15 minutes
+    ...CACHE_CONFIG.PROMOTIONS,
   });
 }
 
@@ -40,8 +39,7 @@ export function usePromotion(id: string) {
     queryKey: ['promotion', id],
     queryFn: () => promotionsService.getPromotionById(id),
     enabled: !!id,
-    staleTime: 1000 * 60 * 10, // 10 minutes
-    gcTime: 1000 * 60 * 20, // 20 minutes
+    ...CACHE_CONFIG.PROMOTION_DETAIL,
   });
 }
 

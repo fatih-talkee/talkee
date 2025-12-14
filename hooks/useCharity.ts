@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { handleError } from '@/lib/errorHandler';
 import { logger } from '@/lib/logger';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
 import type { CharityOrganization, DonationRecord } from '@/types';
 
 // Temporary placeholder data until backend is ready
@@ -14,14 +15,16 @@ const mockDonations: DonationRecord[] = [];
 // Helper functions
 const getCharitiesByCategory = (category: string): CharityOrganization[] => {
   if (category === 'all') return mockCharities;
-  return mockCharities.filter(c => c.category === category);
+  return mockCharities.filter((c) => c.category === category);
 };
 
 const getTotalDonated = (donations: DonationRecord[]): number => {
   return donations.reduce((sum, d) => sum + d.amount, 0);
 };
 
-const getDonationsByCharity = (donations: DonationRecord[]): Record<string, { name: string; total: number; count: number }> => {
+const getDonationsByCharity = (
+  donations: DonationRecord[]
+): Record<string, { name: string; total: number; count: number }> => {
   return donations.reduce((acc, donation) => {
     const charityId = donation.charityId;
     if (!acc[charityId]) {
@@ -33,16 +36,24 @@ const getDonationsByCharity = (donations: DonationRecord[]): Record<string, { na
   }, {} as Record<string, { name: string; total: number; count: number }>);
 };
 
-const getDonationsByPeriod = (donations: DonationRecord[], periodDays: number): DonationRecord[] => {
+const getDonationsByPeriod = (
+  donations: DonationRecord[],
+  periodDays: number
+): DonationRecord[] => {
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - periodDays);
-  return donations.filter(d => new Date(d.date) >= cutoffDate);
+  return donations.filter((d) => new Date(d.date) >= cutoffDate);
 };
 
-const groupDonationsByMonth = (donations: DonationRecord[]): Record<string, DonationRecord[]> => {
+const groupDonationsByMonth = (
+  donations: DonationRecord[]
+): Record<string, DonationRecord[]> => {
   return donations.reduce((acc, donation) => {
     const date = new Date(donation.date);
-    const monthKey = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const monthKey = date.toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric',
+    });
     if (!acc[monthKey]) {
       acc[monthKey] = [];
     }
@@ -66,8 +77,7 @@ export function useCharityOrganizations(category?: string) {
       }
       return Promise.resolve(mockCharities);
     },
-    staleTime: 1000 * 60 * 30, // 30 minutes (organizations don't change often)
-    gcTime: 1000 * 60 * 60, // 1 hour
+    ...CACHE_CONFIG.CHARITY_ORGANIZATIONS,
   });
 }
 
@@ -86,8 +96,7 @@ export function useDonationHistory(period?: number) {
       }
       return Promise.resolve(mockDonations);
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes
-    gcTime: 1000 * 60 * 10, // 10 minutes
+    ...CACHE_CONFIG.DONATION_HISTORY,
   });
 }
 
@@ -142,4 +151,3 @@ export function useSaveCharitySettings() {
     },
   });
 }
-

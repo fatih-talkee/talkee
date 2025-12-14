@@ -6,6 +6,7 @@
 import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { categoriesService } from '@/services/supabase/categories.service';
 import { Category } from '@/types/database.types';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
 
 // Query Keys
 export const categoriesKeys = {
@@ -21,8 +22,7 @@ export function useCategories(): UseQueryResult<Category[]> {
   return useQuery({
     queryKey: categoriesKeys.lists(),
     queryFn: () => categoriesService.getCategories(),
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    gcTime: 30 * 60 * 1000,
+    ...CACHE_CONFIG.CATEGORIES,
   });
 }
 
@@ -33,8 +33,7 @@ export function usePopularCategories(limit: number = 8): UseQueryResult<Category
   return useQuery({
     queryKey: [...categoriesKeys.lists(), 'popular', limit],
     queryFn: () => categoriesService.getPopularCategories(limit),
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    gcTime: 30 * 60 * 1000,
+    ...CACHE_CONFIG.CATEGORIES,
   });
 }
 
@@ -54,8 +53,7 @@ export function useCategoriesGrouped(): UseQueryResult<
   return useQuery({
     queryKey: [...categoriesKeys.lists(), 'grouped'],
     queryFn: () => categoriesService.getCategoriesGrouped(),
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    gcTime: 30 * 60 * 1000,
+    ...CACHE_CONFIG.CATEGORIES,
   });
 }
 
@@ -70,7 +68,6 @@ export function useCategory(
     queryKey: categoriesKeys.detail(id || ''),
     queryFn: () => categoriesService.getCategoryById(id!),
     enabled: !!id && enabled,
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    gcTime: 30 * 60 * 1000,
+    ...CACHE_CONFIG.CATEGORIES,
   });
 }

@@ -5,7 +5,6 @@ import {
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
-  ActivityIndicator,
   SectionList,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -15,6 +14,7 @@ import { SearchBar } from '@/components/ui/SearchBar';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
 import { FilterModal } from '@/components/filters/FilterModal';
 import { useTheme } from '@/contexts/ThemeContext';
+import { PageLoading } from '@/components/ui/PageLoading';
 
 // ✅ API HOOKS
 import { useProfessionals } from '@/hooks/useProfessionals';
@@ -218,12 +218,7 @@ export default function CategoryScreen() {
       />
 
       {professionalsLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
-            Loading professionals...
-          </Text>
-        </View>
+        <PageLoading message="Loading professionals..." />
       ) : professionalsError ? (
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: theme.colors.error }]}>
@@ -273,17 +268,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    marginTop: 16,
   },
   errorContainer: {
     flex: 1,

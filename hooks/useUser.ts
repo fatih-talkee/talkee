@@ -2,6 +2,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usersService } from '@/services/supabase';
 import { User, UserUpdate } from '@/types/database.types';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
+
+// Query Keys Factory Pattern
+export const userKeys = {
+  all: ['user'] as const,
+  current: () => [...userKeys.all, 'current'] as const,
+  detail: (userId: string) => [...userKeys.all, userId] as const,
+  wallet: () => [...userKeys.all, 'wallet'] as const,
+  balance: () => [...userKeys.wallet(), 'balance'] as const,
+  transactions: (limit?: number, offset?: number) =>
+    [...userKeys.wallet(), 'transactions', limit, offset] as const,
+};
 
 /**
  * Get current authenticated user
@@ -9,10 +21,9 @@ import { User, UserUpdate } from '@/types/database.types';
  */
 export function useCurrentUser() {
   return useQuery<User | null>({
-    queryKey: ['user', 'current'],
+    queryKey: userKeys.current(),
     queryFn: () => usersService.getCurrentUser(),
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 15, // 15 minutes
+    ...CACHE_CONFIG.USER_CURRENT,
     retry: 1,
   });
 }
@@ -22,11 +33,10 @@ export function useCurrentUser() {
  */
 export function useUser(userId: string) {
   return useQuery<User | null>({
-    queryKey: ['user', userId],
+    queryKey: userKeys.detail(userId),
     queryFn: () => usersService.getUserById(userId),
     enabled: !!userId,
-    staleTime: 1000 * 60 * 5,
-    gcTime: 1000 * 60 * 15,
+    ...CACHE_CONFIG.USER_PROFILE,
   });
 }
 
@@ -40,12 +50,12 @@ export function useUpdateUser() {
   return useMutation({
     mutationFn: (data: UserUpdate) => usersService.updateUser(data),
     onMutate: async (data) => {
-      await queryClient.cancelQueries({ queryKey: ['user', 'current'] });
+      await queryClient.cancelQueries({ queryKey: userKeys.current() });
 
-      const previousUser = queryClient.getQueryData(['user', 'current']);
+      const previousUser = queryClient.getQueryData(userKeys.current());
 
       // Optimistically update
-      queryClient.setQueryData(['user', 'current'], (old: User | null) => {
+      queryClient.setQueryData(userKeys.current(), (old: User | null) => {
         if (!old) return old;
         return { ...old, ...data };
       });
@@ -54,11 +64,11 @@ export function useUpdateUser() {
     },
     onError: (err, data, context) => {
       if (context?.previousUser) {
-        queryClient.setQueryData(['user', 'current'], context.previousUser);
+        queryClient.setQueryData(userKeys.current(), context.previousUser);
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['user', 'current'] });
+      queryClient.invalidateQueries({ queryKey: userKeys.current() });
     },
   });
 }
@@ -69,10 +79,9 @@ export function useUpdateUser() {
  */
 export function useWalletBalance() {
   return useQuery<number>({
-    queryKey: ['wallet', 'balance'],
+    queryKey: userKeys.balance(),
     queryFn: () => usersService.getWalletBalance(),
-    staleTime: 1000 * 60 * 1, // 1 minute
-    gcTime: 1000 * 60 * 5, // 5 minutes
+    ...CACHE_CONFIG.WALLET_BALANCE,
     refetchOnWindowFocus: true, // Refetch when app comes to foreground
   });
 }
@@ -83,10 +92,9 @@ export function useWalletBalance() {
  */
 export function useWalletTransactions(limit: number = 10, offset: number = 0) {
   return useQuery({
-    queryKey: ['wallet', 'transactions', limit, offset],
+    queryKey: userKeys.transactions(limit, offset),
     queryFn: () => usersService.getTransactions(limit, offset),
-    staleTime: 1000 * 30, // 30 seconds
-    gcTime: 1000 * 60 * 5, // 5 minutes
+    ...CACHE_CONFIG.TRANSACTIONS,
     refetchOnWindowFocus: true,
   });
 }
@@ -97,7 +105,7 @@ export function useWalletTransactions(limit: number = 10, offset: number = 0) {
 export function useInvalidateUser() {
   const queryClient = useQueryClient();
   return () => {
-    queryClient.invalidateQueries({ queryKey: ['user'] });
+    queryClient.invalidateQueries({ queryKey: userKeys.all });
   };
 }
 
@@ -107,7 +115,6 @@ export function useInvalidateUser() {
 export function useInvalidateWallet() {
   const queryClient = useQueryClient();
   return () => {
-    queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    queryClient.invalidateQueries({ queryKey: userKeys.wallet() });
   };
 }
-

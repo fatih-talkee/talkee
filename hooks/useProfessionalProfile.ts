@@ -4,6 +4,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { handleError } from '@/lib/errorHandler';
 import { logger } from '@/lib/logger';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
 import { professionalsService } from '@/services/supabase';
 import { useFavorites, useIsFavorite } from './useFavorites';
 
@@ -15,7 +16,9 @@ export function useProfessionalProfile(professionalId: string) {
     queryKey: ['professionals', professionalId],
     queryFn: async () => {
       try {
-        const professional = await professionalsService.getProfessional(professionalId);
+        const professional = await professionalsService.getProfessional(
+          professionalId
+        );
         if (!professional) {
           throw new Error('Professional not found');
         }
@@ -26,8 +29,7 @@ export function useProfessionalProfile(professionalId: string) {
       }
     },
     enabled: !!professionalId,
-    staleTime: 1000 * 60 * 5, // 5 minutes (profiles don't change often)
-    gcTime: 1000 * 60 * 30, // 30 minutes
+    ...CACHE_CONFIG.PROFESSIONAL_DETAIL,
   });
 }
 
@@ -44,8 +46,7 @@ export function useProfessionalAvailability(professionalId: string) {
       return Promise.resolve([]);
     },
     enabled: !!professionalId,
-    staleTime: 1000 * 60 * 10, // 10 minutes
-    gcTime: 1000 * 60 * 30, // 30 minutes
+    ...CACHE_CONFIG.PROFESSIONAL_AVAILABILITY,
   });
 }
 
@@ -62,8 +63,7 @@ export function useProfessionalPosts(professionalId: string) {
       return Promise.resolve([]);
     },
     enabled: !!professionalId,
-    staleTime: 1000 * 60 * 2, // 2 minutes (posts can change)
-    gcTime: 1000 * 60 * 10, // 10 minutes
+    ...CACHE_CONFIG.PROFESSIONAL_POSTS,
   });
 }
 
@@ -84,8 +84,7 @@ export function useProfessionalCharitySettings(professionalId: string) {
       });
     },
     enabled: !!professionalId,
-    staleTime: 1000 * 60 * 10, // 10 minutes
-    gcTime: 1000 * 60 * 30, // 30 minutes
+    ...CACHE_CONFIG.PROFESSIONAL_CHARITY_SETTINGS,
   });
 }
 
@@ -106,8 +105,17 @@ export function useProfessionalProfileData(professionalId: string) {
     availability,
     posts,
     charitySettings,
-    isLoading: profile.isLoading || isFavorite.isLoading || availability.isLoading || posts.isLoading || charitySettings.isLoading,
-    isError: profile.isError || isFavorite.isError || availability.isError || posts.isError || charitySettings.isError,
+    isLoading:
+      profile.isLoading ||
+      isFavorite.isLoading ||
+      availability.isLoading ||
+      posts.isLoading ||
+      charitySettings.isLoading,
+    isError:
+      profile.isError ||
+      isFavorite.isError ||
+      availability.isError ||
+      posts.isError ||
+      charitySettings.isError,
   };
 }
-

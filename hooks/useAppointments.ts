@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { handleError } from '@/lib/errorHandler';
 import { logger } from '@/lib/logger';
 import type { Appointment } from '@/types';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
 
 /**
  * Get appointments for a specific date range
@@ -22,8 +23,7 @@ export function useAppointments(startDate?: string, endDate?: string) {
         throw error;
       }
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes (appointments change frequently)
-    gcTime: 1000 * 60 * 10, // 10 minutes
+    ...CACHE_CONFIG.APPOINTMENTS,
   });
 }
 
@@ -44,8 +44,7 @@ export function useAppointmentsByDate(date: string) {
       }
     },
     enabled: !!date,
-    staleTime: 1000 * 60 * 2, // 2 minutes
-    gcTime: 1000 * 60 * 10, // 10 minutes
+    ...CACHE_CONFIG.APPOINTMENTS,
   });
 }
 

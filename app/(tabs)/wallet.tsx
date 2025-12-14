@@ -6,8 +6,8 @@ import {
   SafeAreaView,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import {
@@ -25,6 +25,8 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useWalletBalance, useWalletTransactions } from '@/hooks/useUser';
 import { logger } from '@/lib/logger';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
+import { SectionLoading } from '@/components/ui/SectionLoading';
+import { InlineLoading } from '@/components/ui/InlineLoading';
 
 interface CreditPackage {
   id: string;
@@ -202,11 +204,7 @@ export default function WalletScreen() {
             </TouchableOpacity>
           </View>
           {balanceLoading ? (
-            <ActivityIndicator
-              size="large"
-              color={theme.colors.primaryLight}
-              style={{ marginVertical: 20 }}
-            />
+            <SectionLoading size="large" style={{ marginVertical: 20 }} />
           ) : balanceError ? (
             <Text
               style={[
@@ -276,15 +274,17 @@ export default function WalletScreen() {
                       theme.name === 'light'
                         ? theme.colors.border
                         : 'transparent',
-                    shadowColor:
-                      theme.name === 'light' ? '#000' : 'transparent',
-                    shadowOffset:
-                      theme.name === 'light'
-                        ? { width: 0, height: 2 }
-                        : { width: 0, height: 0 },
-                    shadowOpacity: theme.name === 'light' ? 0.1 : 0,
-                    shadowRadius: theme.name === 'light' ? 4 : 0,
-                    elevation: theme.name === 'light' ? 2 : 0,
+                    ...(theme.name === 'light'
+                      ? Platform.OS === 'web'
+                        ? { boxShadow: '0px 2px 4px rgba(0,0,0,0.1)' }
+                        : {
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 4,
+                            elevation: 2,
+                          }
+                      : {}),
                   },
                 ]}
               >
@@ -314,15 +314,17 @@ export default function WalletScreen() {
                       theme.name === 'light'
                         ? theme.colors.border
                         : 'transparent',
-                    shadowColor:
-                      theme.name === 'light' ? '#000' : 'transparent',
-                    shadowOffset:
-                      theme.name === 'light'
-                        ? { width: 0, height: 2 }
-                        : { width: 0, height: 0 },
-                    shadowOpacity: theme.name === 'light' ? 0.1 : 0,
-                    shadowRadius: theme.name === 'light' ? 4 : 0,
-                    elevation: theme.name === 'light' ? 2 : 0,
+                    ...(theme.name === 'light'
+                      ? Platform.OS === 'web'
+                        ? { boxShadow: '0px 2px 4px rgba(0,0,0,0.1)' }
+                        : {
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 4,
+                            elevation: 2,
+                          }
+                      : {}),
                   },
                 ]}
               >
@@ -352,15 +354,17 @@ export default function WalletScreen() {
                       theme.name === 'light'
                         ? theme.colors.border
                         : 'transparent',
-                    shadowColor:
-                      theme.name === 'light' ? '#000' : 'transparent',
-                    shadowOffset:
-                      theme.name === 'light'
-                        ? { width: 0, height: 2 }
-                        : { width: 0, height: 0 },
-                    shadowOpacity: theme.name === 'light' ? 0.1 : 0,
-                    shadowRadius: theme.name === 'light' ? 4 : 0,
-                    elevation: theme.name === 'light' ? 2 : 0,
+                    ...(theme.name === 'light'
+                      ? Platform.OS === 'web'
+                        ? { boxShadow: '0px 2px 4px rgba(0,0,0,0.1)' }
+                        : {
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 4,
+                            elevation: 2,
+                          }
+                      : {}),
                   },
                 ]}
               >
@@ -532,17 +536,7 @@ export default function WalletScreen() {
 
           <Card style={styles.transactionCard}>
             {transactionsLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color={theme.colors.primary} />
-                <Text
-                  style={[
-                    styles.loadingText,
-                    { color: theme.colors.textMuted },
-                  ]}
-                >
-                  Loading transactions...
-                </Text>
-              </View>
+              <InlineLoading message="Loading transactions..." size="small" />
             ) : transactionsError ? (
               <View style={styles.errorContainer}>
                 <Text style={[styles.errorText, { color: theme.colors.error }]}>
@@ -830,16 +824,6 @@ const styles = StyleSheet.create({
   viewAllText: {
     fontSize: 14,
     fontFamily: 'Inter-Medium',
-  },
-  loadingContainer: {
-    padding: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    marginTop: 8,
   },
   errorContainer: {
     padding: 32,

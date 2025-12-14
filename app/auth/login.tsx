@@ -207,24 +207,56 @@ export default function LoginScreen() {
     try {
       if (provider === 'google') {
         // Use modal presentation
-        const result = await signInWithGoogle();
+        try {
+          const result = await signInWithGoogle();
 
-        if (result.success) {
-          toast.success({
-            title: 'Welcome!',
-            message: 'Successfully logged in with Google',
-          });
-          // Navigate to home
-          router.replace('/(tabs)/');
-        } else if (result.cancelled) {
-          toast.info({
-            title: 'Cancelled',
-            message: 'Google sign-in was cancelled',
-          });
-        } else if (result.error) {
+          if (result.success && result.session) {
+            // Session is established, now verify user profile exists
+            // If profile doesn't exist, callback handler will create it
+            // Don't navigate here - let callback handler or auth state change handle navigation
+            const { data: userProfile } = await supabase
+              .from('users')
+              .select('id')
+              .eq('auth_id', result.session.user.id)
+              .single();
+            
+            if (userProfile) {
+              // User profile exists - authentication is complete
+              // Navigation will be handled by auth state change listener in _layout.tsx
+              toast.success({
+                title: 'Welcome!',
+                message: 'Successfully logged in with Google',
+              });
+            } else {
+              // Profile doesn't exist yet - callback handler will create it
+              // Show loading message, callback handler will handle navigation
+              toast.show({
+                type: 'info',
+                title: 'Setting up your account...',
+                message: 'Please wait',
+              });
+            }
+          } else if (result.cancelled) {
+            toast.info({
+              title: 'Cancelled',
+              message: 'Google sign-in was cancelled',
+            });
+          } else if (result.error) {
+            toast.error({
+              title: 'Login Failed',
+              message: result.error,
+            });
+          } else if (result.success) {
+            // Success but needs callback handler - browser is opening, don't show error
+            // The callback handler will process the authentication
+            // No toast needed here - browser will show Google's UI
+          }
+        } catch (googleError: any) {
+          // Catch any unhandled errors from signInWithGoogle
+          console.error('Google sign-in error:', googleError);
           toast.error({
             title: 'Login Failed',
-            message: result.error,
+            message: googleError?.message || 'An unexpected error occurred',
           });
         }
       } else {

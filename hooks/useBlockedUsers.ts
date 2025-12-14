@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { handleError } from '@/lib/errorHandler';
 import { logger } from '@/lib/logger';
 import { usersService } from '@/services/supabase';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
 
 type BlockedUserWithDetails = Awaited<
   ReturnType<typeof usersService.getBlockedUsers>
@@ -25,8 +26,7 @@ export function useBlockedUsers() {
         throw error;
       }
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 30, // 30 minutes
+    ...CACHE_CONFIG.BLOCKED_USERS,
   });
 }
 

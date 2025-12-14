@@ -4,6 +4,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { handleError } from '@/lib/errorHandler';
 import { logger } from '@/lib/logger';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
 import { usersService } from '@/services/supabase';
 import type {
   AccountSettings,
@@ -45,8 +46,7 @@ export function useAccountSettings() {
         throw error;
       }
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 30, // 30 minutes
+    ...CACHE_CONFIG.ACCOUNT_SETTINGS,
   });
 }
 
@@ -130,8 +130,7 @@ export function useAvailabilitySettings() {
         throw error;
       }
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 30, // 30 minutes
+    ...CACHE_CONFIG.AVAILABILITY_SETTINGS,
   });
 }
 
@@ -190,4 +189,3 @@ export {
   useNotificationSettings,
   useUpdateNotificationSettings,
 } from './useNotifications';
-

@@ -13,6 +13,10 @@ import {
 import * as SplashScreen from 'expo-splash-screen';
 import { initI18n } from '../lib/i18n';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAutoAvailability } from '../hooks/useAutoAvailability';
 import { useProfile } from '../hooks/useProfile';
 import { logger } from '../lib/logger';
@@ -20,6 +24,9 @@ import { setupGlobalErrorHandlers } from '../lib/globalErrorHandler';
 import * as Sentry from '@sentry/react-native';
 import { SentryAdapter } from '../lib/sentryAdapter';
 import { notificationsService } from '../services';
+import { Platform } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
+import { OfflineBanner } from '../components/ui/OfflineBanner';
 
 // Initialize Sentry
 Sentry.init({
@@ -37,15 +44,70 @@ try {
 
 SplashScreen.preventAutoHideAsync();
 
-// Create a QueryClient instance
+// Create AsyncStorage persister for React Query cache
+const asyncStoragePersister = createAsyncStoragePersister({
+  storage: AsyncStorage,
+  key: 'REACT_QUERY_OFFLINE_CACHE',
+  throttleTime: 1000, // Throttle saves to avoid too frequent writes
+});
+
+// Create a QueryClient instance with offline support
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
+      retry: (failureCount, error: any) => {
+        // Don't retry if offline
+        if (
+          error?.message?.includes('network') ||
+          error?.message?.includes('fetch')
+        ) {
+          return false;
+        }
+        // Retry once for other errors
+        return failureCount < 1;
+      },
       refetchOnWindowFocus: false,
+      // Use cached data when offline
+      networkMode: 'offlineFirst',
+    },
+    mutations: {
+      // Don't retry mutations when offline
+      retry: (failureCount, error: any) => {
+        if (
+          error?.message?.includes('network') ||
+          error?.message?.includes('fetch')
+        ) {
+          return false;
+        }
+        return failureCount < 1;
+      },
+      networkMode: 'offlineFirst',
     },
   },
 });
+
+// Setup network status listener for React Query
+// Works on both mobile and web
+if (Platform.OS === 'web') {
+  // Web: Use navigator.onLine events
+  if (typeof window !== 'undefined') {
+    const handleOnline = () => {
+      queryClient.refetchQueries();
+    };
+
+    window.addEventListener('online', handleOnline);
+
+    // Cleanup is handled by app lifecycle
+  }
+} else {
+  // Mobile: Use NetInfo
+  NetInfo.addEventListener((state) => {
+    if (state.isConnected) {
+      // When back online, refetch all queries
+      queryClient.refetchQueries();
+    }
+  });
+}
 
 // Auto Availability Wrapper Component
 function AutoAvailabilityWrapper({ children }: { children: React.ReactNode }) {
@@ -163,7 +225,14 @@ export default function RootLayout() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{
+        persister: asyncStoragePersister,
+        maxAge: 1000 * 60 * 60 * 24, // 24 hours
+        buster: '', // Cache version - change this to invalidate all cache
+      }}
+    >
       <ThemeProvider>
         <AutoAvailabilityWrapper>
           <Stack screenOptions={{ headerShown: false }}>
@@ -187,9 +256,13 @@ export default function RootLayout() {
             <Stack.Screen name="profile/devices" />
           </Stack>
           <StatusBar style="auto" translucent={false} />
+          <OfflineBanner />
           <ToastStack />
         </AutoAvailabilityWrapper>
       </ThemeProvider>
-    </QueryClientProvider>
+      {__DEV__ && Platform.OS === 'web' && (
+        <ReactQueryDevtools initialIsOpen={false} />
+      )}
+    </PersistQueryClientProvider>
   );
 }

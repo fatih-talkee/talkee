@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { stripeService } from '@/services/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useCurrentUser } from '@/hooks/useUser';
 import { User } from '@/types/database.types';
 
 // Conditional import for Stripe (native-only, doesn't work on web)
@@ -35,7 +36,7 @@ if (Platform.OS !== 'web') {
 }
 export default function CreditsScreen() {
   const stripe = useStripe ? useStripe() : null;
-  const { user } = useAuth() as unknown as { user: User | null };
+  const { data: user } = useCurrentUser();
   const [loading, setLoading] = useState(false);
   const [credits, setCredits] = useState<any>(null);
 
@@ -86,14 +87,14 @@ export default function CreditsScreen() {
       Alert.alert('Error', 'Please login first');
       return;
     }
-
+ console.log('User:', user); // Debug için
     setLoading(true);
     try {
       // 1. Create payment intent
       console.log('Creating payment intent...');
       const { clientSecret } = await stripeService.createPaymentIntent(
         amount,
-        user.id
+        user.id || '' 
       );
 
       if (!stripe) {

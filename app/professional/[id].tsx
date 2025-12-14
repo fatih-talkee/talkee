@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
-  ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Href, router, useLocalSearchParams } from 'expo-router';
@@ -34,6 +34,9 @@ import { TabButtons } from '@/components/ui/TabButtons';
 import { Card } from '@/components/ui/Card';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ShareProfileModal } from '@/components/profile/ShareProfileModal';
+import { PageLoading } from '@/components/ui/PageLoading';
+import { SectionLoading } from '@/components/ui/SectionLoading';
+import { useIsOnline } from '@/hooks/useNetworkStatus';
 
 // ✅ API HOOKS
 import { useProfessional } from '@/hooks/useProfessionals';
@@ -58,6 +61,7 @@ type TabType = 'feed' | 'about' | 'availability' | 'cv';
 export default function ProfessionalProfileScreen() {
   const { id } = useLocalSearchParams();
   const { theme } = useTheme();
+  const isNetworkOnline = useIsOnline();
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [voiceModalVisible, setVoiceModalVisible] = useState(false);
   const [videoModalVisible, setVideoModalVisible] = useState(false);
@@ -349,6 +353,10 @@ export default function ProfessionalProfileScreen() {
     return colors[Math.abs(hash) % colors.length];
   };
 
+  // ✅ Use professional data directly (no need to adapt)
+  // Must be defined before useEffect that uses it
+  const professional = professionalData || null;
+
   // Reset avatar error when professional changes
   useEffect(() => {
     setAvatarError(false);
@@ -357,9 +365,6 @@ export default function ProfessionalProfileScreen() {
 
   // ✅ Toggle favorite mutation
   const toggleFavoriteMutation = useToggleFavorite();
-
-  // ✅ Use professional data directly (no need to adapt)
-  const professional = professionalData || null;
 
   const handleToggleFavorite = async () => {
     try {
@@ -415,25 +420,46 @@ export default function ProfessionalProfileScreen() {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <Header showLogo showBack />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
-            Loading professional...
-          </Text>
-        </View>
+        <PageLoading message="Loading professional..." />
       </SafeAreaView>
     );
   }
 
+  // Offline durumunda cache'lenmiş verileri göster, sadece gerçekten veri yoksa hata göster
   if (error || !professional) {
+    // Offline durumunda ve cache'de veri yoksa
+    if (!isNetworkOnline && !professional) {
+      return (
+        <SafeAreaView
+          style={[styles.container, { backgroundColor: theme.colors.background }]}
+        >
+          <Header showLogo showBack />
+          <View style={styles.errorContainer}>
+            <AlertCircle size={48} color={theme.colors.textMuted} />
+            <Text style={[styles.errorText, { color: theme.colors.text }]}>
+              No Internet Connection
+            </Text>
+            <Text style={[styles.errorSubtext, { color: theme.colors.textMuted }]}>
+              Please check your connection and try again
+            </Text>
+          </View>
+        </SafeAreaView>
+      );
+    }
+
+    // Online durumunda veya gerçekten professional bulunamadıysa
     return (
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <Header showLogo showBack />
         <View style={styles.errorContainer}>
+          <AlertCircle size={48} color={theme.colors.error} />
           <Text style={[styles.errorText, { color: theme.colors.error }]}>
             Professional not found
+          </Text>
+          <Text style={[styles.errorSubtext, { color: theme.colors.textMuted }]}>
+            The professional you're looking for doesn't exist or has been removed
           </Text>
         </View>
       </SafeAreaView>
@@ -446,17 +472,7 @@ export default function ProfessionalProfileScreen() {
         if (feedsLoading) {
           return (
             <View style={styles.feedContainer}>
-              <View style={styles.emptyState}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text
-                  style={[
-                    styles.emptyStateText,
-                    { color: theme.colors.textMuted },
-                  ]}
-                >
-                  Loading posts...
-                </Text>
-              </View>
+              <SectionLoading size="large" />
             </View>
           );
         }
@@ -2472,24 +2488,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    marginTop: 16,
-  },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 24,
+    gap: 16,
   },
   errorText: {
     fontSize: 18,
     fontFamily: 'Inter-Bold',
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
+    marginTop: 8,
   },
   headerActions: {
     flexDirection: 'row',
@@ -2716,11 +2731,15 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 16,
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 2,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 2px 12px rgba(0,0,0,0.08)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 12,
+          elevation: 2,
+        }),
   },
   availabilityHeader: {
     flexDirection: 'row',

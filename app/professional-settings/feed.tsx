@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   SafeAreaView,
-  ActivityIndicator,
   TextInput,
   Modal,
   Pressable,
@@ -17,6 +16,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { PageLoading } from '@/components/ui/PageLoading';
 import { useProfile } from '@/hooks/useProfile';
 import { useToast } from '@/lib/toastService';
 import {
@@ -257,14 +257,7 @@ export default function FeedScreen() {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <Header showLogo showBack onBackPress={() => router.back()} />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text
-            style={[styles.loadingText, { color: theme.colors.textMuted }]}
-          >
-            Loading feeds...
-          </Text>
-        </View>
+        <PageLoading message="Loading feeds..." />
       </SafeAreaView>
     );
   }
@@ -639,16 +632,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 24,
     paddingBottom: 100,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
   },
   header: {
     marginBottom: 32,

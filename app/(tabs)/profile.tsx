@@ -8,7 +8,6 @@ import {
   ScrollView,
   Image,
   Share,
-  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -38,7 +37,9 @@ import { useToast } from '@/lib/toastService';
 import { ShareProfileModal } from '@/components/profile/ShareProfileModal';
 import { AvatarUploadModal } from '@/components/profile/AvatarUploadModal';
 import { useProfile } from '@/hooks/useProfile';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { PageLoading } from '@/components/ui/PageLoading';
 
 interface MenuSection {
   title: string;
@@ -58,6 +59,9 @@ export default function ProfileScreen() {
   const [avatarModalVisible, setAvatarModalVisible] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const toast = useToast();
+
+  // ✅ Check auth state first to prevent loading stuck after sign-out
+  const { isAuthenticated } = useAuth();
 
   // ✅ Use real profile data
   const { user, stats, isProfessional, professional, isLoading, profileData } =
@@ -105,6 +109,19 @@ export default function ProfileScreen() {
     return colors[index];
   };
 
+  // ✅ If not authenticated, show loading and let navigation handle redirect
+  // This prevents the loading stuck issue after sign-out
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <Header showLogo={true} />
+        <PageLoading />
+      </SafeAreaView>
+    );
+  }
+
   // ✅ Loading state
   if (isLoading) {
     return (
@@ -112,25 +129,21 @@ export default function ProfileScreen() {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <Header showLogo={true} />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
+        <PageLoading />
       </SafeAreaView>
     );
   }
 
   // ✅ No user state (shouldn't happen, but defensive)
+  // Show loading instead of error to prevent flash of error message during sign out
+  // The useAuth hook will handle navigation on SIGNED_OUT event immediately
   if (!user || !stats) {
     return (
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <Header showLogo={true} />
-        <View style={styles.loadingContainer}>
-          <Text style={{ color: theme.colors.text }}>
-            Unable to load profile
-          </Text>
-        </View>
+        <PageLoading />
       </SafeAreaView>
     );
   }
@@ -196,11 +209,9 @@ export default function ProfileScreen() {
         message: 'See you soon!',
       });
 
-      // ✅ Navigate to login screen
-      // Use setTimeout to ensure toast is visible before navigation
-      setTimeout(() => {
-        router.replace('/auth/login');
-      }, 1000);
+      // ✅ Navigation will be handled automatically by useAuth hook's onAuthStateChange listener
+      // No need to navigate manually - this prevents showing "Unable to load profile" screen
+      // The auth state change will trigger navigation to login immediately
     } catch (error: any) {
       console.error('Unexpected sign out error:', error);
       toast.error({
@@ -889,10 +900,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
     lineHeight: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 });

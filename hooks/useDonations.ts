@@ -4,6 +4,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { handleError } from '@/lib/errorHandler';
 import { logger } from '@/lib/logger';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
 import type { CharityOrganization } from '@/types';
 
 // Temporary type until backend is ready
@@ -24,8 +25,7 @@ export function useDonationOrganizations() {
       // TODO: Replace with actual API call
       return Promise.resolve(mockDonationOrganizations);
     },
-    staleTime: 1000 * 60 * 30, // 30 minutes (organizations don't change often)
-    gcTime: 1000 * 60 * 60, // 1 hour
+    ...CACHE_CONFIG.DONATION_ORGANIZATIONS,
   });
 }
 
@@ -57,4 +57,3 @@ export function useSaveCallDonation() {
     },
   });
 }
-

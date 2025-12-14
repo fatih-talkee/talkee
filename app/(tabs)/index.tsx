@@ -6,7 +6,6 @@ import {
   ScrollView,
   SafeAreaView,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
 import { Link } from 'expo-router';
 import { Bell } from 'lucide-react-native';
@@ -16,6 +15,8 @@ import { PromotionCarousel } from '@/components/carousel/PromotionCarousel';
 import { useTheme } from '@/contexts/ThemeContext';
 import { router } from 'expo-router';
 import { Header } from '@/components/ui/Header';
+import { SectionLoading } from '@/components/ui/SectionLoading';
+import { InlineLoading } from '@/components/ui/InlineLoading';
 
 // ✅ API HOOKS
 import { useFeaturedProfessionals } from '@/hooks/useProfessionals';
@@ -112,9 +113,7 @@ export default function HomeScreen() {
 
         {/* Browse by Category */}
         {categoriesLoading ? (
-          <View style={styles.loadingSection}>
-            <ActivityIndicator size="small" color={theme.colors.primary} />
-          </View>
+          <SectionLoading />
         ) : categories.length > 0 ? (
           <View style={styles.section}>
             <CategoryGrid categories={categories as unknown as any[]} />
@@ -139,14 +138,10 @@ export default function HomeScreen() {
           </View>
 
           {professionalsLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text
-                style={[styles.loadingText, { color: theme.colors.textMuted }]}
-              >
-                Loading featured professionals...
-              </Text>
-            </View>
+            <InlineLoading
+              message="Loading featured professionals..."
+              size="large"
+            />
           ) : professionalsError ? (
             <View style={styles.errorContainer}>
               <Text
@@ -240,20 +235,6 @@ const styles = StyleSheet.create({
   },
   professionalsGrid: {
     paddingHorizontal: 20,
-  },
-  loadingSection: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-  loadingContainer: {
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    marginTop: 12,
   },
   errorContainer: {
     paddingVertical: 40,

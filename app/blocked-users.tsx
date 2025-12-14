@@ -5,7 +5,6 @@ import {
   StyleSheet,
   SafeAreaView,
   FlatList,
-  ActivityIndicator,
 } from 'react-native';
 import { UserX } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
@@ -15,6 +14,7 @@ import { useBlockedUsers, useUnblockUser } from '@/hooks/useBlockedUsers';
 import { useToast } from '@/lib/toastService';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
 import type { ProfessionalWithRelations } from '@/types/database.types';
+import { PageLoading } from '@/components/ui/PageLoading';
 
 type BlockedUserItem = {
   id: string;
@@ -92,12 +92,7 @@ export default function BlockedUsersScreen() {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <Header showLogo showBack />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
-            Loading blocked users...
-          </Text>
-        </View>
+        <PageLoading message="Loading blocked users..." />
       </SafeAreaView>
     );
   }
@@ -185,16 +180,6 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     overflow: 'hidden',
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
   },
   listContent: {
     padding: 24,

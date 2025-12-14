@@ -6,6 +6,27 @@ import {
 } from '@tanstack/react-query';
 import { professionalsService } from '@/services/supabase/professionals.service';
 import { ProfessionalWithRelations } from '@/types/database.types';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
+
+// Query Keys Factory Pattern
+export const professionalsKeys = {
+  all: ['professionals'] as const,
+  lists: () => [...professionalsKeys.all, 'list'] as const,
+  list: (categoryId?: string) =>
+    [...professionalsKeys.lists(), categoryId] as const,
+  available: (categoryId?: string) =>
+    [...professionalsKeys.all, 'available', categoryId] as const,
+  featured: (limit?: number, categoryId?: string) =>
+    [...professionalsKeys.all, 'featured', limit, categoryId] as const,
+  details: () => [...professionalsKeys.all, 'detail'] as const,
+  detail: (id: string) => [...professionalsKeys.details(), id] as const,
+  search: (query: string) =>
+    [...professionalsKeys.all, 'search', query] as const,
+  infinite: (categoryId?: string) =>
+    [...professionalsKeys.all, 'infinite', categoryId] as const,
+  searchInfinite: (query: string) =>
+    [...professionalsKeys.all, 'search-infinite', query] as const,
+};
 
 /**
  * Get professionals list (optionally filtered by category)
@@ -14,10 +35,9 @@ import { ProfessionalWithRelations } from '@/types/database.types';
  */
 export function useProfessionals(categoryId?: string) {
   return useQuery<ProfessionalWithRelations[]>({
-    queryKey: ['professionals', categoryId],
+    queryKey: professionalsKeys.list(categoryId),
     queryFn: () => professionalsService.getProfessionals(categoryId),
-    staleTime: 1000 * 60 * 2, // 2 minutes
-    gcTime: 1000 * 60 * 10, // 10 minutes
+    ...CACHE_CONFIG.PROFESSIONALS_LIST,
   });
 }
 
@@ -28,10 +48,9 @@ export function useProfessionals(categoryId?: string) {
  */
 export function useAvailableProfessionals(categoryId?: string) {
   return useQuery<ProfessionalWithRelations[]>({
-    queryKey: ['professionals', 'available', categoryId],
+    queryKey: professionalsKeys.available(categoryId),
     queryFn: () => professionalsService.getAvailableProfessionals(categoryId),
-    staleTime: 1000 * 60, // 1 minute
-    gcTime: 1000 * 60 * 5, // 5 minutes
+    ...CACHE_CONFIG.PROFESSIONAL_AVAILABLE,
   });
 }
 
@@ -45,11 +64,10 @@ export function useFeaturedProfessionals(
   categoryId?: string
 ) {
   return useQuery<ProfessionalWithRelations[]>({
-    queryKey: ['professionals', 'featured', limit, categoryId],
+    queryKey: professionalsKeys.featured(limit, categoryId),
     queryFn: () =>
       professionalsService.getFeaturedProfessionals(limit, categoryId),
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 15, // 15 minutes
+    ...CACHE_CONFIG.PROFESSIONAL_FEATURED,
   });
 }
 
@@ -59,11 +77,10 @@ export function useFeaturedProfessionals(
  */
 export function useProfessional(id: string) {
   return useQuery<ProfessionalWithRelations | null>({
-    queryKey: ['professional', id],
+    queryKey: professionalsKeys.detail(id),
     queryFn: () => professionalsService.getProfessional(id),
     enabled: !!id,
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 15, // 15 minutes
+    ...CACHE_CONFIG.PROFESSIONAL_DETAIL,
   });
 }
 
@@ -74,11 +91,10 @@ export function useProfessional(id: string) {
  */
 export function useSearchProfessionals(query: string) {
   return useQuery<ProfessionalWithRelations[]>({
-    queryKey: ['professionals', 'search', query],
+    queryKey: professionalsKeys.search(query),
     queryFn: () => professionalsService.searchProfessionals(query),
     enabled: query.length > 0,
-    staleTime: 1000 * 60, // 1 minute
-    gcTime: 1000 * 60 * 5, // 5 minutes
+    ...CACHE_CONFIG.PROFESSIONAL_SEARCH,
   });
 }
 
@@ -91,7 +107,7 @@ export function useInfiniteProfessionals(categoryId?: string) {
   const PAGE_SIZE = 20;
 
   return useInfiniteQuery<ProfessionalWithRelations[]>({
-    queryKey: ['professionals', 'infinite', categoryId],
+    queryKey: professionalsKeys.infinite(categoryId),
     queryFn: ({ pageParam = 0 }) => {
       return professionalsService.getProfessionals(
         categoryId,
@@ -107,8 +123,7 @@ export function useInfiniteProfessionals(categoryId?: string) {
       return allPages.length;
     },
     initialPageParam: 0,
-    staleTime: 1000 * 60 * 2, // 2 minutes
-    gcTime: 1000 * 60 * 10, // 10 minutes
+    ...CACHE_CONFIG.PROFESSIONALS_LIST,
   });
 }
 
@@ -121,7 +136,7 @@ export function useInfiniteSearchProfessionals(query: string) {
   const PAGE_SIZE = 20;
 
   return useInfiniteQuery<ProfessionalWithRelations[]>({
-    queryKey: ['professionals', 'search-infinite', query],
+    queryKey: professionalsKeys.searchInfinite(query),
     queryFn: ({ pageParam = 0 }) => {
       return professionalsService.searchProfessionals(
         query,
@@ -138,8 +153,7 @@ export function useInfiniteSearchProfessionals(query: string) {
     },
     initialPageParam: 0,
     enabled: query.length > 0,
-    staleTime: 1000 * 60, // 1 minute
-    gcTime: 1000 * 60 * 5, // 5 minutes
+    ...CACHE_CONFIG.PROFESSIONAL_SEARCH,
   });
 }
 
@@ -149,6 +163,6 @@ export function useInfiniteSearchProfessionals(query: string) {
 export function useInvalidateProfessionals() {
   const queryClient = useQueryClient();
   return () => {
-    queryClient.invalidateQueries({ queryKey: ['professionals'] });
+    queryClient.invalidateQueries({ queryKey: professionalsKeys.all });
   };
 }

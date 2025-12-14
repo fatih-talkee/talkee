@@ -14,6 +14,7 @@ import {
   FavoriteWithProfessional,
   ProfessionalWithRelations,
 } from '@/types/database.types';
+import { CACHE_CONFIG } from '@/lib/cacheConfig';
 
 // Query Keys
 export const favoritesKeys = {
@@ -33,8 +34,7 @@ export function useFavorites(): UseQueryResult<ProfessionalWithRelations[]> {
       const favorites = await favoritesService.getFavorites();
       return favorites as unknown as ProfessionalWithRelations[];
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 10 * 60 * 1000,
+    ...CACHE_CONFIG.FAVORITES,
   });
 }
 
@@ -46,8 +46,7 @@ export function useIsFavorite(professionalId: string) {
     queryKey: favoritesKeys.check(professionalId),
     queryFn: () => favoritesService.isFavorite(professionalId),
     enabled: !!professionalId,
-    staleTime: 2 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    ...CACHE_CONFIG.FAVORITES,
   });
 }
 

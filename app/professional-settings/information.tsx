@@ -7,12 +7,12 @@ import {
   TextInput,
   SafeAreaView,
   Platform,
-  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
+import { PageLoading } from '@/components/ui/PageLoading';
 import { useProfile } from '@/hooks/useProfile';
 import { professionalsService } from '@/services/supabase/professionals.service';
 import { usersService } from '@/services/supabase/user.service';
@@ -168,12 +168,7 @@ export default function InformationScreen() {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <Header showLogo showBack onBackPress={() => router.back()} />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
-            Loading information...
-          </Text>
-        </View>
+        <PageLoading message="Loading information..." />
       </SafeAreaView>
     );
   }
@@ -372,16 +367,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 24,
     paddingBottom: 100,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
   },
   header: {
     marginBottom: 32,

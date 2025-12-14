@@ -7,6 +7,7 @@ import {
   FlatList,
   TouchableOpacity,
   Image,
+  Platform,
 } from 'react-native';
 import { Header } from '@/components/ui/Header';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -265,14 +266,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 2px 4px rgba(0,0,0,0.1)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: {
+            width: 0,
+            height: 2,
+          },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 3,
+        }),
   },
   recordingContent: {
     flexDirection: 'row',
