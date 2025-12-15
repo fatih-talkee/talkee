@@ -189,11 +189,18 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
             invoice.id
           );
           stripeInvoiceId = finalizedInvoice.id;
-          invoicePdfUrl = finalizedInvoice.hosted_invoice_url || null;
+          // Try both hosted_invoice_url (web view) and invoice_pdf (PDF download)
+          invoicePdfUrl =
+            finalizedInvoice.hosted_invoice_url ||
+            finalizedInvoice.invoice_pdf ||
+            null;
 
           console.log('Stripe invoice created:', {
             ...logContext,
             invoice_id: stripeInvoiceId,
+            hosted_invoice_url: finalizedInvoice.hosted_invoice_url,
+            invoice_pdf: finalizedInvoice.invoice_pdf,
+            pdf_url: invoicePdfUrl,
           });
         }
       } catch (invoiceError: any) {
@@ -201,7 +208,17 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
         console.warn('Failed to create Stripe invoice:', {
           ...logContext,
           error: invoiceError.message,
+          customer_id: customerId,
+          has_customer: !!customerId,
         });
+        // If customerId exists but invoice creation failed, log more details
+        if (customerId) {
+          console.warn('Invoice creation failed despite having customerId:', {
+            ...logContext,
+            customer_id: customerId,
+            error_details: invoiceError,
+          });
+        }
       }
 
       // Add credits to user (creates credit_transactions record and updates wallet_balance)
@@ -293,6 +310,9 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
             payment_intent_id: paymentIntent.id,
             stripe_invoice_id: stripeInvoiceId || null,
             credits: amount,
+            // Add invoice URL to metadata as well for easier access
+            hosted_url: invoicePdfUrl || null,
+            invoice_pdf: invoicePdfUrl || null,
           },
         });
 

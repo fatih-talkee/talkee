@@ -248,19 +248,44 @@ export default function InvoicesScreen() {
   };
 
   const handleViewInvoice = async (invoice: InvoiceWithRelations) => {
-    // Try different possible keys for hosted URL
-    const viewUrl =
-      invoice.metadata?.hosted_url ||
-      invoice.metadata?.hostedUrl ||
-      invoice.metadata?.url ||
-      invoice.metadata?.view_url ||
-      invoice.metadata?.viewUrl;
+    // Check if this is a credit purchase
+    const isCreditPurchase =
+      invoice.metadata?.type === 'credit_purchase' || !invoice.professional_id;
+
+    // For credit purchase, try pdf_url first, then metadata URLs
+    // For regular invoices, try metadata hosted URLs first, then pdf_url
+    const viewUrl = isCreditPurchase
+      ? invoice.pdf_url ||
+        invoice.metadata?.hosted_url ||
+        invoice.metadata?.hostedUrl ||
+        invoice.metadata?.url ||
+        invoice.metadata?.view_url ||
+        invoice.metadata?.viewUrl
+      : invoice.metadata?.hosted_url ||
+        invoice.metadata?.hostedUrl ||
+        invoice.metadata?.url ||
+        invoice.metadata?.view_url ||
+        invoice.metadata?.viewUrl ||
+        invoice.pdf_url;
 
     if (!viewUrl) {
-      Alert.alert(
-        'Invoice URL Not Available',
-        'The invoice view URL is not available. Please contact support if this issue persists.'
-      );
+      // For credit purchase, show a more helpful message
+      if (isCreditPurchase) {
+        Alert.alert(
+          'Invoice Details',
+          `Invoice #${
+            invoice.invoice_number
+          }\n\nAmount: $${invoice.total_amount.toFixed(2)}\nDate: ${formatDate(
+            invoice.invoice_date
+          )}\nStatus: ${invoice.status}\n\n${invoice.notes || ''}`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Invoice URL Not Available',
+          'The invoice view URL is not available. Please contact support if this issue persists.'
+        );
+      }
       return;
     }
 
@@ -278,13 +303,28 @@ export default function InvoicesScreen() {
   };
 
   const renderInvoiceItem = ({ item }: { item: InvoiceWithRelations }) => {
-    const professionalName =
-      item.professional?.users?.name || 'Unknown Professional';
-    const professionalAvatar = item.professional?.users?.avatar_url || '';
-    const professionalTitle =
-      item.professional?.categories?.name ||
-      item.professional?.users?.name ||
-      'Professional';
+    // Check if this is a credit purchase (no professional)
+    const isCreditPurchase =
+      item.metadata?.type === 'credit_purchase' || !item.professional_id;
+
+    // For credit purchase, show caller (user) name, otherwise show professional name
+    const displayName = isCreditPurchase
+      ? item.caller?.name || 'You'
+      : item.professional?.users?.name || 'Unknown Professional';
+
+    const displayAvatar = isCreditPurchase
+      ? item.caller?.avatar_url || ''
+      : item.professional?.users?.avatar_url || '';
+
+    const displayTitle = isCreditPurchase
+      ? 'Credit Purchase'
+      : item.professional?.categories?.name ||
+        item.professional?.users?.name ||
+        'Professional';
+
+    const professionalName = displayName;
+    const professionalAvatar = displayAvatar;
+    const professionalTitle = displayTitle;
     const invoiceId = item.id;
     const hasAvatarError = avatarErrors[invoiceId] || false;
 
@@ -306,6 +346,15 @@ export default function InvoicesScreen() {
         <TouchableOpacity
           style={styles.invoiceContainer}
           onPress={() => {
+            // Don't navigate to professional page for credit purchase
+            const isCreditPurchase =
+              item.metadata?.type === 'credit_purchase' ||
+              !item.professional_id;
+            if (isCreditPurchase) {
+              // For credit purchase, just show invoice details
+              handleViewInvoice(item);
+              return;
+            }
             if (!item.professional_id) {
               console.error('Professional ID is missing');
               return;
@@ -470,14 +519,20 @@ export default function InvoicesScreen() {
                   theme.name === 'light'
                     ? theme.colors.primary
                     : theme.colors.primaryLight,
-                opacity: item.metadata?.hosted_url ? 1 : 0.6,
+                // Enable button if there's any URL or if it's a credit purchase (show details)
+                opacity:
+                  item.metadata?.hosted_url ||
+                  item.pdf_url ||
+                  item.metadata?.type === 'credit_purchase'
+                    ? 1
+                    : 0.6,
               },
             ]}
             onPress={(e) => {
               e.stopPropagation();
               handleViewInvoice(item);
             }}
-            disabled={!item.metadata?.hosted_url}
+            disabled={false} // Always enabled - will show details if no URL
           >
             <FileText size={16} color={theme.colors.surface} />
             <Text
