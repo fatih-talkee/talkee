@@ -146,27 +146,51 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
 
       // Ensure Stripe customer exists
       let customerId = user.stripe_customer_id;
-      if (!customerId && user.primary_email) {
-        // Create Stripe customer if doesn't exist
-        const customer = await stripe.customers.create({
-          email: user.primary_email,
-          name: user.name || 'User',
-          metadata: {
-            user_id: user.id,
-          },
-        });
-        customerId = customer.id;
+      if (!customerId) {
+        // Try to get email from user or payment intent
+        const userEmail =
+          user.primary_email ||
+          paymentIntent.receipt_email ||
+          paymentIntent.customer_email;
 
-        // Update user with customer ID
-        await supabase
-          .from('users')
-          .update({ stripe_customer_id: customerId })
-          .eq('id', user_id);
+        if (userEmail) {
+          try {
+            // Create Stripe customer if doesn't exist
+            const customer = await stripe.customers.create({
+              email: userEmail,
+              name: user.name || 'User',
+              metadata: {
+                user_id: user.id,
+              },
+            });
+            customerId = customer.id;
 
-        console.log('Stripe customer created:', {
-          ...logContext,
-          customer_id: customerId,
-        });
+            // Update user with customer ID
+            await supabase
+              .from('users')
+              .update({ stripe_customer_id: customerId })
+              .eq('id', user_id);
+
+            console.log('Stripe customer created:', {
+              ...logContext,
+              customer_id: customerId,
+              email: userEmail,
+            });
+          } catch (customerError: any) {
+            console.warn('Failed to create Stripe customer:', {
+              ...logContext,
+              error: customerError.message,
+              email: userEmail,
+            });
+          }
+        } else {
+          console.warn('Cannot create Stripe customer - no email available:', {
+            ...logContext,
+            user_primary_email: user.primary_email,
+            payment_intent_receipt_email: paymentIntent.receipt_email,
+            payment_intent_customer_email: paymentIntent.customer_email,
+          });
+        }
       }
 
       // Create Stripe invoice (optional but recommended)
@@ -202,6 +226,13 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
             invoice_pdf: finalizedInvoice.invoice_pdf,
             pdf_url: invoicePdfUrl,
           });
+        } else {
+          console.warn('Skipping Stripe invoice creation - no customer ID:', {
+            ...logContext,
+            user_primary_email: user.primary_email,
+            payment_intent_receipt_email: paymentIntent.receipt_email,
+            payment_intent_customer_email: paymentIntent.customer_email,
+          });
         }
       } catch (invoiceError: any) {
         // Invoice creation is optional, log but don't fail
@@ -210,6 +241,8 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
           error: invoiceError.message,
           customer_id: customerId,
           has_customer: !!customerId,
+          error_code: invoiceError.code,
+          error_type: invoiceError.type,
         });
         // If customerId exists but invoice creation failed, log more details
         if (customerId) {

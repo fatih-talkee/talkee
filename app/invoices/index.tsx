@@ -30,6 +30,7 @@ import type {
   InvoiceStatus,
 } from '@/types/database.types';
 import { PageLoading } from '@/components/ui/PageLoading';
+import { supabase } from '@/lib/supabase';
 
 type FilterStatus = 'all' | 'paid' | 'pending' | 'overdue' | 'cancelled';
 
@@ -254,7 +255,7 @@ export default function InvoicesScreen() {
 
     // For credit purchase, try pdf_url first, then metadata URLs
     // For regular invoices, try metadata hosted URLs first, then pdf_url
-    const viewUrl = isCreditPurchase
+    let viewUrl = isCreditPurchase
       ? invoice.pdf_url ||
         invoice.metadata?.hosted_url ||
         invoice.metadata?.hostedUrl ||
@@ -268,37 +269,103 @@ export default function InvoicesScreen() {
         invoice.metadata?.viewUrl ||
         invoice.pdf_url;
 
+    // If no URL found, try to get it from Stripe
     if (!viewUrl) {
-      // For credit purchase, show a more helpful message
-      if (isCreditPurchase) {
-        Alert.alert(
-          'Invoice Details',
-          `Invoice #${
-            invoice.invoice_number
-          }\n\nAmount: $${invoice.total_amount.toFixed(2)}\nDate: ${formatDate(
-            invoice.invoice_date
-          )}\nStatus: ${invoice.status}\n\n${invoice.notes || ''}`,
-          [{ text: 'OK' }]
-        );
+      const stripeInvoiceId = invoice.metadata?.stripe_invoice_id;
+      const paymentIntentId = invoice.metadata?.payment_intent_id;
+
+      if (stripeInvoiceId || paymentIntentId) {
+        try {
+          // Call edge function to get invoice URL from Stripe
+          const { data, error } = await supabase.functions.invoke(
+            'get-invoice-url',
+            {
+              body: {
+                invoice_id: invoice.id,
+                stripe_invoice_id: stripeInvoiceId,
+                payment_intent_id: paymentIntentId,
+              },
+            }
+          );
+
+          if (error) throw error;
+
+          if (data?.url) {
+            viewUrl = data.url;
+            // Update invoice in database with the URL (optional, async)
+            supabase
+              .from('invoices')
+              .update({ pdf_url: data.url })
+              .eq('id', invoice.id)
+              .then(() => {
+                console.log('Invoice URL updated in database');
+              })
+              .catch((err) => {
+                console.error('Failed to update invoice URL:', err);
+              });
+          } else {
+            throw new Error('URL not available from Stripe');
+          }
+        } catch (error: any) {
+          console.error('Error fetching invoice URL from Stripe:', error);
+          // Fallback: show invoice details
+          if (isCreditPurchase) {
+            Alert.alert(
+              'Invoice Details',
+              `Invoice #${
+                invoice.invoice_number
+              }\n\nAmount: $${invoice.total_amount.toFixed(
+                2
+              )}\nDate: ${formatDate(invoice.invoice_date)}\nStatus: ${
+                invoice.status
+              }\n\n${invoice.notes || ''}`,
+              [{ text: 'OK' }]
+            );
+          } else {
+            Alert.alert(
+              'Invoice URL Not Available',
+              'The invoice view URL is not available. Please contact support if this issue persists.'
+            );
+          }
+          return;
+        }
       } else {
-        Alert.alert(
-          'Invoice URL Not Available',
-          'The invoice view URL is not available. Please contact support if this issue persists.'
-        );
+        // No Stripe invoice ID, show details
+        if (isCreditPurchase) {
+          Alert.alert(
+            'Invoice Details',
+            `Invoice #${
+              invoice.invoice_number
+            }\n\nAmount: $${invoice.total_amount.toFixed(
+              2
+            )}\nDate: ${formatDate(invoice.invoice_date)}\nStatus: ${
+              invoice.status
+            }\n\n${invoice.notes || ''}`,
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert(
+            'Invoice URL Not Available',
+            'The invoice view URL is not available. Please contact support if this issue persists.'
+          );
+        }
+        return;
       }
-      return;
     }
 
-    try {
-      const canOpen = await Linking.canOpenURL(viewUrl);
-      if (canOpen) {
-        await Linking.openURL(viewUrl);
-      } else {
-        Alert.alert('Error', 'Cannot open this URL');
+    // Open the URL
+    if (viewUrl) {
+      try {
+        const canOpen = await Linking.canOpenURL(viewUrl);
+        if (canOpen) {
+          await Linking.openURL(viewUrl);
+        } else {
+          Alert.alert('Error', 'Cannot open this URL');
+        }
+      } catch (error) {
+        console.error('Error opening invoice URL:', error);
+        Alert.alert('Error', 'Failed to open invoice');
       }
-    } catch (error) {
-      console.error('Error opening invoice URL:', error);
-      Alert.alert('Error', 'Failed to open invoice');
     }
   };
 
