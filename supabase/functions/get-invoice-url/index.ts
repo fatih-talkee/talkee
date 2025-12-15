@@ -81,22 +81,60 @@ serve(async (req) => {
     if (invoice.status === 'draft') {
       try {
         invoice = await stripe.invoices.finalizeInvoice(invoice.id);
+        console.log('Invoice finalized:', invoice.id);
       } catch (error: any) {
         console.warn('Failed to finalize invoice:', error.message);
       }
     }
 
-    // Get URLs
-    const hosted_invoice_url = invoice.hosted_invoice_url;
-    const invoice_pdf = invoice.invoice_pdf;
-    const url = hosted_invoice_url || invoice_pdf || null;
+    // Get URLs - should be available immediately after finalization
+    let hosted_invoice_url = invoice.hosted_invoice_url;
+    let invoice_pdf = invoice.invoice_pdf;
+    let url = hosted_invoice_url || invoice_pdf || null;
+
+    // If URL is not available (rare case), retry once after a short delay
+    if (!url && invoice.status !== 'draft') {
+      console.log('Invoice URL not immediately available, retrying once...', {
+        invoice_id: invoice.id,
+        status: invoice.status,
+      });
+      
+      // Wait 1 second and retrieve invoice again
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      
+      try {
+        invoice = await stripe.invoices.retrieve(invoice.id);
+        hosted_invoice_url = invoice.hosted_invoice_url;
+        invoice_pdf = invoice.invoice_pdf;
+        url = hosted_invoice_url || invoice_pdf || null;
+        
+        if (url) {
+          console.log('✅ Invoice URL found after retry:', {
+            invoice_id: invoice.id,
+            hosted_invoice_url,
+            invoice_pdf,
+            url,
+          });
+        } else {
+          console.warn('⚠️ Invoice URL still not available after retry:', {
+            invoice_id: invoice.id,
+            status: invoice.status,
+            hosted_invoice_url,
+            invoice_pdf,
+          });
+        }
+      } catch (error: any) {
+        console.warn('Error retrieving invoice on retry:', error.message);
+      }
+    }
 
     if (!url) {
       return new Response(
         JSON.stringify({
-          error: 'Invoice URL not available',
+          error: 'Invoice URL not available after retries',
           invoice_id: invoice.id,
           status: invoice.status,
+          note: 'Stripe may need more time to generate the invoice URL. Please try again later.',
         }),
         {
           status: 404,

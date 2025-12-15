@@ -43,6 +43,25 @@ export default function InvoicesScreen() {
   );
   const { invoices = [], isLoading, error } = useInvoices('caller');
 
+  // Log invoices when they load
+  useEffect(() => {
+    if (invoices.length > 0) {
+      console.log('📋 Invoices loaded:', {
+        count: invoices.length,
+        invoices_with_url: invoices.filter((inv) => inv.pdf_url || inv.metadata?.hosted_url || inv.metadata?.invoice_pdf).length,
+        invoices_without_url: invoices.filter((inv) => !inv.pdf_url && !inv.metadata?.hosted_url && !inv.metadata?.invoice_pdf).length,
+        invoice_details: invoices.map((inv) => ({
+          id: inv.id,
+          invoice_number: inv.invoice_number,
+          has_pdf_url: !!inv.pdf_url,
+          has_metadata_hosted_url: !!inv.metadata?.hosted_url,
+          has_metadata_invoice_pdf: !!inv.metadata?.invoice_pdf,
+          stripe_invoice_id: inv.metadata?.stripe_invoice_id || 'MISSING',
+        })),
+      });
+    }
+  }, [invoices]);
+
   // ✅ Get user initials for avatar
   const getInitials = (name: string): string => {
     if (!name) return '?';
@@ -253,6 +272,19 @@ export default function InvoicesScreen() {
     const isCreditPurchase =
       invoice.metadata?.type === 'credit_purchase' || !invoice.professional_id;
 
+    // Log invoice data for debugging
+    console.log('📄 Invoice View - Checking for URL:', {
+      invoice_id: invoice.id,
+      invoice_number: invoice.invoice_number,
+      is_credit_purchase: isCreditPurchase,
+      pdf_url: invoice.pdf_url,
+      metadata: invoice.metadata,
+      has_pdf_url: !!invoice.pdf_url,
+      has_metadata_hosted_url: !!invoice.metadata?.hosted_url,
+      has_metadata_invoice_pdf: !!invoice.metadata?.invoice_pdf,
+      metadata_keys: invoice.metadata ? Object.keys(invoice.metadata) : [],
+    });
+
     // For credit purchase, try pdf_url first, then metadata URLs
     // For regular invoices, try metadata hosted URLs first, then pdf_url
     let viewUrl = isCreditPurchase
@@ -270,6 +302,28 @@ export default function InvoicesScreen() {
         invoice.metadata?.view_url ||
         invoice.metadata?.viewUrl ||
         invoice.pdf_url;
+
+    console.log('📄 Invoice View - URL check result:', {
+      invoice_id: invoice.id,
+      invoice_number: invoice.invoice_number,
+      viewUrl: viewUrl || null,
+      has_url: !!viewUrl,
+      url_source: viewUrl
+        ? isCreditPurchase
+          ? invoice.pdf_url === viewUrl
+            ? 'pdf_url'
+            : invoice.metadata?.hosted_url === viewUrl
+            ? 'metadata.hosted_url'
+            : invoice.metadata?.invoice_pdf === viewUrl
+            ? 'metadata.invoice_pdf'
+            : 'other_metadata'
+          : invoice.metadata?.hosted_url === viewUrl
+          ? 'metadata.hosted_url'
+          : invoice.pdf_url === viewUrl
+          ? 'pdf_url'
+          : 'other_metadata'
+        : 'none',
+    });
 
     // If no URL found, try to get it from Stripe
     if (!viewUrl) {
@@ -302,22 +356,62 @@ export default function InvoicesScreen() {
 
           if (data?.url) {
             viewUrl = data.url;
-            // Update invoice in database with the URL (optional, async)
+            console.log('✅ Invoice URL fetched from Stripe:', {
+              invoice_id: invoice.id,
+              invoice_number: invoice.invoice_number,
+              url: viewUrl,
+              hosted_invoice_url: data.hosted_invoice_url,
+              invoice_pdf: data.invoice_pdf,
+              invoice_status: data.status,
+            });
+            
+            // Update invoice in database with the URL (async, don't wait)
             supabase
               .from('invoices')
-              .update({ pdf_url: data.url })
+              .update({ 
+                pdf_url: data.url,
+                metadata: {
+                  ...invoice.metadata,
+                  hosted_url: data.hosted_invoice_url || data.url,
+                  invoice_pdf: data.invoice_pdf || data.url,
+                }
+              })
               .eq('id', invoice.id)
-              .then(() => {
-                console.log('Invoice URL updated in database');
+              .then((result) => {
+                if (result.error) {
+                  console.error('❌ Failed to update invoice URL in database:', {
+                    invoice_id: invoice.id,
+                    error: result.error.message,
+                  });
+                } else {
+                  console.log('✅ Invoice URL updated in database:', {
+                    invoice_id: invoice.id,
+                    invoice_number: invoice.invoice_number,
+                    pdf_url: data.url,
+                  });
+                }
               })
               .catch((err) => {
-                console.error('Failed to update invoice URL:', err);
+                console.error('❌ Error updating invoice URL in database:', {
+                  invoice_id: invoice.id,
+                  error: err.message || err,
+                });
               });
           } else {
+            console.error('❌ URL not available from Stripe:', {
+              invoice_id: invoice.id,
+              invoice_number: invoice.invoice_number,
+              response_data: data,
+            });
             throw new Error('URL not available from Stripe');
           }
         } catch (error: any) {
-          console.error('Error fetching invoice URL from Stripe:', error);
+          console.error('❌ Error fetching invoice URL from Stripe:', {
+            invoice_id: invoice.id,
+            invoice_number: invoice.invoice_number,
+            error: error.message || error,
+            error_details: error,
+          });
           // Fallback: show invoice details
           if (isCreditPurchase) {
             Alert.alert(
@@ -365,17 +459,41 @@ export default function InvoicesScreen() {
 
     // Open the URL
     if (viewUrl) {
+      console.log('🔗 Opening invoice URL:', {
+        invoice_id: invoice.id,
+        invoice_number: invoice.invoice_number,
+        url: viewUrl,
+      });
       try {
         const canOpen = await Linking.canOpenURL(viewUrl);
         if (canOpen) {
           await Linking.openURL(viewUrl);
+          console.log('✅ Invoice URL opened successfully:', {
+            invoice_id: invoice.id,
+            invoice_number: invoice.invoice_number,
+          });
         } else {
+          console.error('❌ Cannot open invoice URL:', {
+            invoice_id: invoice.id,
+            invoice_number: invoice.invoice_number,
+            url: viewUrl,
+          });
           Alert.alert('Error', 'Cannot open this URL');
         }
       } catch (error) {
-        console.error('Error opening invoice URL:', error);
+        console.error('❌ Error opening invoice URL:', {
+          invoice_id: invoice.id,
+          invoice_number: invoice.invoice_number,
+          url: viewUrl,
+          error: error instanceof Error ? error.message : error,
+        });
         Alert.alert('Error', 'Failed to open invoice');
       }
+    } else {
+      console.error('❌ No URL available to open:', {
+        invoice_id: invoice.id,
+        invoice_number: invoice.invoice_number,
+      });
     }
   };
 

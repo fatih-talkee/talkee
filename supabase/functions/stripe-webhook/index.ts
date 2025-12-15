@@ -198,6 +198,8 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
       let invoicePdfUrl: string | null = null;
       try {
         if (customerId) {
+          // Create invoice with auto_advance: true (automatically finalizes)
+          // Stripe typically provides URLs immediately after finalization
           const invoice = await stripe.invoices.create({
             customer: customerId,
             payment_intent: paymentIntent.id,
@@ -209,55 +211,92 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
             auto_advance: true, // Automatically finalize invoice
           });
 
-          // Finalize invoice (even if auto_advance is true, we still need to finalize for URLs)
-          const finalizedInvoice = await stripe.invoices.finalizeInvoice(
-            invoice.id
-          );
-          stripeInvoiceId = finalizedInvoice.id;
+          stripeInvoiceId = invoice.id;
           
-          // URLs might not be immediately available after finalization
-          // Try to get them, if not available, retrieve invoice again after a short delay
-          invoicePdfUrl =
-            finalizedInvoice.hosted_invoice_url ||
-            finalizedInvoice.invoice_pdf ||
-            null;
-
-          // If URLs are not available, wait a bit and retrieve invoice again
-          if (!invoicePdfUrl) {
-            console.log('Invoice URLs not immediately available, retrying...', {
+          // With auto_advance: true, invoice should be finalized
+          // But sometimes URLs need a moment to be generated
+          // Check invoice status first
+          let finalInvoice = invoice;
+          
+          // If invoice is still draft (shouldn't happen with auto_advance, but check)
+          if (invoice.status === 'draft') {
+            console.log('Invoice is still draft, finalizing...', {
               ...logContext,
               invoice_id: stripeInvoiceId,
             });
+            finalInvoice = await stripe.invoices.finalizeInvoice(invoice.id);
+          }
+          
+          // Try to get URLs immediately
+          invoicePdfUrl =
+            finalInvoice.hosted_invoice_url ||
+            finalInvoice.invoice_pdf ||
+            null;
+
+          console.log('Initial invoice check:', {
+            ...logContext,
+            invoice_id: stripeInvoiceId,
+            invoice_status: finalInvoice.status,
+            hosted_invoice_url: finalInvoice.hosted_invoice_url,
+            invoice_pdf: finalInvoice.invoice_pdf,
+            pdf_url: invoicePdfUrl,
+            has_url: !!invoicePdfUrl,
+          });
+
+          // If URLs are not immediately available, retry once after a short delay
+          if (!invoicePdfUrl) {
+            console.log('Invoice URLs not immediately available, retrying once...', {
+              ...logContext,
+              invoice_id: stripeInvoiceId,
+              invoice_status: finalInvoice.status,
+            });
             
-            // Wait 2 seconds for Stripe to generate URLs
-            await new Promise((resolve) => setTimeout(resolve, 2000));
+            // Wait 1 second and retrieve invoice again (usually enough)
+            await new Promise((resolve) => setTimeout(resolve, 1000));
             
-            // Retrieve invoice again to get URLs
-            const retrievedInvoice = await stripe.invoices.retrieve(
-              stripeInvoiceId
-            );
+            const retrievedInvoice = await stripe.invoices.retrieve(stripeInvoiceId);
             
             invoicePdfUrl =
               retrievedInvoice.hosted_invoice_url ||
               retrievedInvoice.invoice_pdf ||
               null;
             
-            console.log('Invoice retrieved after delay:', {
+            if (invoicePdfUrl) {
+              console.log('✅ Invoice URL found after retry:', {
+                ...logContext,
+                invoice_id: stripeInvoiceId,
+                hosted_invoice_url: retrievedInvoice.hosted_invoice_url,
+                invoice_pdf: retrievedInvoice.invoice_pdf,
+                pdf_url: invoicePdfUrl,
+              });
+              finalInvoice = retrievedInvoice; // Update for logging
+            } else {
+              console.warn('⚠️ Invoice URL still not available after retry:', {
+                ...logContext,
+                invoice_id: stripeInvoiceId,
+                invoice_status: retrievedInvoice.status,
+                note: 'URL will be fetched on-demand via get-invoice-url function when user views invoice',
+              });
+            }
+          } else {
+            console.log('✅ Invoice URL available immediately:', {
               ...logContext,
               invoice_id: stripeInvoiceId,
-              hosted_invoice_url: retrievedInvoice.hosted_invoice_url,
-              invoice_pdf: retrievedInvoice.invoice_pdf,
+              hosted_invoice_url: finalInvoice.hosted_invoice_url,
+              invoice_pdf: finalInvoice.invoice_pdf,
               pdf_url: invoicePdfUrl,
             });
           }
 
-          console.log('Stripe invoice created:', {
+          // Final log with all details
+          console.log('Stripe invoice created (final):', {
             ...logContext,
             invoice_id: stripeInvoiceId,
-            hosted_invoice_url: finalizedInvoice.hosted_invoice_url,
-            invoice_pdf: finalizedInvoice.invoice_pdf,
+            invoice_status: finalInvoice.status,
+            hosted_invoice_url: finalInvoice.hosted_invoice_url,
+            invoice_pdf: finalInvoice.invoice_pdf,
             pdf_url: invoicePdfUrl,
-            final_url: invoicePdfUrl,
+            will_save_to_db: !!invoicePdfUrl,
           });
         } else {
           console.warn('Skipping Stripe invoice creation - no customer ID:', {
@@ -389,10 +428,35 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
           });
           // Don't throw - invoice is secondary, payment already processed
         } else {
-          console.log('Invoice created successfully:', {
+          // Log what we're saving to database
+          console.log('✅ Invoice created successfully in database:', {
             ...logContext,
             invoice_number: invoiceNumber,
+            invoice_id: 'will be returned by insert',
+            pdf_url: invoicePdfUrl || null,
+            metadata_hosted_url: invoicePdfUrl || null,
+            metadata_invoice_pdf: invoicePdfUrl || null,
+            stripe_invoice_id: stripeInvoiceId || null,
+            has_url: !!invoicePdfUrl,
+            will_save_url: !!invoicePdfUrl,
           });
+          
+          // If URL is still not available, log a warning but don't fail
+          // Frontend will fetch it on-demand via get-invoice-url function
+          if (!invoicePdfUrl && stripeInvoiceId) {
+            console.warn('⚠️ Invoice created but URL not available yet:', {
+              ...logContext,
+              invoice_number: invoiceNumber,
+              stripe_invoice_id: stripeInvoiceId,
+              note: 'Frontend will fetch URL on-demand when user views invoice',
+            });
+          } else if (!invoicePdfUrl && !stripeInvoiceId) {
+            console.warn('⚠️ Invoice created but no Stripe invoice ID:', {
+              ...logContext,
+              invoice_number: invoiceNumber,
+              note: 'No customer ID was available, so Stripe invoice was not created',
+            });
+          }
         }
       } catch (invoiceError: any) {
         console.error('Error creating invoice:', {
