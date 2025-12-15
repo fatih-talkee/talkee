@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usersService } from '@/services/supabase';
 import { User, UserUpdate } from '@/types/database.types';
 import { CACHE_CONFIG } from '@/lib/cacheConfig';
+import { supabase } from '@/lib/supabase';
+import { useEffect, useState } from 'react';
 
 // Query Keys Factory Pattern
 export const userKeys = {
@@ -91,9 +93,36 @@ export function useWalletBalance() {
  * Cache: 30 seconds (transactions change frequently)
  */
 export function useWalletTransactions(limit: number = 10, offset: number = 0) {
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Get current user and listen to auth changes
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const user = await usersService.getCurrentUser();
+      setUserId(user?.id || null);
+    };
+
+    getCurrentUser();
+
+    // Listen for auth changes to update userId when user switches
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const user = await usersService.getCurrentUser();
+        setUserId(user?.id || null);
+      } else {
+        setUserId(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   return useQuery({
-    queryKey: userKeys.transactions(limit, offset),
+    queryKey: [...userKeys.transactions(limit, offset), userId],
     queryFn: () => usersService.getTransactions(limit, offset),
+    enabled: !!userId,
     ...CACHE_CONFIG.TRANSACTIONS,
     refetchOnWindowFocus: true,
   });

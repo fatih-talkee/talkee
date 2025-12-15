@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   TextInput,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Button } from '@/components/ui/Button';
 import { Header } from '@/components/ui/Header';
@@ -60,6 +61,7 @@ const TOTAL_STEPS = 6;
 
 export default function BecomeProfessionalScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const { profileData, isLoading: profileLoading } = useProfile();
   const toast = useToast();
   const [currentStep, setCurrentStep] = useState(1);
@@ -733,6 +735,7 @@ export default function BecomeProfessionalScreen() {
           {
             backgroundColor: '#000000',
             borderTopColor: theme.colors.border,
+            paddingBottom: Math.max(insets.bottom, 24),
           },
         ]}
       >
@@ -1622,7 +1625,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     padding: 24,
-    paddingBottom: Platform.OS === 'ios' ? 32 : 24,
+    paddingTop: 24,
     borderTopWidth: 1,
   },
   nextButtonFullWidth: {

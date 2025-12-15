@@ -13,10 +13,12 @@ import {
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ProfessionalPricing() {
   const router = useRouter();
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [ratePerMinute, setRatePerMinute] = useState('10.00');
   const [minCallDuration, setMinCallDuration] = useState('5');

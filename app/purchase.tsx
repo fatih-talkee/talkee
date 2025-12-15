@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { CreditCard, Check } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
@@ -25,6 +26,7 @@ const savedCards: SavedCard[] = [
 
 export default function PurchaseScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const { credits, price } = useLocalSearchParams();
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [useNewCard, setUseNewCard] = useState(false);
@@ -262,7 +264,7 @@ export default function PurchaseScreen() {
         </ScrollView>
 
         {/* Fixed Bottom Button */}
-        <View style={[styles.bottomContainer, { backgroundColor: theme.colors.background }]}>
+        <View style={[styles.bottomContainer, { backgroundColor: theme.colors.background, paddingBottom: Math.max(insets.bottom, 20) }]}>
           <Button
             title={loading ? "Processing..." : 'Pay $' + totalPrice.toFixed(2)}
             onPress={handlePurchase}

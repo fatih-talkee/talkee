@@ -13,10 +13,12 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ProfessionalBasicInfo() {
   const router = useRouter();
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [title, setTitle] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -126,7 +128,7 @@ export default function ProfessionalBasicInfo() {
         </View>
       </ScrollView>
 
-      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
+      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border, paddingBottom: Math.max(insets.bottom, 20) }]}>
         <TouchableOpacity
           style={[styles.saveButton, { backgroundColor: theme.colors.pinkTwo }]}
           onPress={handleSave}

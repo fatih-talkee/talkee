@@ -32,21 +32,29 @@ export class AvatarService {
       });
 
       // 0.1. Check if bucket exists (optional check, but helpful for debugging)
-      const { data: buckets, error: bucketError } =
-        await supabase.storage.listBuckets();
-      if (bucketError) {
-        console.error('❌ Error checking buckets:', bucketError);
-      } else {
-        const avatarsBucket = buckets?.find((b) => b.name === this.BUCKET_NAME);
-        if (!avatarsBucket) {
-          console.error(
-            `❌ Bucket '${this.BUCKET_NAME}' not found. Please create it in Supabase Dashboard.`
-          );
-          throw new Error(
-            `Storage bucket '${this.BUCKET_NAME}' does not exist. Please create it in Supabase Dashboard → Storage → New Bucket`
-          );
+      // Note: listBuckets() might fail due to permissions, but that's OK - we'll try upload anyway
+      // If bucket doesn't exist, upload will fail with a clear error message
+      try {
+        const { data: buckets, error: bucketError } =
+          await supabase.storage.listBuckets();
+        if (bucketError) {
+          console.warn('⚠️ Could not list buckets (might be permission issue):', bucketError.message);
+          console.log('ℹ️ Continuing with upload - will fail with better error if bucket missing');
+        } else {
+          const avatarsBucket = buckets?.find((b) => b.name === this.BUCKET_NAME);
+          if (avatarsBucket) {
+            console.log('✅ Bucket found:', {
+              name: avatarsBucket.name,
+              public: avatarsBucket.public,
+              id: avatarsBucket.id,
+            });
+          } else {
+            console.warn(`⚠️ Bucket '${this.BUCKET_NAME}' not found in list, but continuing anyway (might be permission issue)`);
+          }
         }
-        console.log('✅ Bucket found:', avatarsBucket);
+      } catch (checkError) {
+        console.warn('⚠️ Bucket check failed, continuing with upload:', checkError);
+        // Don't throw - let upload attempt reveal the real error
       }
 
       // 1. Convert URI to blob
@@ -128,32 +136,44 @@ export class AvatarService {
         console.error('❌ Upload error details:', {
           message: uploadError.message,
           statusCode: uploadError.statusCode,
-          error: uploadError,
+          error: JSON.stringify(uploadError, null, 2),
           userId,
           authUserId: authUser.id,
           filePath,
+          bucket: this.BUCKET_NAME,
         });
 
-        // Provide more helpful error message
-        if (uploadError.message?.includes('Bucket not found')) {
+        // Provide more helpful error message based on error type
+        const errorMsg = uploadError.message || '';
+        
+        if (errorMsg.includes('Bucket not found') || errorMsg.includes('does not exist')) {
           throw new Error(
-            `Storage bucket '${this.BUCKET_NAME}' not found. Please create it in Supabase Dashboard → Storage → New Bucket`
+            `Storage bucket '${this.BUCKET_NAME}' not found. Please verify the bucket exists in Supabase Dashboard → Storage → Buckets`
           );
         } else if (
-          uploadError.message?.includes('new row violates row-level security') ||
-          uploadError.message?.includes('row-level security') ||
-          uploadError.message?.includes('RLS')
+          errorMsg.includes('new row violates row-level security') ||
+          errorMsg.includes('row-level security') ||
+          errorMsg.includes('RLS') ||
+          errorMsg.includes('permission denied') ||
+          errorMsg.includes('Policy violation')
         ) {
           throw new Error(
-            `Permission denied. RLS policy check failed. User ID: ${userId}, Auth UID: ${authUser.id}. Please check Storage RLS policies for avatars bucket. The policy should allow authenticated users to upload to their own folder.`
+            `Permission denied (RLS). User ID: ${userId}, Auth UID: ${authUser.id}, File Path: ${filePath}.\n\nPlease check:\n1. RLS policies exist for 'avatars' bucket\n2. Policy allows INSERT for authenticated users\n3. Policy checks: (storage.foldername(name))[1] = auth.uid()::text\n4. File path format: ${authUser.id}/avatar-*.${ext}`
           );
-        } else if (uploadError.message?.includes('JWT')) {
+        } else if (errorMsg.includes('JWT') || errorMsg.includes('token') || errorMsg.includes('unauthorized')) {
           throw new Error(
-            'Authentication token expired. Please log out and log in again.'
+            'Authentication token expired or invalid. Please log out and log in again.'
+          );
+        } else if (errorMsg.includes('duplicate') || errorMsg.includes('already exists')) {
+          // This shouldn't happen with upsert: false, but handle it anyway
+          throw new Error(
+            'File already exists. Please try again or contact support.'
           );
         }
+        
+        // Generic error with full message
         throw new Error(
-          `Upload failed: ${uploadError.message || 'Unknown error'}`
+          `Upload failed: ${errorMsg || 'Unknown error'}. Status: ${uploadError.statusCode || 'N/A'}`
         );
       }
 

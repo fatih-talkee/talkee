@@ -11,9 +11,12 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/lib/toastService';
 import { UserPreferencesService } from '@/services/supabase/userPreferences.service';
 import { PageLoading } from '@/components/ui/PageLoading';
+import { useQueryClient } from '@tanstack/react-query';
+import { invalidateUserQueries } from '@/lib/cacheUtils';
 
 export default function AuthCallbackScreen() {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const hasRun = useRef(false);
 
   useEffect(() => {
@@ -309,13 +312,29 @@ export default function AuthCallbackScreen() {
             message: 'Your account has been created',
           });
 
-          // Wait a bit to ensure session is fully established before navigation
+          // Invalidate cache to ensure fresh data for new login
+          if (session?.user?.id) {
+            invalidateUserQueries(queryClient, session.user.id);
+          }
+
+          // Wait a bit to ensure session is fully established and cache is cleared
           // This prevents the login loop issue
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          await new Promise((resolve) => setTimeout(resolve, 1500));
 
           // Navigate to main app (home page)
+          // Use a small delay to ensure all state updates are complete
           try {
-            router.replace('/(tabs)');
+            // Double-check session is still valid before navigation
+            const {
+              data: { session: finalSession },
+            } = await supabase.auth.getSession();
+            
+            if (finalSession) {
+              router.replace('/(tabs)');
+            } else {
+              // Session lost, redirect to login
+              router.replace('/auth/login');
+            }
           } catch (error) {
             console.error('Navigation error:', error);
             // Fallback: try again after a short delay
@@ -324,8 +343,9 @@ export default function AuthCallbackScreen() {
                 router.replace('/(tabs)');
               } catch (retryError) {
                 console.error('Retry navigation error:', retryError);
+                router.replace('/auth/login');
               }
-            }, 200);
+            }, 300);
           }
         }
       } else {

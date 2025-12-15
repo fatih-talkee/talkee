@@ -10,10 +10,12 @@ import {
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ProfessionalFinancial() {
   const router = useRouter();
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [accountBalance] = useState('$1,245.50');
   const [lastPayout] = useState('Dec 1, 2025');
@@ -104,6 +106,7 @@ export default function ProfessionalFinancial() {
           {
             backgroundColor: theme.colors.surface,
             borderTopColor: theme.colors.border,
+            paddingBottom: Math.max(insets.bottom, 20),
           },
         ]}
       >

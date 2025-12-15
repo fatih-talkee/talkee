@@ -10,7 +10,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Href, router, useLocalSearchParams } from 'expo-router';
 import {
   ArrowLeft,
@@ -66,6 +66,7 @@ export default function ProfessionalProfileScreen() {
   const { id } = useLocalSearchParams();
   const { theme } = useTheme();
   const isNetworkOnline = useIsOnline();
+  const insets = useSafeAreaInsets();
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [voiceModalVisible, setVoiceModalVisible] = useState(false);
   const [videoModalVisible, setVideoModalVisible] = useState(false);
@@ -1789,7 +1790,10 @@ export default function ProfessionalProfileScreen() {
       <View
         style={[
           styles.callActionsWrapper,
-          { backgroundColor: theme.colors.background },
+          { 
+            backgroundColor: theme.colors.background,
+            paddingBottom: Math.max(insets.bottom, 8),
+          },
         ]}
       >
         <View

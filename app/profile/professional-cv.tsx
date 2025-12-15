@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
 import { Plus, X } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Experience {
   id: string;
@@ -38,6 +39,7 @@ interface Education {
 export default function ProfessionalCV() {
   const router = useRouter();
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [experiences, setExperiences] = useState<Experience[]>([]);
   const [education, setEducation] = useState<Education[]>([]);
@@ -281,6 +283,7 @@ export default function ProfessionalCV() {
           {
             backgroundColor: theme.colors.surface,
             borderTopColor: theme.colors.border,
+            paddingBottom: Math.max(insets.bottom, 20),
           },
         ]}
       >

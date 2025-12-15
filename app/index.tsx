@@ -12,22 +12,27 @@ export default function Index() {
     const isOnCallback = segments[0] === 'auth' && segments[1] === 'callback';
     if (isOnCallback) {
       // On callback page, do nothing - let callback handle everything
+      // Don't even check session to avoid race conditions
       return;
     }
 
-    const checkSession = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        setIsAuthenticated(!!session);
-      } catch (error) {
-        console.error('Session check error:', error);
-        setIsAuthenticated(false);
-      }
-    };
+    // Add a small delay before checking session to avoid race conditions
+    // with callback page navigation
+    const checkSessionTimer = setTimeout(() => {
+      const checkSession = async () => {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          setIsAuthenticated(!!session);
+        } catch (error) {
+          console.error('Session check error:', error);
+          setIsAuthenticated(false);
+        }
+      };
 
-    checkSession();
+      checkSession();
+    }, 500); // Small delay to let callback complete
 
     // Listen for auth changes
     const {
@@ -40,7 +45,10 @@ export default function Index() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(checkSessionTimer);
+      subscription.unsubscribe();
+    };
   }, [segments]);
 
   // Don't redirect if we're on callback page
