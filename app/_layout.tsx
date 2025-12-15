@@ -27,6 +27,7 @@ import { notificationsService } from '../services';
 import { Platform } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { OfflineBanner } from '../components/ui/OfflineBanner';
+import { StripeProvider } from '@stripe/stripe-react-native';
 
 // Initialize Sentry
 Sentry.init({
@@ -224,6 +225,10 @@ export default function RootLayout() {
     return null;
   }
 
+  // Stripe publishable key from environment
+  const stripePublishableKey =
+    process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
+
   return (
     <PersistQueryClientProvider
       client={queryClient}
@@ -233,36 +238,42 @@ export default function RootLayout() {
         buster: '', // Cache version - change this to invalidate all cache
       }}
     >
-      <ThemeProvider>
-        <AutoAvailabilityWrapper>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="auth" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="become-professional/index" />
-            <Stack.Screen name="credit-selection" />
-            <Stack.Screen name="purchase" />
-            <Stack.Screen name="notifications/index" />
-            <Stack.Screen name="wallet-history" />
-            <Stack.Screen name="blocked-users" />
-            <Stack.Screen name="how-it-works" />
-            <Stack.Screen name="help" />
-            <Stack.Screen name="settings/theme" />
-            <Stack.Screen name="settings/language" />
-            <Stack.Screen name="settings/notifications" />
-            <Stack.Screen name="settings/change-password" />
-            <Stack.Screen name="+not-found" />
-            <Stack.Screen name="profile/professional-settings" />
-            <Stack.Screen name="profile/privacy-policy" />
-            <Stack.Screen name="profile/devices" />
-          </Stack>
-          <StatusBar style="auto" translucent={false} />
-          <OfflineBanner />
-          <ToastStack />
-        </AutoAvailabilityWrapper>
-      </ThemeProvider>
-      {__DEV__ && Platform.OS === 'web' && (
-        <ReactQueryDevtools initialIsOpen={false} />
-      )}
+      <StripeProvider
+        publishableKey={stripePublishableKey}
+        merchantIdentifier="merchant.net.talkee.app"
+        urlScheme="talkee"
+      >
+        <ThemeProvider>
+          <AutoAvailabilityWrapper>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="auth" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="become-professional/index" />
+              <Stack.Screen name="credit-selection" />
+              <Stack.Screen name="purchase" />
+              <Stack.Screen name="notifications/index" />
+              <Stack.Screen name="wallet-history" />
+              <Stack.Screen name="blocked-users" />
+              <Stack.Screen name="how-it-works" />
+              <Stack.Screen name="help" />
+              <Stack.Screen name="settings/theme" />
+              <Stack.Screen name="settings/language" />
+              <Stack.Screen name="settings/notifications" />
+              <Stack.Screen name="settings/change-password" />
+              <Stack.Screen name="+not-found" />
+              <Stack.Screen name="profile/professional-settings" />
+              <Stack.Screen name="profile/privacy-policy" />
+              <Stack.Screen name="profile/devices" />
+            </Stack>
+            <StatusBar style="auto" translucent={false} />
+            <OfflineBanner />
+            <ToastStack />
+          </AutoAvailabilityWrapper>
+        </ThemeProvider>
+        {__DEV__ && Platform.OS === 'web' && (
+          <ReactQueryDevtools initialIsOpen={false} />
+        )}
+      </StripeProvider>
     </PersistQueryClientProvider>
   );
 }

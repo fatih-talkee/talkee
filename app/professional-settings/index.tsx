@@ -130,7 +130,10 @@ export default function ProfessionalSettingsScreen() {
         icon: Calendar,
         route: '/professional-settings/availability',
         color: '#F59E0B',
-        badge: (professionalData as any)?.availabilities?.length > 0 ? '✓' : undefined,
+        badge:
+          (professionalData as any)?.availabilities?.length > 0
+            ? '✓'
+            : undefined,
       },
       {
         id: 'status',
@@ -168,15 +171,18 @@ export default function ProfessionalSettingsScreen() {
 
       if (result.success) {
         toast.show('Professional profile deleted successfully', 'success');
-        
+
         // Invalidate queries to refresh data
         queryClient.invalidateQueries({ queryKey: ['profile'] });
         queryClient.invalidateQueries({ queryKey: ['professionals'] });
-        
+
         // Navigate back to profile
         router.back();
       } else {
-        toast.show(result.error || 'Failed to delete professional profile', 'error');
+        toast.show(
+          result.error || 'Failed to delete professional profile',
+          'error'
+        );
       }
     } catch (error: any) {
       console.error('Error deleting professional:', error);
@@ -212,7 +218,9 @@ export default function ProfessionalSettingsScreen() {
           <Text style={[styles.title, { color: theme.colors.text }]}>
             Professional Settings
           </Text>
-          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+          <Text
+            style={[styles.subtitle, { color: theme.colors.textSecondary }]}
+          >
             Manage your professional profile
           </Text>
         </View>
@@ -223,7 +231,17 @@ export default function ProfessionalSettingsScreen() {
             return (
               <TouchableOpacity
                 key={item.id}
-                onPress={() => router.push(item.route as any)}
+                onPress={() => {
+                  if (!item.route) {
+                    console.error('Route is missing for item:', item.id);
+                    return;
+                  }
+                  try {
+                    router.push(item.route as any);
+                  } catch (error) {
+                    console.error('Navigation error:', error);
+                  }
+                }}
                 activeOpacity={0.7}
               >
                 <Card
@@ -247,7 +265,10 @@ export default function ProfessionalSettingsScreen() {
                     <View style={styles.cardText}>
                       <View style={styles.cardHeader}>
                         <Text
-                          style={[styles.cardTitle, { color: theme.colors.text }]}
+                          style={[
+                            styles.cardTitle,
+                            { color: theme.colors.text },
+                          ]}
                         >
                           {item.title}
                         </Text>
@@ -377,7 +398,10 @@ export default function ProfessionalSettingsScreen() {
             </Text>
 
             <Text
-              style={[styles.modalDescription, { color: theme.colors.textSecondary }]}
+              style={[
+                styles.modalDescription,
+                { color: theme.colors.textSecondary },
+              ]}
             >
               This will permanently delete all your professional information,
               including:
@@ -385,30 +409,40 @@ export default function ProfessionalSettingsScreen() {
 
             <View style={styles.modalList}>
               <Text
-                style={[styles.modalListItem, { color: theme.colors.textSecondary }]}
+                style={[
+                  styles.modalListItem,
+                  { color: theme.colors.textSecondary },
+                ]}
               >
                 • Your professional profile
               </Text>
               <Text
-                style={[styles.modalListItem, { color: theme.colors.textSecondary }]}
+                style={[
+                  styles.modalListItem,
+                  { color: theme.colors.textSecondary },
+                ]}
               >
                 • Education and experience
               </Text>
               <Text
-                style={[styles.modalListItem, { color: theme.colors.textSecondary }]}
+                style={[
+                  styles.modalListItem,
+                  { color: theme.colors.textSecondary },
+                ]}
               >
                 • Availability schedules
               </Text>
               <Text
-                style={[styles.modalListItem, { color: theme.colors.textSecondary }]}
+                style={[
+                  styles.modalListItem,
+                  { color: theme.colors.textSecondary },
+                ]}
               >
                 • Feed posts
               </Text>
             </View>
 
-            <Text
-              style={[styles.modalNote, { color: theme.colors.textMuted }]}
-            >
+            <Text style={[styles.modalNote, { color: theme.colors.textMuted }]}>
               You can still use the app as a regular user.
             </Text>
 
@@ -605,4 +639,3 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-

@@ -65,7 +65,15 @@ export default function CallScreen() {
   const currentCost = duration * costPerSecond;
 
   const handleEndCall = () => {
-    router.replace(`/call-review/${professional.id}`);
+    if (!professional?.id) {
+      console.error('Professional ID is missing');
+      return;
+    }
+    try {
+      router.replace(`/call-review/${professional.id}`);
+    } catch (error) {
+      console.error('Navigation error:', error);
+    }
   };
 
   if (!professional) {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,25 +8,61 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Minus, Plus } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useStripe } from '@stripe/stripe-react-native';
+import { stripeService } from '@/services/supabase/stripe.service';
+import { useCurrentUser } from '@/hooks/useUser';
+import { useToast } from '@/lib/toastService';
+import { useWalletBalance } from '@/hooks/useUser';
+import { useQueryClient } from '@tanstack/react-query';
+import { userKeys } from '@/hooks/useUser';
 
 export default function CreditSelectionScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const [credits, setCredits] = useState(50);
-  const [inputValue, setInputValue] = useState('50');
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+  const { data: user } = useCurrentUser();
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const { refetch: refetchBalance } = useWalletBalance();
+  const params = useLocalSearchParams();
+
+  // Get initial credits from URL params or default to 50
+  const initialCredits = params.credits
+    ? parseInt(params.credits as string, 10)
+    : 50;
+
+  const [credits, setCredits] = useState(initialCredits);
+  const [inputValue, setInputValue] = useState(initialCredits.toString());
+  const [loading, setLoading] = useState(false);
 
   const MIN_CREDITS = 1;
   const MAX_CREDITS = 2000;
   const PRICE_PER_CREDIT = 1.0; // $1 per credit
+
+  // Update credits when params change
+  useEffect(() => {
+    if (params.credits) {
+      const newCredits = parseInt(params.credits as string, 10);
+      if (
+        !isNaN(newCredits) &&
+        newCredits >= MIN_CREDITS &&
+        newCredits <= MAX_CREDITS
+      ) {
+        setCredits(newCredits);
+        setInputValue(newCredits.toString());
+      }
+    }
+  }, [params.credits]);
 
   const handleDecrease = () => {
     if (credits > MIN_CREDITS) {
@@ -62,19 +98,152 @@ export default function CreditSelectionScreen() {
 
   const handleInputBlur = () => {
     // Ensure input field shows the validated value
-    setInputValue(credits.toString());
+    // If input is empty or invalid, reset to current credits value
+    const numericValue = parseInt(inputValue, 10);
+    if (isNaN(numericValue) || numericValue < MIN_CREDITS) {
+      setCredits(50); // Default to 50 if invalid
+      setInputValue('50');
+    } else {
+      setInputValue(credits.toString());
+    }
   };
 
   const totalPrice = credits * PRICE_PER_CREDIT;
 
-  const handleContinue = () => {
-    router.push({
-      pathname: '/purchase',
-      params: {
-        credits: credits.toString(),
-        price: totalPrice.toFixed(2),
-      },
-    });
+  const handleContinue = async () => {
+    if (!user) {
+      Alert.alert('Error', 'Please login first');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // 1. Create payment intent
+      const { clientSecret, paymentIntentId } =
+        await stripeService.createPaymentIntent(totalPrice, user.id);
+
+      if (!clientSecret) {
+        throw new Error('Failed to create payment intent');
+      }
+
+      // Helper function to convert rgba/rgb to hex (Stripe requires 6-character hex format, no alpha)
+      const colorToHex = (
+        color: string,
+        fallback: string = '#FFFFFF'
+      ): string => {
+        // If already hex, validate and return
+        if (color.startsWith('#')) {
+          const hex = color.substring(1);
+          // Stripe only accepts 6-character hex (RGB), not 8-character (RGBA)
+          if (hex.length === 6) {
+            return color;
+          }
+          // If 8-character hex, remove alpha channel
+          if (hex.length === 8) {
+            return `#${hex.substring(0, 6)}`;
+          }
+          // If invalid hex length, use fallback
+          return fallback;
+        }
+
+        // If rgba/rgb format, convert to hex (ignore alpha for Stripe)
+        const rgbaMatch = color.match(
+          /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/
+        );
+        if (rgbaMatch) {
+          const r = parseInt(rgbaMatch[1], 10);
+          const g = parseInt(rgbaMatch[2], 10);
+          const b = parseInt(rgbaMatch[3], 10);
+
+          // Convert RGB to 6-character hex (Stripe format)
+          const hex = [r, g, b]
+            .map((x) => {
+              const hexValue = x.toString(16);
+              return hexValue.length === 1 ? '0' + hexValue : hexValue;
+            })
+            .join('');
+
+          return `#${hex}`;
+        }
+
+        // Fallback: return provided fallback or default
+        return fallback;
+      };
+
+      // 2. Initialize payment sheet
+      const { error: initError } = await initPaymentSheet({
+        merchantDisplayName: 'Talkee',
+        paymentIntentClientSecret: clientSecret,
+        defaultBillingDetails: {
+          name: user.name || 'User',
+          email: user.primary_email || '',
+        },
+        allowsDelayedPaymentMethods: true,
+        appearance: {
+          colors: {
+            primary: colorToHex(theme.colors.primary, '#6366F1'),
+            background: colorToHex(theme.colors.background, '#FFFFFF'),
+            componentBackground: colorToHex(theme.colors.card, '#F9FAFB'),
+            componentBorder: colorToHex(theme.colors.border, '#E5E7EB'),
+            componentDivider: colorToHex(theme.colors.border, '#E5E7EB'),
+            primaryText: colorToHex(theme.colors.text, '#111827'),
+            secondaryText: colorToHex(theme.colors.textMuted, '#6B7280'),
+            componentText: colorToHex(theme.colors.text, '#111827'),
+            placeholderText: colorToHex(theme.colors.textMuted, '#9CA3AF'),
+          },
+          shapes: {
+            borderRadius: 12,
+            borderWidth: 1,
+          },
+        },
+      });
+
+      if (initError) {
+        throw new Error(initError.message);
+      }
+
+      // 3. Present payment sheet
+      const { error: presentError } = await presentPaymentSheet();
+
+      if (presentError) {
+        if (presentError.code !== 'Canceled') {
+          Alert.alert('Payment Error', presentError.message);
+        }
+        // User cancelled, no need to show error
+      } else {
+        // Payment successful
+        toast.success({
+          title: 'Payment Successful! 💰',
+          message: `You've successfully purchased ${credits.toLocaleString()} credits for $${totalPrice.toFixed(
+            2
+          )}.`,
+        });
+
+        // Invalidate and refetch wallet balance and transactions
+        queryClient.invalidateQueries({ queryKey: userKeys.wallet() });
+        // Explicitly invalidate transactions to ensure they refresh
+        queryClient.invalidateQueries({ queryKey: userKeys.transactions() });
+        await refetchBalance();
+
+        // Invalidate notifications cache to show new notification
+        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+        // Also refetch notifications to ensure they appear immediately
+        queryClient.refetchQueries({ queryKey: ['notifications'] });
+
+        // Navigate back to wallet
+        setTimeout(() => {
+          router.replace('/(tabs)/wallet');
+        }, 1500);
+      }
+    } catch (error: any) {
+      console.error('Payment error:', error);
+      Alert.alert(
+        'Payment Error',
+        error.message || 'Payment failed. Please try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -240,8 +409,9 @@ export default function CreditSelectionScreen() {
 
           <View style={styles.buttonContainer}>
             <Button
-              title="Continue to Payment"
+              title={loading ? 'Processing...' : 'Continue to Payment'}
               onPress={handleContinue}
+              disabled={loading}
               style={[
                 styles.continueButton,
                 { backgroundColor: theme.colors.pinkTwo },

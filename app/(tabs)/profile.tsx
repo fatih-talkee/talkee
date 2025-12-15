@@ -229,21 +229,39 @@ export default function ProfileScreen() {
           id: 'favorites',
           label: 'Favorites',
           icon: <Heart size={20} color="#ef4444" />,
-          onPress: () => router.push('/favorites'),
+          onPress: () => {
+            try {
+              router.push('/favorites');
+            } catch (error) {
+              console.error('Navigation error:', error);
+            }
+          },
           badge: stats.favorites_count?.toString(),
         },
         {
           id: 'history',
           label: 'Call History',
           icon: <Clock size={20} color="#3b82f6" />,
-          onPress: () => router.push('/call-history'),
+          onPress: () => {
+            try {
+              router.push('/call-history');
+            } catch (error) {
+              console.error('Navigation error:', error);
+            }
+          },
           badge: stats.total_calls?.toString(),
         },
         {
           id: 'invoices',
           label: 'Invoices',
           icon: <FileText size={20} color="#10b981" />,
-          onPress: () => router.push('/invoices'),
+          onPress: () => {
+            try {
+              router.push('/invoices');
+            } catch (error) {
+              console.error('Navigation error:', error);
+            }
+          },
           badge: stats.invoices_count?.toString(),
         },
         // TODO: Recordings feature - to be developed later
@@ -256,12 +274,18 @@ export default function ProfileScreen() {
         // Blocked Users - only for professionals
         ...(isProfessional
           ? [
-        {
-          id: 'blocked',
-          label: 'Blocked Users',
-          icon: <UserX size={20} color="#f59e0b" />,
-          onPress: () => router.push('/blocked-users'),
-          badge: stats.blocked_users_count?.toString(),
+              {
+                id: 'blocked',
+                label: 'Blocked Users',
+                icon: <UserX size={20} color="#f59e0b" />,
+                onPress: () => {
+                  try {
+                    router.push('/blocked-users');
+                  } catch (error) {
+                    console.error('Navigation error:', error);
+                  }
+                },
+                badge: stats.blocked_users_count?.toString(),
               },
             ]
           : []),
@@ -269,7 +293,13 @@ export default function ProfileScreen() {
           id: 'notifications',
           label: 'Notifications',
           icon: <Bell size={20} color="#64748b" />,
-          onPress: () => router.push('/notifications/index' as any),
+          onPress: () => {
+            try {
+              router.push('/notifications' as any);
+            } catch (error) {
+              console.error('Navigation error:', error);
+            }
+          },
           badge: '3', // TODO: Replace with real notification count
         },
       ],
@@ -281,7 +311,13 @@ export default function ProfileScreen() {
           id: 'account',
           label: 'Account Settings',
           icon: <Settings size={20} color="#64748b" />,
-          onPress: () => router.push('/settings/account'),
+          onPress: () => {
+            try {
+              router.push('/settings/account');
+            } catch (error) {
+              console.error('Navigation error:', error);
+            }
+          },
         },
       ],
     },
@@ -292,13 +328,25 @@ export default function ProfileScreen() {
           id: 'howitworks',
           label: 'How It Works',
           icon: <BookOpen size={20} color="#64748b" />,
-          onPress: () => router.push('/how-it-works'),
+          onPress: () => {
+            try {
+              router.push('/how-it-works');
+            } catch (error) {
+              console.error('Navigation error:', error);
+            }
+          },
         },
         {
           id: 'help',
           label: 'Help Center',
           icon: <HelpCircle size={20} color="#64748b" />,
-          onPress: () => router.push('/help'),
+          onPress: () => {
+            try {
+              router.push('/help');
+            } catch (error) {
+              console.error('Navigation error:', error);
+            }
+          },
         },
         {
           id: 'logout',
@@ -340,9 +388,9 @@ export default function ProfileScreen() {
                   !avatarError;
 
                 return hasValidAvatar ? (
-              <Image
+                  <Image
                     source={{ uri: user.avatar_url }}
-                style={styles.avatar}
+                    style={styles.avatar}
                     onError={() => {
                       setAvatarError(true);
                     }}
@@ -463,7 +511,13 @@ export default function ProfileScreen() {
                         borderColor: theme.colors.border,
                       },
                     ]}
-                    onPress={() => router.push('/professional-settings')}
+                    onPress={() => {
+                      try {
+                        router.push('/professional-settings');
+                      } catch (error) {
+                        console.error('Navigation error:', error);
+                      }
+                    }}
                   >
                     <Settings size={16} color={theme.colors.text} />
                     <Text
@@ -526,7 +580,13 @@ export default function ProfileScreen() {
                 </Text>
                 <Button
                   title="Become a Professional"
-                  onPress={() => router.push('/become-professional/index')}
+                  onPress={() => {
+                    try {
+                      router.push('/become-professional' as any);
+                    } catch (error) {
+                      console.error('Navigation error:', error);
+                    }
+                  }}
                   variant="primary"
                   size="medium"
                   style={[
@@ -552,7 +612,13 @@ export default function ProfileScreen() {
                 styles.menuItem,
                 { borderBottomColor: theme.colors.divider },
               ]}
-              onPress={() => router.push('/settings/theme')}
+              onPress={() => {
+                try {
+                  router.push('/settings/theme');
+                } catch (error) {
+                  console.error('Navigation error:', error);
+                }
+              }}
             >
               <View style={styles.menuItemLeft}>
                 <View style={styles.menuItemIcon}>
@@ -576,7 +642,13 @@ export default function ProfileScreen() {
 
             <TouchableOpacity
               style={[styles.menuItem, styles.lastMenuItem]}
-              onPress={() => router.push('/settings/language')}
+              onPress={() => {
+                try {
+                  router.push('/settings/language');
+                } catch (error) {
+                  console.error('Navigation error:', error);
+                }
+              }}
             >
               <View style={styles.menuItemLeft}>
                 <View style={styles.menuItemIcon}>

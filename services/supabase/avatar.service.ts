@@ -14,8 +14,28 @@ export class AvatarService {
     imageUri: string
   ): Promise<string | null> {
     try {
+      // 0. Check if bucket exists (optional check, but helpful for debugging)
+      const { data: buckets, error: bucketError } =
+        await supabase.storage.listBuckets();
+      if (bucketError) {
+        console.error('❌ Error checking buckets:', bucketError);
+      } else {
+        const avatarsBucket = buckets?.find((b) => b.name === this.BUCKET_NAME);
+        if (!avatarsBucket) {
+          console.error(
+            `❌ Bucket '${this.BUCKET_NAME}' not found. Please create it in Supabase Dashboard.`
+          );
+          throw new Error(
+            `Storage bucket '${this.BUCKET_NAME}' does not exist. Please create it in Supabase Dashboard → Storage → New Bucket`
+          );
+        }
+      }
+
       // 1. Convert URI to blob
       const response = await fetch(imageUri);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.statusText}`);
+      }
       const blob = await response.blob();
 
       // 2. Get file extension
@@ -29,15 +49,30 @@ export class AvatarService {
       const filePath = `${userId}/${fileName}`;
 
       // 4. Delete old avatars for this user (optional - keeps storage clean)
-      const { data: existingFiles } = await supabase.storage
-        .from(this.BUCKET_NAME)
-        .list(userId);
+      try {
+        const { data: existingFiles } = await supabase.storage
+          .from(this.BUCKET_NAME)
+          .list(userId);
 
-      if (existingFiles && existingFiles.length > 0) {
-        const filesToRemove = existingFiles.map(
-          (file) => `${userId}/${file.name}`
-        );
-        await supabase.storage.from(this.BUCKET_NAME).remove(filesToRemove);
+        if (existingFiles && existingFiles.length > 0) {
+          const filesToRemove = existingFiles.map(
+            (file) => `${userId}/${file.name}`
+          );
+          const { error: removeError } = await supabase.storage
+            .from(this.BUCKET_NAME)
+            .remove(filesToRemove);
+
+          if (removeError) {
+            console.warn(
+              '⚠️ Warning: Could not delete old avatars:',
+              removeError
+            );
+            // Don't throw - continue with upload
+          }
+        }
+      } catch (listError) {
+        console.warn('⚠️ Warning: Could not list existing files:', listError);
+        // Don't throw - continue with upload
       }
 
       // 5. Upload new avatar
@@ -51,6 +86,18 @@ export class AvatarService {
 
       if (uploadError) {
         console.error('❌ Upload error:', uploadError);
+        // Provide more helpful error message
+        if (uploadError.message?.includes('Bucket not found')) {
+          throw new Error(
+            `Storage bucket '${this.BUCKET_NAME}' not found. Please create it in Supabase Dashboard → Storage → New Bucket`
+          );
+        } else if (
+          uploadError.message?.includes('new row violates row-level security')
+        ) {
+          throw new Error(
+            'Permission denied. Please check Storage RLS policies for avatars bucket.'
+          );
+        }
         throw uploadError;
       }
 

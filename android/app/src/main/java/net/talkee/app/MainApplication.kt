@@ -20,6 +20,19 @@ import net.talkee.app.BuildConfig
 
 class MainApplication : Application(), ReactApplication {
 
+  // Initialize Twilio Voice SDK (optional - only if SDK is available)
+  private var voiceApplicationProxy: Any? = null
+  
+  init {
+    try {
+      val voiceProxyClass = Class.forName("com.twiliovoicereactnative.VoiceApplicationProxy")
+      voiceApplicationProxy = voiceProxyClass.getConstructor(Application::class.java).newInstance(this)
+    } catch (e: Exception) {
+      // Twilio SDK not available or not initialized - app will work without it
+      android.util.Log.w("MainApplication", "Twilio Voice SDK not available: ${e.message}")
+    }
+  }
+
   override val reactNativeHost: ReactNativeHost = ReactNativeHostWrapper(
       this,
       object : DefaultReactNativeHost(this) {
@@ -43,6 +56,14 @@ class MainApplication : Application(), ReactApplication {
   override fun onCreate() {
     super.onCreate()
     
+    // Initialize Twilio Voice SDK (MUST be before loadReactNative, if available)
+    try {
+      voiceApplicationProxy?.javaClass?.getMethod("onCreate")?.invoke(voiceApplicationProxy)
+    } catch (e: Exception) {
+      // Twilio SDK not available - continue without it
+      android.util.Log.w("MainApplication", "Twilio Voice SDK onCreate failed: ${e.message}")
+    }
+    
     // Initialize Stripe PaymentConfiguration
     val stripePublishableKey = BuildConfig.STRIPE_PUBLISHABLE_KEY
     if (stripePublishableKey.isNotEmpty()) {
@@ -56,6 +77,16 @@ class MainApplication : Application(), ReactApplication {
     }
     loadReactNative(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
+  }
+
+  override fun onTerminate() {
+    try {
+      voiceApplicationProxy?.javaClass?.getMethod("onTerminate")?.invoke(voiceApplicationProxy)
+    } catch (e: Exception) {
+      // Twilio SDK not available - continue without it
+      android.util.Log.w("MainApplication", "Twilio Voice SDK onTerminate failed: ${e.message}")
+    }
+    super.onTerminate()
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {

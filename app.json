@@ -25,11 +25,14 @@
         "NSCameraUsageDescription": "This app needs camera access for video calls and profile photos.",
         "NSPhotoLibraryUsageDescription": "This app needs photo library access to upload profile photos.",
         "NSPhotoLibraryAddUsageDescription": "This app needs permission to save photos to your library.",
-        "UIBackgroundModes": [
-          "audio",
-          "voip"
-        ],
+        "NSFaceIDUsageDescription": "This app uses Face ID for secure authentication.",
+        "UIBackgroundModes": ["audio", "voip"],
         "AVAudioSessionCategory": "PlayAndRecord"
+      },
+      "config": {
+        "stripe": {
+          "merchantIdentifier": "merchant.net.talkee.app"
+        }
       }
     },
     "android": {
@@ -43,6 +46,9 @@
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
         "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "POST_NOTIFICATIONS",
+        "MODIFY_AUDIO_SETTINGS",
         "BLUETOOTH",
         "BLUETOOTH_CONNECT",
         "WAKE_LOCK",
@@ -84,7 +90,8 @@
         "expo-image-picker",
         {
           "photosPermission": "Allow Talkee to access your photos to update your profile picture.",
-          "cameraPermission": "Allow Talkee to use your camera to take profile pictures."
+          "cameraPermission": "Allow Talkee to use your camera to take profile pictures.",
+          "mediaLibraryPermission": "Allow Talkee to access your media library to upload photos and videos."
         }
       ]
     ],
@@ -107,7 +114,10 @@
       },
       "eas": {
         "projectId": "dfd312c3-0e23-42cb-b37e-5cc26f629eb2"
-      }
+      },
+      "supabaseUrl": "https://hmimorflmdhcgjhlxbwn.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtaW1vcmZsbWRoY2dqaGx4YnduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyMzgzMTcsImV4cCI6MjA3NjgxNDMxN30.SJSxGs4GiCH7iySrMu1gLeXM_L5YxQMl0VNBMpzz6Cg",
+      "stripePublishableKey": "pk_test_51SdKSj9FgtmyYQNj7UvOTKS0mDkCkPozEl0EIRQfVoZBQRqmha82sNUr83d2kgtzunEQF54ugTAqXulPNLXfjATK00fsasIefq"
     }
   }
 }

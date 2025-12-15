@@ -165,7 +165,15 @@ export function CallHistoryCard({
   };
 
   const handlePress = () => {
-    router.push(`/professional/${professional.id}`);
+    if (!professional?.id) {
+      console.error('Professional ID is missing');
+      return;
+    }
+    try {
+      router.push(`/professional/${professional.id}`);
+    } catch (error) {
+      console.error('Navigation error:', error);
+    }
   };
 
   const handleBlockPress = (event: any) => {

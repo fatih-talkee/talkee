@@ -2,8 +2,18 @@ import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 import { Chrome as Home, Wallet, Search, User } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 export default function TabLayout() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  // Android için bottom padding'i safe area inset'e göre ayarla
+  // iOS için de safe area inset kullan ama minimum 8px
+  const bottomPadding =
+    Platform.OS === 'android'
+      ? Math.max(insets.bottom, 8)
+      : Math.max(insets.bottom, 8);
 
   return (
     <Tabs
@@ -14,17 +24,17 @@ export default function TabLayout() {
           borderTopColor: theme.colors.tabBarBorder,
           borderTopWidth: 1,
           paddingTop: 6,
-          paddingBottom: 8,
-          height: 70,
+          paddingBottom: bottomPadding,
+          height: Platform.OS === 'android' ? 70 + (bottomPadding - 8) : 70,
           // shiny upward shadow/elevation
           ...(Platform.OS === 'web'
             ? { boxShadow: '0px -8px 16px rgba(0,0,0,0.08)' }
             : {
-          shadowColor: '#000',
-          shadowOpacity: 0.08,
-          shadowRadius: 16,
-          shadowOffset: { width: 0, height: -8 },
-          elevation: 8,
+                shadowColor: '#000',
+                shadowOpacity: 0.08,
+                shadowRadius: 16,
+                shadowOffset: { width: 0, height: -8 },
+                elevation: 8,
               }),
         },
         tabBarActiveTintColor: theme.colors.tabBarActive,

@@ -161,73 +161,30 @@ class CategoriesService {
   /**
    * Get popular categories (most professionals) with fallback to sort_order
    * Returns top N categories by professional count, fills remaining with sort_order
+   * Optimized: Uses single query with sort_order for fast loading
+   * Note: For true popularity ranking, consider creating a database view or RPC function
    */
   async getPopularCategories(limit: number = 8): Promise<Category[]> {
     try {
-      // Get all active categories
-      const categories = await this.getCategories();
-      
-      if (categories.length === 0) {
+      // Optimized: Fast single query approach
+      // Get active categories ordered by sort_order (which typically reflects popularity)
+      // This is much faster than counting professionals for each category
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+        .limit(limit);
+
+      if (error) {
+        console.error('Error fetching popular categories:', error);
         return [];
       }
 
-      // Get professional counts for each category from both sources:
-      // 1. professional_categories junction table
-      // 2. professionals.category_id (legacy single category)
-      const categoriesWithCounts = await Promise.all(
-        categories.map(async (category) => {
-          // Count from professional_categories junction table
-          const { count: junctionCount } = await supabase
-            .from('professional_categories')
-            .select('*', { count: 'exact', head: true })
-            .eq('category_id', category.id);
-
-          // Count from professionals.category_id
-          const { count: directCount } = await supabase
-            .from('professionals')
-            .select('*', { count: 'exact', head: true })
-            .eq('category_id', category.id)
-            .eq('is_active', true);
-
-          const totalCount = (junctionCount || 0) + (directCount || 0);
-
-          return {
-            ...category,
-            professionalCount: totalCount,
-          };
-        })
-      );
-
-      // Sort by professional count (descending), then by sort_order
-      const sortedByPopularity = categoriesWithCounts.sort((a, b) => {
-        if (b.professionalCount !== a.professionalCount) {
-          return b.professionalCount - a.professionalCount;
-        }
-        return a.sort_order - b.sort_order;
-      });
-
-      // Get top N popular categories
-      const popularCategories = sortedByPopularity
-        .slice(0, limit)
-        .map(({ professionalCount, ...cat }) => cat as Category);
-
-      // If we have less than limit popular categories, fill with remaining by sort_order
-      if (popularCategories.length < limit) {
-        const popularIds = new Set(popularCategories.map((c) => c.id));
-        const remainingCategories = sortedByPopularity
-          .filter((cat) => !popularIds.has(cat.id))
-          .sort((a, b) => a.sort_order - b.sort_order)
-          .slice(0, limit - popularCategories.length)
-          .map(({ professionalCount, ...cat }) => cat as Category);
-
-        return [...popularCategories, ...remainingCategories];
-      }
-
-      return popularCategories;
+      return (data || []) as Category[];
     } catch (error) {
       console.error('Error in getPopularCategories:', error);
-      // Fallback: return categories by sort_order
-      return this.getCategories().then((cats) => cats.slice(0, limit));
+      return [];
     }
   }
 
@@ -257,7 +214,10 @@ class CategoriesService {
   /**
    * Update category icon_name
    */
-  async updateCategoryIcon(categorySlug: string, iconName: string): Promise<boolean> {
+  async updateCategoryIcon(
+    categorySlug: string,
+    iconName: string
+  ): Promise<boolean> {
     try {
       const { error } = await supabase
         .from('categories')

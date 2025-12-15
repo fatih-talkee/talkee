@@ -214,28 +214,23 @@ export default function LoginScreen() {
             // Session is established, now verify user profile exists
             // If profile doesn't exist, callback handler will create it
             // Don't navigate here - let callback handler or auth state change handle navigation
+            // Don't show toast here - callback handler will show appropriate message
             const { data: userProfile } = await supabase
               .from('users')
               .select('id')
               .eq('auth_id', result.session.user.id)
               .single();
-            
-            if (userProfile) {
-              // User profile exists - authentication is complete
-              // Navigation will be handled by auth state change listener in _layout.tsx
-              toast.success({
-                title: 'Welcome!',
-                message: 'Successfully logged in with Google',
-              });
-            } else {
+
+            if (!userProfile) {
               // Profile doesn't exist yet - callback handler will create it
-              // Show loading message, callback handler will handle navigation
+              // Show loading message, callback handler will handle navigation and toast
               toast.show({
                 type: 'info',
                 title: 'Setting up your account...',
                 message: 'Please wait',
               });
             }
+            // If userProfile exists, callback handler will show toast and handle navigation
           } else if (result.cancelled) {
             toast.info({
               title: 'Cancelled',

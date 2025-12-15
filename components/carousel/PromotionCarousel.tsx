@@ -37,25 +37,29 @@ export function PromotionCarousel({
   isProfessional = false,
 }: PromotionCarouselProps) {
   const handlePromotionPress = (promotion: Promotion) => {
-    if (promotion.ctaLink) {
-      // ✅ Conditional routing: If "Get Started" button points to become-professional
-      // and user is already professional, redirect to professional-settings instead
-      if (
-        (promotion.ctaLink === '/become-professional' ||
-          promotion.ctaLink === '/become-professional/index') &&
-        isProfessional
-      ) {
-        router.push('/professional-settings' as any);
-      } else {
-        // Normalize route paths
-        let normalizedLink = promotion.ctaLink;
-        if (normalizedLink === '/become-professional') {
-          normalizedLink = '/become-professional/index';
+    try {
+      if (promotion.ctaLink) {
+        // ✅ Conditional routing: If "Get Started" button points to become-professional
+        // and user is already professional, redirect to professional-settings instead
+        if (
+          (promotion.ctaLink === '/become-professional' ||
+            promotion.ctaLink === '/become-professional/index') &&
+          isProfessional
+        ) {
+          router.push('/professional-settings' as any);
+        } else {
+          // Normalize route paths
+          let normalizedLink = promotion.ctaLink;
+          if (normalizedLink === '/become-professional') {
+            normalizedLink = '/become-professional';
+          }
+          router.push(normalizedLink as any);
         }
-        router.push(normalizedLink as any);
+      } else {
+        router.push('/(tabs)/search');
       }
-    } else {
-      router.push('/(tabs)/search');
+    } catch (error) {
+      console.error('Navigation error:', error);
     }
   };
 

@@ -237,9 +237,19 @@ export function CategoryGrid({ categories }: CategoryGridProps) {
   const { theme } = useTheme();
 
   const handleCategoryPress = (categoryId: string, categoryName: string) => {
-    router.push(
-      `/category/${categoryId}?name=${encodeURIComponent(categoryName)}`
-    );
+    if (!categoryId) {
+      console.error('Category ID is missing');
+      return;
+    }
+    try {
+      router.push(
+        `/category/${categoryId}?name=${encodeURIComponent(
+          categoryName || 'Category'
+        )}`
+      );
+    } catch (error) {
+      console.error('Navigation error:', error);
+    }
   };
 
   const renderCategory = ({

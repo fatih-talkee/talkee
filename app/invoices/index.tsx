@@ -289,26 +289,36 @@ export default function InvoicesScreen() {
     const hasAvatarError = avatarErrors[invoiceId] || false;
 
     return (
-    <Card
-      style={[
-        styles.invoiceCard,
-        {
-          backgroundColor:
-            theme.name === 'dark' ? '#000000' : theme.colors.card,
-          borderColor:
-            theme.name === 'dark'
-              ? 'rgba(255, 255, 255, 0.3)'
-              : theme.colors.border,
-          borderWidth: 1.5,
-        },
-      ]}
-    >
-      <TouchableOpacity
-        style={styles.invoiceContainer}
-          onPress={() => router.push(`/professional/${item.professional_id}`)}
+      <Card
+        style={[
+          styles.invoiceCard,
+          {
+            backgroundColor:
+              theme.name === 'dark' ? '#000000' : theme.colors.card,
+            borderColor:
+              theme.name === 'dark'
+                ? 'rgba(255, 255, 255, 0.3)'
+                : theme.colors.border,
+            borderWidth: 1.5,
+          },
+        ]}
       >
-        <View style={styles.invoiceHeader}>
-          <View style={styles.professionalInfo}>
+        <TouchableOpacity
+          style={styles.invoiceContainer}
+          onPress={() => {
+            if (!item.professional_id) {
+              console.error('Professional ID is missing');
+              return;
+            }
+            try {
+              router.push(`/professional/${item.professional_id}`);
+            } catch (error) {
+              console.error('Navigation error:', error);
+            }
+          }}
+        >
+          <View style={styles.invoiceHeader}>
+            <View style={styles.professionalInfo}>
               {(() => {
                 const hasValidAvatar =
                   professionalAvatar &&
@@ -319,9 +329,9 @@ export default function InvoicesScreen() {
                   !hasAvatarError;
 
                 return hasValidAvatar ? (
-            <Image
+                  <Image
                     source={{ uri: professionalAvatar }}
-              style={styles.avatar}
+                    style={styles.avatar}
                     onError={() => {
                       setAvatarErrors((prev) => ({
                         ...prev,
@@ -343,112 +353,112 @@ export default function InvoicesScreen() {
                   </View>
                 );
               })()}
-            <View style={styles.professionalDetails}>
-              <Text
+              <View style={styles.professionalDetails}>
+                <Text
                   style={[
                     styles.professionalName,
                     { color: theme.colors.text },
                   ]}
-              >
+                >
                   {professionalName}
-              </Text>
-              <Text
-                style={[
-                  styles.professionalTitle,
-                  { color: theme.colors.textMuted },
-                ]}
-              >
+                </Text>
+                <Text
+                  style={[
+                    styles.professionalTitle,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
                   {professionalTitle}
+                </Text>
+              </View>
+            </View>
+            <View
+              style={[
+                styles.statusBadge,
+                { backgroundColor: getStatusColor(item) + '20' },
+              ]}
+            >
+              {getStatusIcon(item)}
+              <Text
+                style={[styles.statusText, { color: getStatusColor(item) }]}
+              >
+                {getStatusLabel(item)}
               </Text>
             </View>
           </View>
-          <View
-            style={[
-              styles.statusBadge,
-                { backgroundColor: getStatusColor(item) + '20' },
-            ]}
-          >
-              {getStatusIcon(item)}
-            <Text
-                style={[styles.statusText, { color: getStatusColor(item) }]}
-            >
-                {getStatusLabel(item)}
-            </Text>
-          </View>
-        </View>
 
-        <View style={styles.invoiceDetails}>
-          <View style={styles.invoiceRow}>
-            <Text style={[styles.label, { color: theme.colors.textMuted }]}>
-              Invoice #
-            </Text>
+          <View style={styles.invoiceDetails}>
+            <View style={styles.invoiceRow}>
+              <Text style={[styles.label, { color: theme.colors.textMuted }]}>
+                Invoice #
+              </Text>
               <Text
                 style={[styles.invoiceNumber, { color: theme.colors.text }]}
               >
                 {item.invoice_number}
-            </Text>
-          </View>
-
-          <View style={styles.invoiceRow}>
-            <Text style={[styles.label, { color: theme.colors.textMuted }]}>
-              Date
-            </Text>
-            <View style={styles.dateRow}>
-              <Calendar size={14} color={theme.colors.textMuted} />
-              <Text style={[styles.dateText, { color: theme.colors.text }]}>
-                  {formatDate(item.invoice_date)}
               </Text>
             </View>
-          </View>
+
+            <View style={styles.invoiceRow}>
+              <Text style={[styles.label, { color: theme.colors.textMuted }]}>
+                Date
+              </Text>
+              <View style={styles.dateRow}>
+                <Calendar size={14} color={theme.colors.textMuted} />
+                <Text style={[styles.dateText, { color: theme.colors.text }]}>
+                  {formatDate(item.invoice_date)}
+                </Text>
+              </View>
+            </View>
 
             {item.call_duration_minutes != null &&
               item.call_duration_minutes > 0 && (
-            <View style={styles.invoiceRow}>
+                <View style={styles.invoiceRow}>
                   <Text
                     style={[styles.label, { color: theme.colors.textMuted }]}
                   >
-                Duration
-              </Text>
+                    Duration
+                  </Text>
                   <Text
                     style={[styles.durationText, { color: theme.colors.text }]}
                   >
                     {item.call_duration_minutes} min
-              </Text>
-            </View>
-          )}
+                  </Text>
+                </View>
+              )}
 
             {item.notes && (
-          <View style={styles.invoiceRow}>
-            <Text style={[styles.label, { color: theme.colors.textMuted }]}>
+              <View style={styles.invoiceRow}>
+                <Text style={[styles.label, { color: theme.colors.textMuted }]}>
                   Notes
-            </Text>
-            <Text
-              style={[styles.descriptionText, { color: theme.colors.text }]}
-            >
+                </Text>
+                <Text
+                  style={[styles.descriptionText, { color: theme.colors.text }]}
+                >
                   {item.notes}
-            </Text>
-          </View>
+                </Text>
+              </View>
             )}
 
-          <View
+            <View
               style={[
                 styles.amountRow,
                 { borderTopColor: theme.colors.border },
               ]}
-          >
-            <Text style={[styles.amountLabel, { color: theme.colors.text }]}>
-              Amount
-            </Text>
-            <View style={styles.amountContainer}>
-              <DollarSign size={20} color={theme.colors.primary} />
-              <Text
-                style={[styles.amountValue, { color: theme.colors.primary }]}
-              >
-                  {item.total_amount.toFixed(2)}
+            >
+              <Text style={[styles.amountLabel, { color: theme.colors.text }]}>
+                Amount
               </Text>
+              <View style={styles.amountContainer}>
+                <DollarSign size={20} color={theme.colors.primary} />
+                <Text
+                  style={[styles.amountValue, { color: theme.colors.primary }]}
+                >
+                  {item.total_amount.toFixed(2)}
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
         </TouchableOpacity>
 
         <View style={styles.actionButtons}>
@@ -477,9 +487,9 @@ export default function InvoicesScreen() {
             </Text>
           </TouchableOpacity>
           {item.pdf_url && (
-        <TouchableOpacity
-          style={[
-            styles.downloadButton,
+            <TouchableOpacity
+              style={[
+                styles.downloadButton,
                 {
                   backgroundColor:
                     theme.name === 'light'
@@ -488,21 +498,21 @@ export default function InvoicesScreen() {
                   borderColor: theme.colors.border,
                   borderWidth: 1,
                 },
-          ]}
+              ]}
               onPress={(e) => {
                 e.stopPropagation();
                 handleDownloadInvoice(item);
               }}
-        >
+            >
               <Download size={16} color={theme.colors.text} />
               <Text style={[styles.downloadText, { color: theme.colors.text }]}>
-            Download
-          </Text>
-        </TouchableOpacity>
+                Download
+              </Text>
+            </TouchableOpacity>
           )}
         </View>
-    </Card>
-  );
+      </Card>
+    );
   };
 
   if (isLoading) {

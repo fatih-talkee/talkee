@@ -168,11 +168,19 @@ export default function AccountSettingsScreen() {
   };
 
   const handleChangePassword = () => {
-    router.push('/settings/change-password');
+    try {
+      router.push('/settings/change-password');
+    } catch (error) {
+      console.error('Navigation error:', error);
+    }
   };
 
   const handleSetPassword = () => {
-    router.push('/settings/set-password');
+    try {
+      router.push('/settings/set-password');
+    } catch (error) {
+      console.error('Navigation error:', error);
+    }
   };
 
   const handleDeleteAccount = () => {

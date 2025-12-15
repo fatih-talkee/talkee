@@ -76,7 +76,7 @@ export default function HomeScreen() {
                       : '#000000',
                 },
               ]}
-              onPress={() => router.push('/notifications/index' as any)}
+              onPress={() => router.push('/notifications' as any)}
             >
               <Bell size={20} color="#FFFFFF" />
               {unreadNotificationCount > 0 && (

@@ -182,9 +182,17 @@ export default function NotificationsScreen() {
     // Navigate based on notification type and data
     const professionalId = notification.data?.professional_id;
     if (professionalId) {
-      router.push(`/professional/${professionalId}` as any);
+      try {
+        router.push(`/professional/${professionalId}` as any);
+      } catch (error) {
+        console.error('Navigation error:', error);
+      }
     } else if (notification.data?.action_url) {
-      router.push(notification.data.action_url as any);
+      try {
+        router.push(notification.data.action_url as any);
+      } catch (error) {
+        console.error('Navigation error:', error);
+      }
     }
   };
 

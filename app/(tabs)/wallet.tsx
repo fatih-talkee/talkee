@@ -14,7 +14,6 @@ import {
   CreditCard,
   Plus,
   History,
-  Download,
   TrendingUp,
   TrendingDown,
 } from 'lucide-react-native';
@@ -45,7 +44,7 @@ const creditPackages: CreditPackage[] = [
 
 export default function WalletScreen() {
   const { theme } = useTheme();
-  const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
+  const [selectedPackage, setSelectedPackage] = useState<string>('1'); // Default: 50 credits
   const [refreshing, setRefreshing] = useState(false);
 
   // Fetch wallet balance
@@ -91,15 +90,13 @@ export default function WalletScreen() {
       }, 0);
   }, [transactions]);
 
-  const handlePurchase = (packageId: string) => {
+  const handlePurchase = (packageId: string, amount: number) => {
     setSelectedPackage(packageId);
-    router.push('/credit-selection');
-  };
-
-  const handleExport = () => {
-    // TODO: Implement export functionality
-    logger.info('Export wallet data requested');
-    // Could navigate to export screen or trigger download
+    try {
+      router.push(`/credit-selection?credits=${amount}`);
+    } catch (error) {
+      console.error('Navigation error:', error);
+    }
   };
 
   const onRefresh = async () => {
@@ -199,9 +196,6 @@ export default function WalletScreen() {
             >
               Current Balance
             </Text>
-            <TouchableOpacity onPress={handleExport}>
-              <Download size={20} color={theme.colors.textMuted} />
-            </TouchableOpacity>
           </View>
           {balanceLoading ? (
             <SectionLoading size="large" style={{ marginVertical: 20 }} />
@@ -261,7 +255,13 @@ export default function WalletScreen() {
           <View style={styles.quickActions}>
             <TouchableOpacity
               style={styles.quickAction}
-              onPress={() => router.push('/credit-selection')}
+              onPress={() => {
+                try {
+                  router.push('/credit-selection');
+                } catch (error) {
+                  console.error('Navigation error:', error);
+                }
+              }}
               activeOpacity={0.7}
             >
               <View
@@ -302,7 +302,13 @@ export default function WalletScreen() {
             <TouchableOpacity
               style={styles.quickAction}
               activeOpacity={0.7}
-              onPress={() => router.push('/wallet-history')}
+              onPress={() => {
+                try {
+                  router.push('/wallet-history');
+                } catch (error) {
+                  console.error('Navigation error:', error);
+                }
+              }}
             >
               <View
                 style={[
@@ -339,46 +345,6 @@ export default function WalletScreen() {
                 History
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickAction}
-              activeOpacity={0.7}
-              onPress={handleExport}
-            >
-              <View
-                style={[
-                  styles.quickActionIcon,
-                  {
-                    backgroundColor: theme.colors.surface,
-                    borderWidth: theme.name === 'light' ? 1 : 0,
-                    borderColor:
-                      theme.name === 'light'
-                        ? theme.colors.border
-                        : 'transparent',
-                    ...(theme.name === 'light'
-                      ? Platform.OS === 'web'
-                        ? { boxShadow: '0px 2px 4px rgba(0,0,0,0.1)' }
-                        : {
-                            shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 2 },
-                            shadowOpacity: 0.1,
-                            shadowRadius: 4,
-                            elevation: 2,
-                          }
-                      : {}),
-                  },
-                ]}
-              >
-                <Download size={24} color={theme.colors.success} />
-              </View>
-              <Text
-                style={[
-                  styles.quickActionText,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                Export
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -412,11 +378,12 @@ export default function WalletScreen() {
                     backgroundColor: theme.colors.accentLight || '#FFF3CD',
                   },
                   selectedPackage === pkg.id && {
-                    borderColor: theme.colors.accent,
-                    backgroundColor: theme.colors.accentLight || '#FFF3CD',
+                    borderColor: '#FFD60A', // Yellow border when selected
+                    borderWidth: 2,
+                    backgroundColor: '#FFD60A' + '20', // Light yellow background
                   },
                 ]}
-                onPress={() => handlePurchase(pkg.id)}
+                onPress={() => handlePurchase(pkg.id, pkg.amount)}
                 activeOpacity={0.8}
               >
                 {pkg.popular && (
@@ -522,7 +489,13 @@ export default function WalletScreen() {
             </Text>
             {transactions.length > 0 && (
               <TouchableOpacity
-                onPress={() => router.push('/wallet-history')}
+                onPress={() => {
+                  try {
+                    router.push('/wallet-history');
+                  } catch (error) {
+                    console.error('Navigation error:', error);
+                  }
+                }}
                 activeOpacity={0.7}
               >
                 <Text

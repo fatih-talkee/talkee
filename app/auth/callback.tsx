@@ -31,16 +31,62 @@ export default function AuthCallbackScreen() {
 
   const handleCallback = async () => {
     try {
-      // Get session from Supabase
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
+      // Wait for session to be ready (OAuth redirect can take a moment)
+      let session = null;
+      let retries = 0;
+      const maxRetries = 10;
 
-      if (error) {
+      while (!session && retries < maxRetries) {
+        const {
+          data: { session: currentSession },
+          error,
+        } = await supabase.auth.getSession();
+
+        if (error && retries === 0) {
+          // Only show error on first attempt
+          console.error('Session error:', error);
+        }
+
+        if (currentSession) {
+          session = currentSession;
+          break;
+        }
+
+        // Wait before retrying (exponential backoff)
+        await new Promise((resolve) =>
+          setTimeout(resolve, 100 * (retries + 1))
+        );
+        retries++;
+      }
+
+      if (!session) {
+        // Still no session after retries - check auth state change
+        console.log('No session found, waiting for auth state change...');
+
+        // Wait for auth state change (up to 3 seconds)
+        const sessionPromise = new Promise<any>((resolve) => {
+          const timeout = setTimeout(() => {
+            resolve(null);
+          }, 3000);
+
+          const {
+            data: { subscription },
+          } = supabase.auth.onAuthStateChange((_event, newSession) => {
+            if (newSession) {
+              clearTimeout(timeout);
+              subscription.unsubscribe();
+              resolve(newSession);
+            }
+          });
+        });
+
+        session = await sessionPromise;
+      }
+
+      if (!session) {
         toast.error({
           title: 'Authentication Failed',
-          message: error.message || 'Failed to complete sign in',
+          message: 'Session not found. Please try again.',
         });
         router.replace('/auth/login');
         return;
@@ -54,7 +100,9 @@ export default function AuthCallbackScreen() {
         // Check if user profile exists (including deleted accounts)
         const { data: existingUser } = await supabase
           .from('users')
-          .select('id, oauth_providers, oauth_emails, deleted_at, name, primary_email')
+          .select(
+            'id, oauth_providers, oauth_emails, deleted_at, name, primary_email'
+          )
           .eq('auth_id', session.user.id)
           .single();
 
@@ -82,12 +130,13 @@ export default function AuthCallbackScreen() {
             });
 
             // Account was deleted, restore it
-            const restored = await accountRestorationService.restoreDeletedAccount(
-              session.user.id,
-              oauthEmail || '',
-              oauthName,
-              oauthAvatar || undefined
-            );
+            const restored =
+              await accountRestorationService.restoreDeletedAccount(
+                session.user.id,
+                oauthEmail || '',
+                oauthName,
+                oauthAvatar || undefined
+              );
 
             if (restored) {
               console.log('✅ [callback] Account restored successfully');
@@ -104,7 +153,8 @@ export default function AuthCallbackScreen() {
               console.error('❌ [callback] Failed to restore account');
               toast.error({
                 title: 'Restoration Failed',
-                message: 'Failed to restore your account. Please contact support.',
+                message:
+                  'Failed to restore your account. Please contact support.',
               });
               router.replace('/auth/login');
               return;
@@ -140,17 +190,15 @@ export default function AuthCallbackScreen() {
             });
           }
 
-          // Navigate to main app - wait for router to be ready
-          setTimeout(() => {
-            try {
+          // Navigate to main app (home page) - immediate navigation
+          try {
+            router.replace('/(tabs)');
+          } catch (error) {
+            // Fallback: try again after a short delay
+            setTimeout(() => {
               router.replace('/(tabs)');
-            } catch (error) {
-              // Fallback: try again after a short delay
-              setTimeout(() => {
-                router.replace('/(tabs)');
-              }, 500);
-            }
-          }, 200);
+            }, 100);
+          }
         } else {
           // ✅ Check if there's a deleted account to restore
           const { accountRestorationService } = await import(
@@ -168,12 +216,13 @@ export default function AuthCallbackScreen() {
             null;
 
           // Try to restore deleted account first
-          const restoredUser = await accountRestorationService.restoreDeletedAccount(
-            session.user.id,
-            oauthEmail || '',
-            oauthName,
-            oauthAvatar || undefined
-          );
+          const restoredUser =
+            await accountRestorationService.restoreDeletedAccount(
+              session.user.id,
+              oauthEmail || '',
+              oauthName,
+              oauthAvatar || undefined
+            );
 
           let newUser;
           if (restoredUser) {
@@ -211,55 +260,56 @@ export default function AuthCallbackScreen() {
               .select()
               .single();
 
-              if (profileError) {
-                // Check for unique constraint violation (might be a deleted account)
-                if (profileError.code === '23505') {
-                  // Unique constraint violation - might be a deleted account
-                  // Try to restore it
-                  const restored = await accountRestorationService.restoreDeletedAccount(
+            if (profileError) {
+              // Check for unique constraint violation (might be a deleted account)
+              if (profileError.code === '23505') {
+                // Unique constraint violation - might be a deleted account
+                // Try to restore it
+                const restored =
+                  await accountRestorationService.restoreDeletedAccount(
                     session.user.id,
                     oauthEmail || '',
                     oauthName,
                     oauthAvatar || undefined
                   );
 
-                  if (restored) {
-                    newUser = restored;
-                    console.log('✅ [callback] Account restored after unique constraint error');
-                  } else {
-                    throw new Error(
-                      'Account already exists. Please try logging in instead of signing up.'
-                    );
-                  }
+                if (restored) {
+                  newUser = restored;
+                  console.log(
+                    '✅ [callback] Account restored after unique constraint error'
+                  );
                 } else {
-                  // Other errors
-                  throw profileError;
+                  throw new Error(
+                    'Account already exists. Please try logging in instead of signing up.'
+                  );
                 }
               } else {
-                newUser = insertedUser;
+                // Other errors
+                throw profileError;
               }
+            } else {
+              newUser = insertedUser;
             }
+          }
 
-            if (!newUser) {
-              throw new Error('Failed to create or restore user account');
-            }
+          if (!newUser) {
+            throw new Error('Failed to create or restore user account');
+          }
 
           toast.success({
             title: 'Welcome!',
             message: 'Your account has been created',
           });
 
-          // Navigate to main app - wait for router to be ready
-          setTimeout(() => {
-            try {
+          // Navigate to main app (home page) - immediate navigation
+          try {
+            router.replace('/(tabs)');
+          } catch (error) {
+            // Fallback: try again after a short delay
+            setTimeout(() => {
               router.replace('/(tabs)');
-            } catch (error) {
-              // Fallback: try again after a short delay
-              setTimeout(() => {
-                router.replace('/(tabs)');
-              }, 500);
-            }
-          }, 200);
+            }, 100);
+          }
         }
       } else {
         // No session
@@ -280,10 +330,7 @@ export default function AuthCallbackScreen() {
 
   return (
     <View style={styles.container}>
-      <PageLoading
-        message="Completing sign in..."
-        size="large"
-      />
+      <PageLoading message="Completing sign in..." size="large" />
     </View>
   );
 }

@@ -98,7 +98,11 @@ export default function SetupAccountScreen() {
   };
 
   const handleBecomeProfessional = () => {
-    router.push('/become-professional/index');
+    try {
+      router.push('/become-professional' as any);
+    } catch (error) {
+      console.error('Navigation error:', error);
+    }
   };
 
   const toggleInterest = (categoryId: string) => {

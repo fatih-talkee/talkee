@@ -387,7 +387,15 @@ export default function ProfessionalProfileScreen() {
   };
 
   const handleScheduleCall = () => {
-    router.push(`/schedule-call/${id}`);
+    if (!id) {
+      console.error('Professional ID is missing');
+      return;
+    }
+    try {
+      router.push(`/schedule-call/${id}`);
+    } catch (error) {
+      console.error('Navigation error:', error);
+    }
   };
 
   // Determine button states
@@ -431,7 +439,10 @@ export default function ProfessionalProfileScreen() {
     if (!isNetworkOnline && !professional) {
       return (
         <SafeAreaView
-          style={[styles.container, { backgroundColor: theme.colors.background }]}
+          style={[
+            styles.container,
+            { backgroundColor: theme.colors.background },
+          ]}
         >
           <Header showLogo showBack />
           <View style={styles.errorContainer}>
@@ -439,7 +450,9 @@ export default function ProfessionalProfileScreen() {
             <Text style={[styles.errorText, { color: theme.colors.text }]}>
               No Internet Connection
             </Text>
-            <Text style={[styles.errorSubtext, { color: theme.colors.textMuted }]}>
+            <Text
+              style={[styles.errorSubtext, { color: theme.colors.textMuted }]}
+            >
               Please check your connection and try again
             </Text>
           </View>
@@ -458,8 +471,11 @@ export default function ProfessionalProfileScreen() {
           <Text style={[styles.errorText, { color: theme.colors.error }]}>
             Professional not found
           </Text>
-          <Text style={[styles.errorSubtext, { color: theme.colors.textMuted }]}>
-            The professional you're looking for doesn't exist or has been removed
+          <Text
+            style={[styles.errorSubtext, { color: theme.colors.textMuted }]}
+          >
+            The professional you're looking for doesn't exist or has been
+            removed
           </Text>
         </View>
       </SafeAreaView>
@@ -554,8 +570,8 @@ export default function ProfessionalProfileScreen() {
                     <View style={styles.feedAuthorRow}>
                       {(() => {
                         const feedAvatarUrl =
-                            feed.professional_avatar ||
-                            professional.users?.avatar_url ||
+                          feed.professional_avatar ||
+                          professional.users?.avatar_url ||
                           '';
                         const feedName =
                           feed.professional_name ||
@@ -575,7 +591,7 @@ export default function ProfessionalProfileScreen() {
                         return hasValidFeedAvatar ? (
                           <Image
                             source={{ uri: feedAvatarUrl }}
-                        style={styles.feedAvatar}
+                            style={styles.feedAvatar}
                             onError={() => {
                               setFeedAvatarErrors((prev) => ({
                                 ...prev,
@@ -1499,9 +1515,9 @@ export default function ProfessionalProfileScreen() {
                 !avatarError;
 
               return hasValidAvatar ? (
-            <Image
+                <Image
                   source={{ uri: avatarUrl }}
-              style={styles.avatar}
+                  style={styles.avatar}
                   onError={() => {
                     setAvatarError(true);
                   }}

@@ -16,10 +16,18 @@ export function useAuth() {
 
     const checkAuth = async () => {
       try {
+        // Use getSession which is faster and uses cached session
         const {
           data: { session },
+          error,
         } = await supabase.auth.getSession();
-        if (isMounted) {
+
+        if (error) {
+          console.error('❌ Auth check error:', error);
+          if (isMounted) {
+            setIsAuthenticated(false);
+          }
+        } else if (isMounted) {
           setIsAuthenticated(!!session);
         }
       } catch (error) {

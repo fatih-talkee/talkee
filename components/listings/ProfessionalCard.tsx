@@ -92,12 +92,28 @@ export function ProfessionalCard({
   const totalCalls = professional.total_calls || 0;
 
   const handlePress = () => {
-    router.push(`/professional/${professional.id}`);
+    if (!professional?.id) {
+      console.error('Professional ID is missing');
+      return;
+    }
+    try {
+      router.push(`/professional/${professional.id}`);
+    } catch (error) {
+      console.error('Navigation error:', error);
+    }
   };
 
   const handleProfilePress = (event: any) => {
     event.stopPropagation();
-    router.push(`/professional/${professional.id}`);
+    if (!professional?.id) {
+      console.error('Professional ID is missing');
+      return;
+    }
+    try {
+      router.push(`/professional/${professional.id}`);
+    } catch (error) {
+      console.error('Navigation error:', error);
+    }
   };
 
   const handleUnblockPress = (event: any) => {
@@ -289,37 +305,37 @@ export function ProfessionalCard({
                 </Text>
               </TouchableOpacity>
             )}
-          <TouchableOpacity
-            style={[
-              styles.profileButton,
-              {
-                backgroundColor:
-                  theme.name === 'light'
-                    ? theme.colors.surface
-                    : theme.colors.primaryLight,
-                borderColor:
+            <TouchableOpacity
+              style={[
+                styles.profileButton,
+                {
+                  backgroundColor:
+                    theme.name === 'light'
+                      ? theme.colors.surface
+                      : theme.colors.primaryLight,
+                  borderColor:
                     theme.name === 'light'
                       ? theme.colors.primary
                       : 'transparent',
-                borderWidth: theme.name === 'light' ? 1 : 0,
-              },
-            ]}
-            onPress={handleProfilePress}
-          >
-            <Text
-              style={[
-                styles.profileButtonText,
-                {
-                  color:
-                    theme.name === 'light'
-                      ? theme.colors.primary
-                      : theme.colors.surface,
+                  borderWidth: theme.name === 'light' ? 1 : 0,
                 },
               ]}
+              onPress={handleProfilePress}
             >
-              Profile Page
-            </Text>
-          </TouchableOpacity>
+              <Text
+                style={[
+                  styles.profileButtonText,
+                  {
+                    color:
+                      theme.name === 'light'
+                        ? theme.colors.primary
+                        : theme.colors.surface,
+                  },
+                ]}
+              >
+                Profile Page
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </View>
