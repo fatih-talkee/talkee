@@ -259,11 +259,13 @@ export default function InvoicesScreen() {
       ? invoice.pdf_url ||
         invoice.metadata?.hosted_url ||
         invoice.metadata?.hostedUrl ||
+        invoice.metadata?.invoice_pdf ||
         invoice.metadata?.url ||
         invoice.metadata?.view_url ||
         invoice.metadata?.viewUrl
       : invoice.metadata?.hosted_url ||
         invoice.metadata?.hostedUrl ||
+        invoice.metadata?.invoice_pdf ||
         invoice.metadata?.url ||
         invoice.metadata?.view_url ||
         invoice.metadata?.viewUrl ||
@@ -273,6 +275,14 @@ export default function InvoicesScreen() {
     if (!viewUrl) {
       const stripeInvoiceId = invoice.metadata?.stripe_invoice_id;
       const paymentIntentId = invoice.metadata?.payment_intent_id;
+      
+      console.log('No invoice URL found, attempting to fetch from Stripe:', {
+        invoice_id: invoice.id,
+        invoice_number: invoice.invoice_number,
+        stripe_invoice_id: stripeInvoiceId,
+        payment_intent_id: paymentIntentId,
+        is_credit_purchase: isCreditPurchase,
+      });
 
       if (stripeInvoiceId || paymentIntentId) {
         try {
@@ -410,29 +420,7 @@ export default function InvoicesScreen() {
           },
         ]}
       >
-        <TouchableOpacity
-          style={styles.invoiceContainer}
-          onPress={() => {
-            // Don't navigate to professional page for credit purchase
-            const isCreditPurchase =
-              item.metadata?.type === 'credit_purchase' ||
-              !item.professional_id;
-            if (isCreditPurchase) {
-              // For credit purchase, just show invoice details
-              handleViewInvoice(item);
-              return;
-            }
-            if (!item.professional_id) {
-              console.error('Professional ID is missing');
-              return;
-            }
-            try {
-              router.push(`/professional/${item.professional_id}`);
-            } catch (error) {
-              console.error('Navigation error:', error);
-            }
-          }}
-        >
+        <View style={styles.invoiceContainer}>
           <View style={styles.invoiceHeader}>
             <View style={styles.professionalInfo}>
               {(() => {
@@ -575,7 +563,7 @@ export default function InvoicesScreen() {
               </View>
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
 
         <View style={styles.actionButtons}>
           <TouchableOpacity

@@ -8,8 +8,8 @@
     "scheme": "talkee",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/splash.png",
-      "resizeMode": "cover",
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
     "newArchEnabled": false,
@@ -56,6 +56,12 @@
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#000000",
+        "monochromeImage": "./assets/images/icon.png"
+      },
+      "splash": {
+        "image": "./assets/images/icon.png",
+        "resizeMode": "contain",
         "backgroundColor": "#000000"
       }
     },

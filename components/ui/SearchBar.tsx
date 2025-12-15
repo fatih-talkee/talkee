@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
   },
   tabButtonsContainer: {
     marginTop: 12,
-    width: '100%',
+    paddingRight: 0,
   },
   resultsHeader: {
     marginTop: 12,

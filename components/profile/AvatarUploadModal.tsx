@@ -135,9 +135,13 @@ export function AvatarUploadModal({
           'Failed to upload avatar. Please try again.'
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error);
-      Alert.alert('Upload Failed', 'An error occurred. Please try again.');
+      // Show more detailed error message
+      const errorMessage =
+        error?.message ||
+        'An error occurred while uploading. Please check console for details.';
+      Alert.alert('Upload Failed', errorMessage);
     } finally {
       setUploading(false);
     }

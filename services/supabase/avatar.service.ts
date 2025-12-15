@@ -14,7 +14,24 @@ export class AvatarService {
     imageUri: string
   ): Promise<string | null> {
     try {
-      // 0. Check if bucket exists (optional check, but helpful for debugging)
+      // 0. Get current auth user to verify authentication
+      const {
+        data: { user: authUser },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError || !authUser) {
+        console.error('❌ Auth error:', authError);
+        throw new Error('Not authenticated. Please log in again.');
+      }
+
+      console.log('📤 Starting avatar upload:', {
+        userId,
+        authUserId: authUser.id,
+        imageUri: imageUri.substring(0, 50) + '...',
+      });
+
+      // 0.1. Check if bucket exists (optional check, but helpful for debugging)
       const { data: buckets, error: bucketError } =
         await supabase.storage.listBuckets();
       if (bucketError) {
@@ -29,14 +46,17 @@ export class AvatarService {
             `Storage bucket '${this.BUCKET_NAME}' does not exist. Please create it in Supabase Dashboard → Storage → New Bucket`
           );
         }
+        console.log('✅ Bucket found:', avatarsBucket);
       }
 
       // 1. Convert URI to blob
+      console.log('📥 Fetching image from URI...');
       const response = await fetch(imageUri);
       if (!response.ok) {
         throw new Error(`Failed to fetch image: ${response.statusText}`);
       }
       const blob = await response.blob();
+      console.log('✅ Image blob created, size:', blob.size, 'bytes');
 
       // 2. Get file extension
       const fileExt = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
@@ -44,19 +64,30 @@ export class AvatarService {
       const ext = validExts.includes(fileExt) ? fileExt : 'jpg';
 
       // 3. Generate filename with timestamp to avoid caching issues
+      // IMPORTANT: Use auth.uid() for RLS policy compatibility
+      // RLS policies check auth.uid(), not public.users.id
       const timestamp = Date.now();
       const fileName = `avatar-${timestamp}.${ext}`;
-      const filePath = `${userId}/${fileName}`;
+      // Use auth.uid() instead of userId for RLS policy compatibility
+      const filePath = `${authUser.id}/${fileName}`;
+      
+      console.log('📁 File path:', {
+        filePath,
+        userId,
+        authUserId: authUser.id,
+        note: 'Using auth.uid() for RLS policy compatibility',
+      });
 
       // 4. Delete old avatars for this user (optional - keeps storage clean)
+      // Use auth.uid() for RLS policy compatibility
       try {
         const { data: existingFiles } = await supabase.storage
           .from(this.BUCKET_NAME)
-          .list(userId);
+          .list(authUser.id);
 
         if (existingFiles && existingFiles.length > 0) {
           const filesToRemove = existingFiles.map(
-            (file) => `${userId}/${file.name}`
+            (file) => `${authUser.id}/${file.name}`
           );
           const { error: removeError } = await supabase.storage
             .from(this.BUCKET_NAME)
@@ -68,6 +99,8 @@ export class AvatarService {
               removeError
             );
             // Don't throw - continue with upload
+          } else {
+            console.log('✅ Old avatars deleted:', filesToRemove.length);
           }
         }
       } catch (listError) {
@@ -76,6 +109,13 @@ export class AvatarService {
       }
 
       // 5. Upload new avatar
+      console.log('📤 Uploading avatar to storage:', {
+        bucket: this.BUCKET_NAME,
+        filePath,
+        contentType: `image/${ext}`,
+        blobSize: blob.size,
+      });
+
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from(this.BUCKET_NAME)
         .upload(filePath, blob, {
@@ -85,42 +125,75 @@ export class AvatarService {
         });
 
       if (uploadError) {
-        console.error('❌ Upload error:', uploadError);
+        console.error('❌ Upload error details:', {
+          message: uploadError.message,
+          statusCode: uploadError.statusCode,
+          error: uploadError,
+          userId,
+          authUserId: authUser.id,
+          filePath,
+        });
+
         // Provide more helpful error message
         if (uploadError.message?.includes('Bucket not found')) {
           throw new Error(
             `Storage bucket '${this.BUCKET_NAME}' not found. Please create it in Supabase Dashboard → Storage → New Bucket`
           );
         } else if (
-          uploadError.message?.includes('new row violates row-level security')
+          uploadError.message?.includes('new row violates row-level security') ||
+          uploadError.message?.includes('row-level security') ||
+          uploadError.message?.includes('RLS')
         ) {
           throw new Error(
-            'Permission denied. Please check Storage RLS policies for avatars bucket.'
+            `Permission denied. RLS policy check failed. User ID: ${userId}, Auth UID: ${authUser.id}. Please check Storage RLS policies for avatars bucket. The policy should allow authenticated users to upload to their own folder.`
+          );
+        } else if (uploadError.message?.includes('JWT')) {
+          throw new Error(
+            'Authentication token expired. Please log out and log in again.'
           );
         }
-        throw uploadError;
+        throw new Error(
+          `Upload failed: ${uploadError.message || 'Unknown error'}`
+        );
       }
+
+      console.log('✅ Avatar uploaded successfully:', uploadData);
 
       // 6. Get public URL
       const {
         data: { publicUrl },
       } = supabase.storage.from(this.BUCKET_NAME).getPublicUrl(filePath);
 
+      console.log('✅ Public URL generated:', publicUrl);
+
       // 7. Update user record in database
+      console.log('📝 Updating user record in database...');
       const { error: updateError } = await supabase
         .from('users')
         .update({ avatar_url: publicUrl })
         .eq('id', userId);
 
       if (updateError) {
-        console.error('❌ Database update error:', updateError);
-        throw updateError;
+        console.error('❌ Database update error:', {
+          error: updateError,
+          userId,
+          publicUrl,
+        });
+        throw new Error(
+          `Failed to update user record: ${updateError.message}`
+        );
       }
 
+      console.log('✅ Avatar upload completed successfully:', publicUrl);
       return publicUrl;
-    } catch (error) {
-      console.error('❌ Avatar upload error:', error);
-      return null;
+    } catch (error: any) {
+      console.error('❌ Avatar upload error:', {
+        error: error.message,
+        stack: error.stack,
+        userId,
+      });
+      // Re-throw with more context
+      throw error;
     }
   }
 

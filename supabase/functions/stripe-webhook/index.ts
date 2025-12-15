@@ -206,18 +206,50 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
               user_id: user_id,
               type: 'credit_purchase',
             },
+            auto_advance: true, // Automatically finalize invoice
           });
 
-          // Finalize invoice
+          // Finalize invoice (even if auto_advance is true, we still need to finalize for URLs)
           const finalizedInvoice = await stripe.invoices.finalizeInvoice(
             invoice.id
           );
           stripeInvoiceId = finalizedInvoice.id;
-          // Try both hosted_invoice_url (web view) and invoice_pdf (PDF download)
+          
+          // URLs might not be immediately available after finalization
+          // Try to get them, if not available, retrieve invoice again after a short delay
           invoicePdfUrl =
             finalizedInvoice.hosted_invoice_url ||
             finalizedInvoice.invoice_pdf ||
             null;
+
+          // If URLs are not available, wait a bit and retrieve invoice again
+          if (!invoicePdfUrl) {
+            console.log('Invoice URLs not immediately available, retrying...', {
+              ...logContext,
+              invoice_id: stripeInvoiceId,
+            });
+            
+            // Wait 2 seconds for Stripe to generate URLs
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            
+            // Retrieve invoice again to get URLs
+            const retrievedInvoice = await stripe.invoices.retrieve(
+              stripeInvoiceId
+            );
+            
+            invoicePdfUrl =
+              retrievedInvoice.hosted_invoice_url ||
+              retrievedInvoice.invoice_pdf ||
+              null;
+            
+            console.log('Invoice retrieved after delay:', {
+              ...logContext,
+              invoice_id: stripeInvoiceId,
+              hosted_invoice_url: retrievedInvoice.hosted_invoice_url,
+              invoice_pdf: retrievedInvoice.invoice_pdf,
+              pdf_url: invoicePdfUrl,
+            });
+          }
 
           console.log('Stripe invoice created:', {
             ...logContext,
@@ -225,6 +257,7 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
             hosted_invoice_url: finalizedInvoice.hosted_invoice_url,
             invoice_pdf: finalizedInvoice.invoice_pdf,
             pdf_url: invoicePdfUrl,
+            final_url: invoicePdfUrl,
           });
         } else {
           console.warn('Skipping Stripe invoice creation - no customer ID:', {

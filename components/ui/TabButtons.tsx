@@ -53,6 +53,7 @@ export function TabButtons({
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={[styles.filters, containerStyle]}
       style={styles.scrollContainer}
+      nestedScrollEnabled={true}
     >
       {options.map((option) => {
         const isSelected = selectedKey === option.key;
@@ -122,6 +123,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     paddingRight: 24,
+    minWidth: '100%',
   },
   tabButton: {
     paddingHorizontal: 16,

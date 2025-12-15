@@ -7,6 +7,8 @@ import {
   ScrollView,
   Image,
   Platform,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Href, router, useLocalSearchParams } from 'expo-router';
@@ -28,6 +30,7 @@ import {
   Award,
   Pin,
   AlertCircle,
+  Wallet,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { TabButtons } from '@/components/ui/TabButtons';
@@ -49,6 +52,7 @@ import { professionalsService } from '@/services/supabase/professionals.service'
 import { usersService } from '@/services/supabase/user.service';
 import { useQuery } from '@tanstack/react-query';
 import type { Availability } from '@/types/database.types';
+import { useWalletBalance } from '@/hooks/useUser';
 
 // ✅ TYPE ADAPTERS (not needed here, we use ProfessionalWithRelations directly)
 import {
@@ -66,7 +70,12 @@ export default function ProfessionalProfileScreen() {
   const [voiceModalVisible, setVoiceModalVisible] = useState(false);
   const [videoModalVisible, setVideoModalVisible] = useState(false);
   const [urgentCallModalVisible, setUrgentCallModalVisible] = useState(false);
+  const [insufficientBalanceModalVisible, setInsufficientBalanceModalVisible] =
+    useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('about'); // Start with 'about' since feed is not implemented yet
+
+  // ✅ Fetch wallet balance
+  const { data: walletBalance = 0 } = useWalletBalance();
 
   // ✅ Fetch professional data
   const {
@@ -374,15 +383,43 @@ export default function ProfessionalProfileScreen() {
     }
   };
 
+  // Calculate minimum required balance (5 minutes)
+  const minimumRequiredBalance = useMemo(() => {
+    if (!professional) return 0;
+    if (currentAvailability) {
+      return currentAvailability.availability.price_per_minute * 5;
+    }
+    // Fallback to professional's rate_per_minute
+    return (professional.rate_per_minute || 0) * 5;
+  }, [professional, currentAvailability]);
+
+  // Check if user has sufficient balance
+  const hasSufficientBalance = walletBalance >= minimumRequiredBalance;
+
   const handleVoiceCall = () => {
+    // Check balance before showing modal
+    if (!hasSufficientBalance) {
+      setInsufficientBalanceModalVisible(true);
+      return;
+    }
     setVoiceModalVisible(true);
   };
 
   const handleVideoCall = () => {
+    // Check balance before showing modal
+    if (!hasSufficientBalance) {
+      setInsufficientBalanceModalVisible(true);
+      return;
+    }
     setVideoModalVisible(true);
   };
 
   const handleUrgentCall = () => {
+    // Check balance before showing modal
+    if (!hasSufficientBalance) {
+      setInsufficientBalanceModalVisible(true);
+      return;
+    }
     setUrgentCallModalVisible(true);
   };
 
@@ -2496,6 +2533,137 @@ export default function ProfessionalProfileScreen() {
             : undefined
         }
       />
+
+      {/* Insufficient Balance Modal */}
+      <Modal
+        visible={insufficientBalanceModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setInsufficientBalanceModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setInsufficientBalanceModalVisible(false)}
+        >
+          <Pressable
+            style={[
+              styles.insufficientBalanceModalContent,
+              { backgroundColor: theme.colors.card },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View
+              style={[
+                styles.modalIconContainer,
+                { backgroundColor: theme.colors.warning + '20' },
+              ]}
+            >
+              <Wallet size={32} color={theme.colors.warning} />
+            </View>
+
+            <Text
+              style={[styles.insufficientBalanceModalTitle, { color: theme.colors.text }]}
+            >
+              Insufficient Balance
+            </Text>
+
+            <Text
+              style={[
+                styles.insufficientBalanceModalDescription,
+                { color: theme.colors.textSecondary },
+              ]}
+            >
+              To make a call, you must have at least 5 minutes' worth of balance
+              in your account.
+            </Text>
+
+            <View
+              style={[
+                styles.balanceInfoContainer,
+                { backgroundColor: theme.colors.surface },
+              ]}
+            >
+              <View style={styles.balanceInfoRow}>
+                <Text
+                  style={[
+                    styles.balanceInfoLabel,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  Current Balance:
+                </Text>
+                <Text
+                  style={[styles.balanceInfoValue, { color: theme.colors.text }]}
+                >
+                  ${walletBalance.toFixed(2)}
+                </Text>
+              </View>
+              <View style={styles.balanceInfoRow}>
+                <Text
+                  style={[
+                    styles.balanceInfoLabel,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  Required (5 min):
+                </Text>
+                <Text
+                  style={[
+                    styles.balanceInfoValue,
+                    { color: theme.colors.primary },
+                  ]}
+                >
+                  ${minimumRequiredBalance.toFixed(2)}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.insufficientBalanceModalButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.insufficientBalanceModalButton,
+                  styles.insufficientBalanceModalButtonSecondary,
+                  {
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+                onPress={() => setInsufficientBalanceModalVisible(false)}
+              >
+                <Text
+                  style={[
+                    styles.insufficientBalanceModalButtonText,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.insufficientBalanceModalButton,
+                  styles.insufficientBalanceModalButtonPrimary,
+                  {
+                    backgroundColor: theme.colors.primary,
+                  },
+                ]}
+                onPress={() => {
+                  setInsufficientBalanceModalVisible(false);
+                  router.push('/credit-selection');
+                }}
+              >
+                <Text
+                  style={[
+                    styles.insufficientBalanceModalButtonText,
+                    { color: '#FFFFFF' },
+                  ]}
+                >
+                  Add Credits
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -3146,5 +3314,89 @@ const styles = StyleSheet.create({
   skillText: {
     fontSize: 14,
     fontFamily: 'Inter-Medium',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  insufficientBalanceModalContent: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 20,
+    padding: 24,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 4px 8px rgba(0,0,0,0.3)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: {
+            width: 0,
+            height: 4,
+          },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+          elevation: 10,
+        }),
+  },
+  modalIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  insufficientBalanceModalTitle: {
+    fontSize: 22,
+    fontFamily: 'Inter-Bold',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  insufficientBalanceModalDescription: {
+    fontSize: 15,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  balanceInfoContainer: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    gap: 12,
+  },
+  balanceInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  balanceInfoLabel: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+  },
+  balanceInfoValue: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+  },
+  insufficientBalanceModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  insufficientBalanceModalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  insufficientBalanceModalButtonSecondary: {
+    borderWidth: 1,
+  },
+  insufficientBalanceModalButtonPrimary: {},
+  insufficientBalanceModalButtonText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
   },
 });

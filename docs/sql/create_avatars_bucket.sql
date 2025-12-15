@@ -26,8 +26,12 @@
 -- ============================================================================
 
 -- After creating the bucket, set up RLS policies:
+-- NOTE: If policies already exist, you'll get an error. That's OK - policies are already set up.
+-- To recreate policies, first drop them or use: DROP POLICY IF EXISTS ...
 
 -- Policy 1: Users can upload their own avatars
+-- Drop if exists to avoid duplicate error
+DROP POLICY IF EXISTS "Users can upload their own avatars" ON storage.objects;
 CREATE POLICY "Users can upload their own avatars"
 ON storage.objects
 FOR INSERT
@@ -38,6 +42,7 @@ WITH CHECK (
 );
 
 -- Policy 2: Users can update their own avatars
+DROP POLICY IF EXISTS "Users can update their own avatars" ON storage.objects;
 CREATE POLICY "Users can update their own avatars"
 ON storage.objects
 FOR UPDATE
@@ -48,6 +53,7 @@ USING (
 );
 
 -- Policy 3: Users can delete their own avatars
+DROP POLICY IF EXISTS "Users can delete their own avatars" ON storage.objects;
 CREATE POLICY "Users can delete their own avatars"
 ON storage.objects
 FOR DELETE
@@ -58,6 +64,7 @@ USING (
 );
 
 -- Policy 4: Everyone can view avatars (public read)
+DROP POLICY IF EXISTS "Public can view avatars" ON storage.objects;
 CREATE POLICY "Public can view avatars"
 ON storage.objects
 FOR SELECT

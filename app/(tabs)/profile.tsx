@@ -32,7 +32,7 @@ import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
-import { router } from 'expo-router';
+import { router, useSegments } from 'expo-router';
 import { useToast } from '@/lib/toastService';
 import { ShareProfileModal } from '@/components/profile/ShareProfileModal';
 import { AvatarUploadModal } from '@/components/profile/AvatarUploadModal';
@@ -55,6 +55,7 @@ interface MenuSection {
 export default function ProfileScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const segments = useSegments();
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [avatarModalVisible, setAvatarModalVisible] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
@@ -64,13 +65,26 @@ export default function ProfileScreen() {
   const { isAuthenticated } = useAuth();
 
   // ✅ Use real profile data
-  const { user, stats, isProfessional, professional, isLoading, profileData } =
+  const { user, stats, isProfessional, professional, isLoading, profileData, refetch } =
     useProfile();
 
   // Reset avatar error when user changes
   useEffect(() => {
     setAvatarError(false);
   }, [user?.avatar_url]);
+
+  // Refetch profile data when screen comes into focus (e.g., after credit purchase)
+  useEffect(() => {
+    // Check if we're on the profile tab
+    const isOnProfileTab = segments[0] === '(tabs)' && segments[1] === 'profile';
+    if (isOnProfileTab) {
+      // Small delay to ensure navigation is complete and webhook has processed
+      const timer = setTimeout(() => {
+        refetch();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [segments, refetch]);
 
   // ✅ Format date helper
   const formatMemberSince = (date: string) => {

@@ -128,45 +128,60 @@ export default function CreditSelectionScreen() {
 
       // Helper function to convert rgba/rgb to hex (Stripe requires 6-character hex format, no alpha)
       const colorToHex = (
-        color: string,
+        color: string | undefined | null,
         fallback: string = '#FFFFFF'
       ): string => {
+        // Handle null/undefined/empty
+        if (!color || typeof color !== 'string' || color.trim() === '') {
+          return fallback;
+        }
+
+        const trimmedColor = color.trim();
+
         // If already hex, validate and return
-        if (color.startsWith('#')) {
-          const hex = color.substring(1);
+        if (trimmedColor.startsWith('#')) {
+          const hex = trimmedColor.substring(1);
           // Stripe only accepts 6-character hex (RGB), not 8-character (RGBA)
-          if (hex.length === 6) {
-            return color;
+          if (hex.length === 6 && /^[0-9A-Fa-f]{6}$/.test(hex)) {
+            return trimmedColor.toUpperCase();
           }
           // If 8-character hex, remove alpha channel
-          if (hex.length === 8) {
-            return `#${hex.substring(0, 6)}`;
+          if (hex.length === 8 && /^[0-9A-Fa-f]{8}$/.test(hex)) {
+            return `#${hex.substring(0, 6).toUpperCase()}`;
           }
           // If invalid hex length, use fallback
           return fallback;
         }
 
         // If rgba/rgb format, convert to hex (ignore alpha for Stripe)
-        const rgbaMatch = color.match(
-          /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/
+        // Match both rgba(255, 255, 255, 0.1) and rgb(255, 255, 255)
+        const rgbaMatch = trimmedColor.match(
+          /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*[\d.]+\s*)?\)/i
         );
         if (rgbaMatch) {
           const r = parseInt(rgbaMatch[1], 10);
           const g = parseInt(rgbaMatch[2], 10);
           const b = parseInt(rgbaMatch[3], 10);
 
+          // Validate RGB values (0-255)
+          if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) {
+            return fallback;
+          }
+
           // Convert RGB to 6-character hex (Stripe format)
           const hex = [r, g, b]
             .map((x) => {
-              const hexValue = x.toString(16);
-              return hexValue.length === 1 ? '0' + hexValue : hexValue;
+              const hexValue = x.toString(16).padStart(2, '0');
+              return hexValue;
             })
-            .join('');
+            .join('')
+            .toUpperCase();
 
           return `#${hex}`;
         }
 
-        // Fallback: return provided fallback or default
+        // If it's a named color or other format we don't recognize, use fallback
+        console.warn(`Unable to convert color to hex: ${color}, using fallback: ${fallback}`);
         return fallback;
       };
 
@@ -223,6 +238,11 @@ export default function CreditSelectionScreen() {
         queryClient.invalidateQueries({ queryKey: userKeys.wallet() });
         // Explicitly invalidate transactions to ensure they refresh
         queryClient.invalidateQueries({ queryKey: userKeys.transactions() });
+
+        // Invalidate profile query to update invoice count and other stats
+        if (user?.id) {
+          queryClient.invalidateQueries({ queryKey: ['profile', user.id] });
+        }
 
         // Refetch all wallet-related queries to ensure UI updates
         await Promise.all([
