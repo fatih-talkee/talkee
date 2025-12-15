@@ -190,15 +190,23 @@ export default function AuthCallbackScreen() {
             });
           }
 
-          // Navigate to main app (home page) - immediate navigation
-          try {
-            router.replace('/(tabs)');
-          } catch (error) {
-            // Fallback: try again after a short delay
-            setTimeout(() => {
+          // Navigate to main app (home page) - force navigation
+          // Use setTimeout to ensure navigation happens after state updates
+          setTimeout(() => {
+            try {
               router.replace('/(tabs)');
-            }, 100);
-          }
+            } catch (error) {
+              console.error('Navigation error:', error);
+              // Fallback: try again
+              setTimeout(() => {
+                try {
+                  router.replace('/(tabs)');
+                } catch (retryError) {
+                  console.error('Retry navigation error:', retryError);
+                }
+              }, 100);
+            }
+          }, 100);
         } else {
           // ✅ Check if there's a deleted account to restore
           const { accountRestorationService } = await import(
@@ -301,14 +309,23 @@ export default function AuthCallbackScreen() {
             message: 'Your account has been created',
           });
 
-          // Navigate to main app (home page) - immediate navigation
+          // Wait a bit to ensure session is fully established before navigation
+          // This prevents the login loop issue
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+
+          // Navigate to main app (home page)
           try {
             router.replace('/(tabs)');
           } catch (error) {
+            console.error('Navigation error:', error);
             // Fallback: try again after a short delay
             setTimeout(() => {
-              router.replace('/(tabs)');
-            }, 100);
+              try {
+                router.replace('/(tabs)');
+              } catch (retryError) {
+                console.error('Retry navigation error:', retryError);
+              }
+            }, 200);
           }
         }
       } else {

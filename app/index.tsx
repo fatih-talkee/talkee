@@ -11,6 +11,7 @@ export default function Index() {
     // Don't interfere if we're on the callback page - let it handle its own flow
     const isOnCallback = segments[0] === 'auth' && segments[1] === 'callback';
     if (isOnCallback) {
+      // On callback page, do nothing - let callback handle everything
       return;
     }
 
@@ -28,11 +29,10 @@ export default function Index() {
 
     checkSession();
 
-    // Listen for auth changes, but only redirect if not on callback page
+    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      // Don't update state if we're on callback page - let callback handle it
       const isOnCallbackNow =
         segments[0] === 'auth' && segments[1] === 'callback';
       if (!isOnCallbackNow) {
@@ -59,5 +59,10 @@ export default function Index() {
   }
 
   // Redirect based on authentication state
-  return <Redirect href={isAuthenticated ? '/(tabs)' : '/auth/login'} />;
+  // Use replace to clear navigation history and always go to home
+  if (isAuthenticated) {
+    return <Redirect href="/(tabs)" />;
+  } else {
+    return <Redirect href="/auth/login" />;
+  }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   RefreshControl,
   Platform,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useSegments } from 'expo-router';
 import {
   CreditCard,
   Plus,
@@ -44,7 +44,8 @@ const creditPackages: CreditPackage[] = [
 
 export default function WalletScreen() {
   const { theme } = useTheme();
-  const [selectedPackage, setSelectedPackage] = useState<string>('1'); // Default: 50 credits
+  const segments = useSegments();
+  const [selectedPackage, setSelectedPackage] = useState<string>('3'); // Default: 250 credits (popular)
   const [refreshing, setRefreshing] = useState(false);
 
   // Fetch wallet balance
@@ -62,6 +63,20 @@ export default function WalletScreen() {
     error: transactionsError,
     refetch: refetchTransactions,
   } = useWalletTransactions(5, 0);
+
+  // Refetch when screen comes into focus (after navigation from credit-selection)
+  useEffect(() => {
+    // Check if we're on the wallet tab
+    const isOnWalletTab = segments[0] === '(tabs)' && segments[1] === 'wallet';
+    if (isOnWalletTab) {
+      // Small delay to ensure navigation is complete
+      const timer = setTimeout(() => {
+        refetchBalance();
+        refetchTransactions();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [segments, refetchBalance, refetchTransactions]);
 
   // Calculate monthly change
   const monthlyChange = useMemo(() => {
@@ -361,116 +376,134 @@ export default function WalletScreen() {
           </Text>
 
           <View style={styles.packagesGrid}>
-            {creditPackages.map((pkg) => (
-              <TouchableOpacity
-                key={pkg.id}
-                style={[
-                  styles.packageCard,
-                  {
-                    backgroundColor:
-                      theme.name === 'dark'
-                        ? theme.colors.creditColor || '#FFFFFF'
-                        : theme.colors.creditColor || theme.colors.card,
-                    borderColor: theme.colors.border,
-                  },
-                  pkg.popular && {
-                    borderColor: theme.colors.accent,
-                    backgroundColor: theme.colors.accentLight || '#FFF3CD',
-                  },
-                  selectedPackage === pkg.id && {
-                    borderColor: '#FFD60A', // Yellow border when selected
-                    borderWidth: 2,
-                    backgroundColor: '#FFD60A' + '20', // Light yellow background
-                  },
-                ]}
-                onPress={() => handlePurchase(pkg.id, pkg.amount)}
-                activeOpacity={0.8}
-              >
-                {pkg.popular && (
-                  <View
-                    style={[
-                      styles.popularBadge,
-                      { backgroundColor: theme.colors.accent },
-                    ]}
-                  >
-                    <Text
+            {creditPackages.map((pkg) => {
+              const isSelected = selectedPackage === pkg.id;
+              const isPopular = pkg.popular; // Only 250 has popular: true
+
+              // Selected cards get the 250 style (yellow border, light yellow background)
+              // Popular badge only shows on 250, regardless of selection
+              return (
+                <TouchableOpacity
+                  key={pkg.id}
+                  style={[
+                    styles.packageCard,
+                    {
+                      backgroundColor:
+                        theme.name === 'dark'
+                          ? theme.colors.creditColor || '#FFFFFF'
+                          : theme.colors.creditColor || theme.colors.card,
+                      borderColor: theme.colors.border,
+                    },
+                    // Apply selected style - only border, no background
+                    isSelected && {
+                      borderColor: '#FFD60A', // Yellow border when selected
+                      borderWidth: 3,
+                    },
+                    // 250 keeps its popular style when NOT selected
+                    isPopular &&
+                      !isSelected && {
+                        borderColor: theme.colors.accent,
+                        backgroundColor: theme.colors.accentLight || '#FFF3CD',
+                      },
+                  ]}
+                  onPress={() => handlePurchase(pkg.id, pkg.amount)}
+                  activeOpacity={0.8}
+                >
+                  {/* Popular badge only shows on 250, regardless of selection */}
+                  {isPopular && (
+                    <View
                       style={[
-                        styles.popularText,
-                        { color: theme.colors.surface },
+                        styles.popularBadge,
+                        { backgroundColor: theme.colors.accent },
                       ]}
                     >
-                      Popular
-                    </Text>
-                  </View>
-                )}
+                      <Text
+                        style={[
+                          styles.popularText,
+                          { color: theme.colors.surface },
+                        ]}
+                      >
+                        Popular
+                      </Text>
+                    </View>
+                  )}
 
-                <View style={styles.packageHeader}>
-                  <Text
-                    style={[
-                      styles.packageAmount,
-                      {
-                        color:
-                          theme.name === 'dark' ? '#000000' : theme.colors.text,
-                      },
-                    ]}
-                  >
-                    {'$' + pkg.amount}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.packageCredits,
-                      {
-                        color:
-                          theme.name === 'dark'
-                            ? '#333333'
-                            : theme.colors.textMuted,
-                      },
-                    ]}
-                  >
-                    credits
-                  </Text>
-                </View>
-
-                {pkg.bonus && (
-                  <View style={styles.bonusSection}>
+                  <View style={styles.packageHeader}>
                     <Text
                       style={[
-                        styles.bonusText,
-                        { color: theme.colors.success },
+                        styles.packageAmount,
+                        {
+                          color:
+                            theme.name === 'dark'
+                              ? '#000000'
+                              : theme.colors.text,
+                        },
                       ]}
                     >
-                      {'+ $' + pkg.bonus + ' bonus'}
+                      {'$' + pkg.amount}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.packageCredits,
+                        {
+                          color:
+                            theme.name === 'dark'
+                              ? '#333333'
+                              : theme.colors.textMuted,
+                        },
+                      ]}
+                    >
+                      credits
                     </Text>
                   </View>
-                )}
 
-                <View style={styles.packageFooter}>
-                  <Text
-                    style={[
-                      styles.packagePrice,
-                      { color: theme.colors.warning },
-                    ]}
-                  >
-                    {'$' + pkg.price}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.packageValue,
-                      {
-                        color:
-                          theme.name === 'dark'
-                            ? '#666666'
-                            : theme.colors.textMuted,
-                      },
-                    ]}
-                  >
-                    {'$' +
-                      (pkg.price / (pkg.amount + (pkg.bonus || 0))).toFixed(2)}
-                    /credit
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+                  {pkg.bonus && (
+                    <View style={styles.bonusSection}>
+                      <Text
+                        style={[
+                          styles.bonusText,
+                          {
+                            color: theme.colors.success,
+                          },
+                        ]}
+                      >
+                        {'+ $' + pkg.bonus + ' bonus'}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={styles.packageFooter}>
+                    <Text
+                      style={[
+                        styles.packagePrice,
+                        {
+                          color: theme.colors.warning,
+                        },
+                      ]}
+                    >
+                      {'$' + pkg.price}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.packageValue,
+                        {
+                          color:
+                            theme.name === 'dark'
+                              ? '#666666'
+                              : theme.colors.textMuted,
+                        },
+                      ]}
+                    >
+                      {'$' +
+                        (pkg.price / (pkg.amount + (pkg.bonus || 0))).toFixed(
+                          2
+                        )}
+                      /credit
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 

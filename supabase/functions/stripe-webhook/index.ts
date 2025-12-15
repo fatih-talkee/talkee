@@ -259,6 +259,64 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
         // Don't throw - credits already added, transaction is secondary
       }
 
+      // Create invoice record (for credit purchase)
+      // Create invoice even if Stripe invoice creation failed (customerId might be missing)
+      try {
+        // Generate invoice number
+        const invoiceNumber = `INV-${Date.now()}-${paymentIntent.id
+          .slice(-8)
+          .toUpperCase()}`;
+        const invoiceDate = new Date().toISOString();
+
+        const { error: invoiceError } = await supabase.from('invoices').insert({
+          call_id: null, // Credit purchase has no call
+          caller_id: user_id,
+          professional_id: null, // Credit purchase has no professional - set to null (schema should allow this)
+          invoice_number: invoiceNumber,
+          subtotal: amount,
+          service_fee: 0,
+          tax: 0,
+          total_amount: amount,
+          currency: paymentIntent.currency || 'usd',
+          call_duration_minutes: 0,
+          rate_per_minute: 0,
+          call_date: invoiceDate,
+          invoice_date: invoiceDate,
+          due_date: null,
+          paid_at: invoiceDate,
+          status: 'paid',
+          pdf_url: invoicePdfUrl || null,
+          image_url: null,
+          notes: `Credit purchase - ${amount} credits`,
+          metadata: {
+            type: 'credit_purchase',
+            payment_intent_id: paymentIntent.id,
+            stripe_invoice_id: stripeInvoiceId || null,
+            credits: amount,
+          },
+        });
+
+        if (invoiceError) {
+          console.error('Error creating invoice:', {
+            ...logContext,
+            error: invoiceError.message,
+          });
+          // Don't throw - invoice is secondary, payment already processed
+        } else {
+          console.log('Invoice created successfully:', {
+            ...logContext,
+            invoice_number: invoiceNumber,
+          });
+        }
+      } catch (invoiceError: any) {
+        console.error('Error creating invoice:', {
+          ...logContext,
+          error: invoiceError.message,
+          stack: invoiceError.stack,
+        });
+        // Don't throw - invoice is secondary
+      }
+
       // Create notification
       const { data: notification, error: notificationError } = await supabase
         .from('notifications')

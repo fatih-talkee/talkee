@@ -223,17 +223,22 @@ export default function CreditSelectionScreen() {
         queryClient.invalidateQueries({ queryKey: userKeys.wallet() });
         // Explicitly invalidate transactions to ensure they refresh
         queryClient.invalidateQueries({ queryKey: userKeys.transactions() });
-        await refetchBalance();
+
+        // Refetch all wallet-related queries to ensure UI updates
+        await Promise.all([
+          refetchBalance(),
+          queryClient.refetchQueries({ queryKey: userKeys.transactions() }),
+        ]);
 
         // Invalidate notifications cache to show new notification
         queryClient.invalidateQueries({ queryKey: ['notifications'] });
         // Also refetch notifications to ensure they appear immediately
         queryClient.refetchQueries({ queryKey: ['notifications'] });
 
-        // Navigate back to wallet
+        // Navigate back to wallet - give time for webhook to process
         setTimeout(() => {
           router.replace('/(tabs)/wallet');
-        }, 1500);
+        }, 2000); // Increased to 2 seconds to allow webhook processing
       }
     } catch (error: any) {
       console.error('Payment error:', error);

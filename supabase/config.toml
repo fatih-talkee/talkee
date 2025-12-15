@@ -23,7 +23,7 @@ entrypoint = "./functions/create-customer/index.ts"
 
 [functions.stripe-webhook]
 enabled = true
-verify_jwt = true
+verify_jwt = false  # Webhook'lar public olmalı - Stripe JWT göndermez
 import_map = "./functions/stripe-webhook/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
