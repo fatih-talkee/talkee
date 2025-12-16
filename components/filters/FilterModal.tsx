@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   Switch,
   TextInput,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -190,7 +191,7 @@ export function FilterModal({
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         {/* Header */}
-        <View style={[styles.header, { backgroundColor: '#000000' }]}>
+        <View style={[styles.header, { backgroundColor: '#000000', paddingTop: topPadding }]}>
           <Text style={[styles.title, { color: '#FFFFFF' }]}>Filters</Text>
           <View style={styles.headerRight}>
             <TouchableOpacity
@@ -620,6 +621,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
+    // paddingTop will be set dynamically via inline style
   },
   headerRight: {
     flexDirection: 'row',

@@ -11,6 +11,7 @@ import {
   Pressable,
   TouchableOpacity,
   TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -720,13 +721,20 @@ export default function BecomeProfessionalScreen() {
 
       {renderProgressBar()}
 
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoid}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        {renderStepContent()}
-      </ScrollView>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {renderStepContent()}
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Footer with navigation buttons */}
       <View
@@ -1616,12 +1624,15 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
     textAlign: 'center',
   },
+  keyboardAvoid: {
+    flex: 1,
+  },
   content: {
     flex: 1,
   },
   contentContainer: {
     padding: 24,
-    paddingBottom: 40,
+    paddingBottom: 100, // Extra padding for keyboard
   },
   footer: {
     padding: 24,
