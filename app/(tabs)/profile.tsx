@@ -27,6 +27,7 @@ import {
   UserX,
   Camera,
   BookOpen,
+  TestTube,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
@@ -326,6 +327,18 @@ export default function ProfileScreen() {
             }
           },
           badge: '3', // TODO: Replace with real notification count
+        },
+        {
+          id: 'test-push',
+          label: 'Test Push Notification',
+          icon: <TestTube size={20} color="#8b5cf6" />,
+          onPress: () => {
+            try {
+              router.push('/settings/test-push' as any);
+            } catch (error) {
+              console.error('Navigation error:', error);
+            }
+          },
         },
       ],
     },

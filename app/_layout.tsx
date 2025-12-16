@@ -259,6 +259,7 @@ export default function RootLayout() {
               <Stack.Screen name="settings/theme" />
               <Stack.Screen name="settings/language" />
               <Stack.Screen name="settings/notifications" />
+              <Stack.Screen name="settings/test-push" />
               <Stack.Screen name="settings/change-password" />
               <Stack.Screen name="+not-found" />
               <Stack.Screen name="profile/professional-settings" />
