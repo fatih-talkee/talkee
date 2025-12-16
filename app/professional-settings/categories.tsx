@@ -356,7 +356,7 @@ export default function CategoriesScreen() {
           {
             backgroundColor: theme.colors.background,
             borderTopColor: theme.colors.border,
-            paddingBottom: Math.max(insets.bottom, 20),
+            paddingBottom: Math.max(insets.bottom, 60),
           },
         ]}
       >

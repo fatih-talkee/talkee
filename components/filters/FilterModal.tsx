@@ -62,6 +62,12 @@ export function FilterModal({
     featured,
   });
 
+  // Calculate top padding for header (same logic as PrimaryHeader)
+  const topPadding = Math.max(
+    insets.top + (Platform.OS === 'android' ? 16 : 0),
+    Platform.OS === 'android' ? 64 : 0
+  );
+
   // Update filters when modal opens (sync with parent state)
   React.useEffect(() => {
     if (visible) {
@@ -620,7 +626,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingBottom: 16,
+    minHeight: 60,
     // paddingTop will be set dynamically via inline style
   },
   headerRight: {

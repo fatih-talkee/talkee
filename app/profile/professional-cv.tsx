@@ -291,7 +291,7 @@ export default function ProfessionalCV() {
           {
             backgroundColor: theme.colors.surface,
             borderTopColor: theme.colors.border,
-            paddingBottom: Math.max(insets.bottom, 20),
+            paddingBottom: Math.max(insets.bottom, 60),
           },
         ]}
       >

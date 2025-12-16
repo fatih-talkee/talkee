@@ -136,7 +136,7 @@ export default function ProfessionalBasicInfo() {
       </ScrollView>
       </KeyboardAvoidingView>
 
-      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border, paddingBottom: Math.max(insets.bottom, 20) }]}>
+      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border, paddingBottom: Math.max(insets.bottom, 60) }]}>
         <TouchableOpacity
           style={[styles.saveButton, { backgroundColor: theme.colors.pinkTwo }]}
           onPress={handleSave}
