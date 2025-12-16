@@ -21,7 +21,11 @@ import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useWalletBalance, useWalletTransactions } from '@/hooks/useUser';
+import {
+  useWalletBalance,
+  useWalletTransactions,
+  useMonthlyTransactions,
+} from '@/hooks/useUser';
 import { logger } from '@/lib/logger';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { SectionLoading } from '@/components/ui/SectionLoading';
@@ -56,13 +60,19 @@ export default function WalletScreen() {
     refetch: refetchBalance,
   } = useWalletBalance();
 
-  // Fetch recent transactions
+  // Fetch recent transactions (for display)
   const {
     data: transactions = [],
     isLoading: transactionsLoading,
     error: transactionsError,
     refetch: refetchTransactions,
   } = useWalletTransactions(5, 0);
+
+  // Fetch monthly transactions (for monthly change calculation)
+  const {
+    data: monthlyTransactions = [],
+    refetch: refetchMonthlyTransactions,
+  } = useMonthlyTransactions();
 
   // Refetch when screen comes into focus (after navigation from credit-selection)
   useEffect(() => {
@@ -73,37 +83,35 @@ export default function WalletScreen() {
       const timer = setTimeout(() => {
         refetchBalance();
         refetchTransactions();
+        refetchMonthlyTransactions();
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [segments, refetchBalance, refetchTransactions]);
+  }, [
+    segments,
+    refetchBalance,
+    refetchTransactions,
+    refetchMonthlyTransactions,
+  ]);
 
-  // Calculate monthly change
+  // Calculate monthly change from all monthly transactions
   const monthlyChange = useMemo(() => {
-    if (!transactions || transactions.length === 0) return 0;
+    if (!monthlyTransactions || monthlyTransactions.length === 0) return 0;
 
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    return transactions
-      .filter((tx) => {
-        const txDate = parseISO(tx.created_at);
-        return txDate >= startOfMonth;
-      })
-      .reduce((sum, tx) => {
-        // Income/earning transactions add, expense transactions subtract
-        if (
-          tx.type === 'income' ||
-          tx.type === 'credit_purchase' ||
-          tx.type === 'call_earning'
-        ) {
-          return sum + tx.amount;
-        } else if (tx.type === 'expenses' || tx.type === 'call_expense') {
-          return sum - tx.amount;
-        }
-        return sum;
-      }, 0);
-  }, [transactions]);
+    return monthlyTransactions.reduce((sum, tx) => {
+      // Income/earning transactions add, expense transactions subtract
+      if (
+        tx.type === 'income' ||
+        tx.type === 'credit_purchase' ||
+        tx.type === 'call_earning'
+      ) {
+        return sum + tx.amount;
+      } else if (tx.type === 'expenses' || tx.type === 'call_expense') {
+        return sum - tx.amount;
+      }
+      return sum;
+    }, 0);
+  }, [monthlyTransactions]);
 
   const handlePurchase = (packageId: string, amount: number) => {
     setSelectedPackage(packageId);

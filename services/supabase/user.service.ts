@@ -321,6 +321,40 @@ class UsersService {
   }
 
   /**
+   * Get transactions for current month (for monthly change calculation)
+   */
+  async getMonthlyTransactions(): Promise<Transaction[]> {
+    try {
+      const currentUser = await this.getCurrentUser();
+
+      if (!currentUser) {
+        return [];
+      }
+
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfMonthISO = startOfMonth.toISOString();
+
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .gte('created_at', startOfMonthISO)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching monthly transactions:', error);
+        return [];
+      }
+
+      return (data || []) as Transaction[];
+    } catch (error) {
+      console.error('Error in getMonthlyTransactions:', error);
+      return [];
+    }
+  }
+
+  /**
    * Get user statistics
    */
   async getUserStats(): Promise<{

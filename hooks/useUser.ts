@@ -131,6 +131,44 @@ export function useWalletTransactions(limit: number = 10, offset: number = 0) {
 }
 
 /**
+ * Get monthly transactions (for monthly change calculation)
+ */
+export function useMonthlyTransactions() {
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Get current user and listen to auth changes
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const user = await usersService.getCurrentUser();
+      setUserId(user?.id || null);
+    };
+
+    getCurrentUser();
+
+    // Listen for auth changes to update userId when user switches
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        setUserId(session.user.id);
+      } else {
+        setUserId(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  return useQuery({
+    queryKey: ['monthlyTransactions', userId],
+    queryFn: () => usersService.getMonthlyTransactions(),
+    enabled: !!userId,
+    ...CACHE_CONFIG.TRANSACTIONS,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/**
  * Invalidate user cache
  */
 export function useInvalidateUser() {
