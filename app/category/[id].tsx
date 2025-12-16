@@ -31,8 +31,11 @@ export default function CategoryScreen() {
   const [filters, setFilters] = useState({
     priceRange: [0, 100] as [number, number],
     rating: 0,
-    availability: 'all' as 'all' | 'online' | 'quick-response',
+    availability: 'all' as 'all' | 'online' | 'urgent-call',
     categories: [] as string[],
+    languages: [] as string[],
+    specialties: [] as string[],
+    skills: [] as string[],
   });
 
   // ✅ Fetch category details
@@ -85,8 +88,8 @@ export default function CategoryScreen() {
           const matchesAvailability =
             filters.availability === 'all' ||
             (filters.availability === 'online' && professional.is_available) ||
-            (filters.availability === 'quick-response' &&
-              professional.is_available); // Simplified: quick response = available
+            (filters.availability === 'urgent-call' &&
+              professional.is_available); // Simplified: urgent call = available
 
           return (
             matchesSearch &&
@@ -251,7 +254,10 @@ export default function CategoryScreen() {
       <FilterModal
         visible={filterVisible}
         onClose={() => setFilterVisible(false)}
-        onApply={setFilters}
+        onApply={(newFilters) => {
+          // Preserve rating filter as FilterModal doesn't manage it
+          setFilters({ ...newFilters, rating: filters.rating });
+        }}
         initialFilters={filters}
       />
     </SafeAreaView>

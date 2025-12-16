@@ -1,4 +1,7 @@
 import { supabase } from '@/lib/supabase';
+import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 export class AvatarService {
   private static BUCKET_NAME = 'avatars';
@@ -57,16 +60,49 @@ export class AvatarService {
         // Don't throw - let upload attempt reveal the real error
       }
 
-      // 1. Convert URI to blob
-      console.log('📥 Fetching image from URI...');
-      const response = await fetch(imageUri);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch image: ${response.statusText}`);
+      // 1. Read image file using FileSystem (React Native compatible)
+      console.log('📥 Reading image from URI...');
+      let imageData: Uint8Array;
+      let contentType: string;
+      
+      if (Platform.OS === 'web') {
+        // Web: Use fetch
+        const response = await fetch(imageUri);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch image: ${response.statusText}`);
+        }
+        const blob = await response.blob();
+        const arrayBuffer = await blob.arrayBuffer();
+        imageData = new Uint8Array(arrayBuffer);
+        contentType = blob.type || 'image/jpeg';
+        console.log('✅ Image blob created (web), size:', imageData.length, 'bytes');
+      } else {
+        // Mobile: Use FileSystem
+        const base64 = await FileSystem.readAsStringAsync(imageUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        
+        // Convert base64 to Uint8Array
+        const binaryString = atob(base64);
+        imageData = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          imageData[i] = binaryString.charCodeAt(i);
+        }
+        
+        // Determine content type from file extension
+        const fileExt = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
+        const mimeTypes: { [key: string]: string } = {
+          jpg: 'image/jpeg',
+          jpeg: 'image/jpeg',
+          png: 'image/png',
+          webp: 'image/webp',
+        };
+        contentType = mimeTypes[fileExt] || 'image/jpeg';
+        
+        console.log('✅ Image read (mobile), size:', imageData.length, 'bytes');
       }
-      const blob = await response.blob();
-      console.log('✅ Image blob created, size:', blob.size, 'bytes');
 
-      // 2. Get file extension
+      // 2. Get file extension for filename
       const fileExt = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
       const validExts = ['jpg', 'jpeg', 'png', 'webp'];
       const ext = validExts.includes(fileExt) ? fileExt : 'jpg';
@@ -116,27 +152,62 @@ export class AvatarService {
         // Don't throw - continue with upload
       }
 
-      // 5. Upload new avatar
+      // 5. Upload new avatar using Supabase Storage REST API directly
+      // This is more reliable than supabase.storage.upload() with Blobs in React Native
       console.log('📤 Uploading avatar to storage:', {
         bucket: this.BUCKET_NAME,
         filePath,
-        contentType: `image/${ext}`,
-        blobSize: blob.size,
+        contentType,
+        dataSize: imageData.length,
       });
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(this.BUCKET_NAME)
-        .upload(filePath, blob, {
-          contentType: `image/${ext}`,
-          upsert: false, // Don't upsert since we deleted old files
-          cacheControl: '3600', // Cache for 1 hour
-        });
+      // Get session token for authentication
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-      if (uploadError) {
+      if (sessionError || !session) {
+        throw new Error('Not authenticated. Please log in again.');
+      }
+
+      // Upload using direct REST API call
+      // Get Supabase URL from environment variables
+      const supabaseUrl =
+        process.env.EXPO_PUBLIC_SUPABASE_URL ||
+        Constants.expoConfig?.extra?.supabaseUrl ||
+        '';
+      
+      if (!supabaseUrl) {
+        throw new Error('Supabase URL not configured');
+      }
+      
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/${this.BUCKET_NAME}/${filePath}`;
+      
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': contentType,
+          'x-upsert': 'false', // Don't upsert since we deleted old files
+        },
+        body: imageData,
+      });
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        let errorMessage = `Upload failed: ${uploadResponse.statusText}`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.message || errorJson.error || errorMessage;
+        } catch {
+          errorMessage = errorText || errorMessage;
+        }
+        
         console.error('❌ Upload error details:', {
-          message: uploadError.message,
-          statusCode: uploadError.statusCode,
-          error: JSON.stringify(uploadError, null, 2),
+          status: uploadResponse.status,
+          statusText: uploadResponse.statusText,
+          errorText,
           userId,
           authUserId: authUser.id,
           filePath,
@@ -144,39 +215,32 @@ export class AvatarService {
         });
 
         // Provide more helpful error message based on error type
-        const errorMsg = uploadError.message || '';
-        
-        if (errorMsg.includes('Bucket not found') || errorMsg.includes('does not exist')) {
+        if (errorMessage.includes('Bucket not found') || errorMessage.includes('does not exist')) {
           throw new Error(
             `Storage bucket '${this.BUCKET_NAME}' not found. Please verify the bucket exists in Supabase Dashboard → Storage → Buckets`
           );
         } else if (
-          errorMsg.includes('new row violates row-level security') ||
-          errorMsg.includes('row-level security') ||
-          errorMsg.includes('RLS') ||
-          errorMsg.includes('permission denied') ||
-          errorMsg.includes('Policy violation')
+          errorMessage.includes('new row violates row-level security') ||
+          errorMessage.includes('row-level security') ||
+          errorMessage.includes('RLS') ||
+          errorMessage.includes('permission denied') ||
+          errorMessage.includes('Policy violation')
         ) {
           throw new Error(
             `Permission denied (RLS). User ID: ${userId}, Auth UID: ${authUser.id}, File Path: ${filePath}.\n\nPlease check:\n1. RLS policies exist for 'avatars' bucket\n2. Policy allows INSERT for authenticated users\n3. Policy checks: (storage.foldername(name))[1] = auth.uid()::text\n4. File path format: ${authUser.id}/avatar-*.${ext}`
           );
-        } else if (errorMsg.includes('JWT') || errorMsg.includes('token') || errorMsg.includes('unauthorized')) {
+        } else if (errorMessage.includes('JWT') || errorMessage.includes('token') || errorMessage.includes('unauthorized')) {
           throw new Error(
             'Authentication token expired or invalid. Please log out and log in again.'
           );
-        } else if (errorMsg.includes('duplicate') || errorMsg.includes('already exists')) {
-          // This shouldn't happen with upsert: false, but handle it anyway
-          throw new Error(
-            'File already exists. Please try again or contact support.'
-          );
         }
         
-        // Generic error with full message
         throw new Error(
-          `Upload failed: ${errorMsg || 'Unknown error'}. Status: ${uploadError.statusCode || 'N/A'}`
+          `Upload failed: ${errorMessage}. Status: ${uploadResponse.status}`
         );
       }
 
+      const uploadData = await uploadResponse.json();
       console.log('✅ Avatar uploaded successfully:', uploadData);
 
       // 6. Get public URL

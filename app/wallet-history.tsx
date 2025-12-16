@@ -39,6 +39,7 @@ export default function WalletHistoryScreen() {
   const {
     data: transactions = [],
     isLoading,
+    isFetching,
     error,
     refetch,
     isRefetching,
@@ -208,7 +209,7 @@ export default function WalletHistoryScreen() {
     );
   };
 
-  if (isLoading) {
+  if (isLoading || isFetching) {
     return (
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -271,15 +272,17 @@ export default function WalletHistoryScreen() {
           />
         }
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <DollarSign size={48} color={theme.colors.textMuted} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
-              No transactions
-            </Text>
-            <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
-              Your transaction history will appear here
-            </Text>
-          </View>
+          !isLoading && !isFetching && filteredTransactions.length === 0 ? (
+            <View style={styles.emptyState}>
+              <DollarSign size={48} color={theme.colors.textMuted} />
+              <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+                No transactions
+              </Text>
+              <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
+                Your transaction history will appear here
+              </Text>
+            </View>
+          ) : null
         }
       />
     </SafeAreaView>

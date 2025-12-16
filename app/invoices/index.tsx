@@ -340,6 +340,12 @@ export default function InvoicesScreen() {
 
       if (stripeInvoiceId || paymentIntentId) {
         try {
+          console.log('📞 Calling get-invoice-url edge function...', {
+            invoice_id: invoice.id,
+            stripe_invoice_id: stripeInvoiceId,
+            payment_intent_id: paymentIntentId,
+          });
+
           // Call edge function to get invoice URL from Stripe
           const { data, error } = await supabase.functions.invoke(
             'get-invoice-url',
@@ -352,7 +358,33 @@ export default function InvoicesScreen() {
             }
           );
 
-          if (error) throw error;
+          console.log('📥 Edge function response:', {
+            invoice_id: invoice.id,
+            has_data: !!data,
+            has_error: !!error,
+            data_keys: data ? Object.keys(data) : [],
+            error_message: error?.message,
+            error_details: error,
+          });
+
+          if (error) {
+            console.error('❌ Edge function error:', {
+              invoice_id: invoice.id,
+              error: error,
+              error_message: error.message,
+              error_context: error.context,
+            });
+            throw error;
+          }
+
+          // Check if response has error field (edge function may return error in data)
+          if (data?.error) {
+            console.error('❌ Error in edge function response:', {
+              invoice_id: invoice.id,
+              error: data.error,
+            });
+            throw new Error(data.error);
+          }
 
           if (data?.url) {
             viewUrl = data.url;
@@ -403,33 +435,56 @@ export default function InvoicesScreen() {
               invoice_number: invoice.invoice_number,
               response_data: data,
             });
-            throw new Error('URL not available from Stripe');
+            throw new Error(data?.error || 'URL not available from Stripe');
           }
         } catch (error: any) {
           console.error('❌ Error fetching invoice URL from Stripe:', {
             invoice_id: invoice.id,
             invoice_number: invoice.invoice_number,
-            error: error.message || error,
+            error: error?.message || error,
+            error_type: error?.constructor?.name,
             error_details: error,
+            error_stack: error?.stack,
           });
-          // Fallback: show invoice details
-          if (isCreditPurchase) {
+          
+          // Show user-friendly error message
+          const errorMessage = error?.message || 'Unknown error occurred';
+          const isNetworkError = errorMessage.includes('Network') || errorMessage.includes('fetch');
+          const isFunctionNotFound = errorMessage.includes('not found') || errorMessage.includes('404');
+          
+          if (isFunctionNotFound) {
             Alert.alert(
-              'Invoice Details',
-              `Invoice #${
-                invoice.invoice_number
-              }\n\nAmount: $${invoice.total_amount.toFixed(
-                2
-              )}\nDate: ${formatDate(invoice.invoice_date)}\nStatus: ${
-                invoice.status
-              }\n\n${invoice.notes || ''}`,
+              'Function Not Available',
+              'The invoice URL service is temporarily unavailable. Please try again later or contact support.',
+              [{ text: 'OK' }]
+            );
+          } else if (isNetworkError) {
+            Alert.alert(
+              'Network Error',
+              'Unable to connect to the server. Please check your internet connection and try again.',
               [{ text: 'OK' }]
             );
           } else {
-            Alert.alert(
-              'Invoice URL Not Available',
-              'The invoice view URL is not available. Please contact support if this issue persists.'
-            );
+            // Fallback: show invoice details
+            if (isCreditPurchase) {
+              Alert.alert(
+                'Invoice Details',
+                `Invoice #${
+                  invoice.invoice_number
+                }\n\nAmount: $${invoice.total_amount.toFixed(
+                  2
+                )}\nDate: ${formatDate(invoice.invoice_date)}\nStatus: ${
+                  invoice.status
+                }\n\n${invoice.notes || ''}\n\nNote: Invoice URL could not be retrieved. ${errorMessage}`,
+                [{ text: 'OK' }]
+              );
+            } else {
+              Alert.alert(
+                'Invoice URL Not Available',
+                `The invoice view URL is not available.\n\nError: ${errorMessage}\n\nPlease contact support if this issue persists.`,
+                [{ text: 'OK' }]
+              );
+            }
           }
           return;
         }

@@ -235,9 +235,8 @@ export default function NotificationsScreen() {
           { backgroundColor: theme.colors.card },
         ]}
       >
-        <TouchableOpacity
+        <View
           style={styles.notificationItem}
-          onPress={() => handleNotificationPress(item)}
         >
           {/* Icon */}
           <View
@@ -330,7 +329,7 @@ export default function NotificationsScreen() {
               })()}
             </>
           )}
-        </TouchableOpacity>
+        </View>
       </Card>
     );
   };

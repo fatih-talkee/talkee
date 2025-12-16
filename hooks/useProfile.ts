@@ -61,8 +61,14 @@ export function useProfile() {
     refetch,
   } = useQuery({
     queryKey: ['profile', userId],
-    queryFn: () => ProfileService.getProfileData(userId!),
-    enabled: !!userId,
+    queryFn: () => {
+      if (!userId) {
+        console.warn('⚠️ [useProfile] userId is null, skipping profile fetch');
+        return null;
+      }
+      return ProfileService.getProfileData(userId);
+    },
+    enabled: !!userId && userId !== 'null' && userId !== 'undefined',
     ...CACHE_CONFIG.USER_PROFILE,
   });
 

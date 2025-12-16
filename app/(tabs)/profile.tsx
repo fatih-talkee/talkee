@@ -195,12 +195,23 @@ export default function ProfileScreen() {
     setAvatarModalVisible(true);
   };
 
-  const handleAvatarUploadComplete = (avatarUrl: string) => {
-    // Optimistic update - React Query will auto-refetch
-    toast.success({
-      title: 'Avatar Updated',
-      message: 'Your profile photo has been updated successfully',
-    });
+  const handleAvatarUploadComplete = async (avatarUrl: string) => {
+    try {
+      // Invalidate and refetch profile data to show updated avatar
+      await refetch();
+      
+      toast.success({
+        title: 'Avatar Updated',
+        message: 'Your profile photo has been updated successfully',
+      });
+    } catch (error) {
+      console.error('Error refreshing profile after avatar upload:', error);
+      // Still show success toast even if refetch fails
+      toast.success({
+        title: 'Avatar Updated',
+        message: 'Your profile photo has been updated successfully',
+      });
+    }
   };
 
   const handleSignOutPress = async () => {

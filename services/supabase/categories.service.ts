@@ -166,24 +166,44 @@ class CategoriesService {
    */
   async getPopularCategories(limit: number = 8): Promise<Category[]> {
     try {
-      // Optimized: Fast single query approach
-      // Get active categories ordered by sort_order (which typically reflects popularity)
-      // This is much faster than counting professionals for each category
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('is_active', true)
-        .order('sort_order', { ascending: true })
-        .limit(limit);
+      console.log('🔍 [getPopularCategories] Starting...', { limit });
+      
+      // Get all categories with their professional counts
+      const categoriesWithCounts = await this.getCategoriesWithCounts();
+      
+      console.log('📊 [getPopularCategories] Categories with counts:', 
+        categoriesWithCounts.map(c => ({ 
+          name: c.name, 
+          count: c.professionalCount,
+          sort_order: c.sort_order 
+        }))
+      );
 
-      if (error) {
-        console.error('Error fetching popular categories:', error);
-        return [];
-      }
+      // Sort by professional count (descending), then by sort_order as tie-breaker
+      const sorted = categoriesWithCounts.sort((a, b) => {
+        // First sort by professional count (descending)
+        if (b.professionalCount !== a.professionalCount) {
+          return b.professionalCount - a.professionalCount;
+        }
+        // If counts are equal, use sort_order as tie-breaker
+        return a.sort_order - b.sort_order;
+      });
 
-      return (data || []) as Category[];
+      console.log('✅ [getPopularCategories] Sorted categories:', 
+        sorted.slice(0, limit).map(c => ({ 
+          name: c.name, 
+          count: c.professionalCount 
+        }))
+      );
+
+      // Take top N and return as Category[] (without professionalCount)
+      const result = sorted.slice(0, limit).map(({ professionalCount, ...category }) => category);
+      
+      console.log('🎯 [getPopularCategories] Returning top', limit, 'categories');
+      
+      return result;
     } catch (error) {
-      console.error('Error in getPopularCategories:', error);
+      console.error('❌ [getPopularCategories] Error:', error);
       return [];
     }
   }
@@ -272,6 +292,8 @@ class CategoriesService {
 
   /**
    * Get all categories with their professional counts
+   * Counts professionals from both category_id field and professional_categories junction table
+   * Avoids double counting professionals that appear in both
    */
   async getCategoriesWithCounts(): Promise<
     Array<Category & { professionalCount: number }>
@@ -282,21 +304,80 @@ class CategoriesService {
       // Get professional counts for each category
       const categoriesWithCounts = await Promise.all(
         categories.map(async (category) => {
-          const { count, error } = await supabase
+          // Get professional IDs from category_id field
+          const { data: directProfessionals, error: directError } = await supabase
             .from('professionals')
-            .select('*', { count: 'exact', head: true })
+            .select('id')
+            .eq('category_id', category.id)
+            .eq('is_active', true)
+            .eq('is_public', true);
+
+          if (directError) {
+            console.error(
+              `❌ [getCategoriesWithCounts] Error fetching direct professionals for ${category.name} (${category.id}):`,
+              directError
+            );
+          }
+
+          // Get professional IDs from professional_categories junction table
+          const { data: junctionData, error: junctionError } = await supabase
+            .from('professional_categories')
+            .select('professional_id')
             .eq('category_id', category.id);
 
-          if (error) {
+          if (junctionError) {
             console.error(
-              `Error counting professionals for ${category.id}:`,
-              error
+              `❌ [getCategoriesWithCounts] Error fetching junction professionals for ${category.name} (${category.id}):`,
+              junctionError
             );
+          }
+
+          // Get unique professional IDs from both sources
+          const directIds = new Set(
+            (directProfessionals || []).map((p) => p.id)
+          );
+          const junctionIds = new Set(
+            (junctionData || []).map((item) => item.professional_id)
+          );
+
+          // Combine and get unique count (union of both sets)
+          const uniqueIds = new Set([...directIds, ...junctionIds]);
+
+          console.log(`📊 [getCategoriesWithCounts] ${category.name}:`, {
+            directCount: directIds.size,
+            junctionCount: junctionIds.size,
+            uniqueCount: uniqueIds.size,
+          });
+
+          // Verify these professionals are active and public
+          if (uniqueIds.size > 0) {
+            const { count, error: countError } = await supabase
+              .from('professionals')
+              .select('id', { count: 'exact', head: true })
+              .in('id', Array.from(uniqueIds))
+              .eq('is_active', true)
+              .eq('is_public', true);
+
+            if (countError) {
+              console.error(
+                `❌ [getCategoriesWithCounts] Error counting professionals for ${category.name} (${category.id}):`,
+                countError
+              );
+              return {
+                ...category,
+                professionalCount: uniqueIds.size, // Fallback to set size
+              };
+            }
+
+            return {
+              ...category,
+              professionalCount: count || 0,
+            };
           }
 
           return {
             ...category,
-            professionalCount: count || 0,
+            professionalCount: 0,
           };
         })
       );

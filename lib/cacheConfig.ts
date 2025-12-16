@@ -28,9 +28,10 @@ export const CACHE_TIME = {
  */
 export const CACHE_CONFIG = {
   // Static data - rarely changes
+  // Note: Popular categories need to be fresh to show correct professional counts
   CATEGORIES: {
-    staleTime: 10 * CACHE_TIME.MINUTE, // 10 minutes
-    gcTime: 30 * CACHE_TIME.MINUTE, // 30 minutes
+    staleTime: 2 * CACHE_TIME.MINUTE, // 2 minutes (reduced for popular categories accuracy)
+    gcTime: 10 * CACHE_TIME.MINUTE, // 10 minutes
   },
 
   // Professional data

@@ -32,8 +32,13 @@ export function useCategories(): UseQueryResult<Category[]> {
 export function usePopularCategories(limit: number = 8): UseQueryResult<Category[]> {
   return useQuery({
     queryKey: [...categoriesKeys.lists(), 'popular', limit],
-    queryFn: () => categoriesService.getPopularCategories(limit),
+    queryFn: () => {
+      console.log('🔄 [usePopularCategories] Fetching popular categories...', { limit });
+      return categoriesService.getPopularCategories(limit);
+    },
     ...CACHE_CONFIG.CATEGORIES,
+    // Force refetch on mount to ensure fresh data
+    refetchOnMount: true,
   });
 }
 

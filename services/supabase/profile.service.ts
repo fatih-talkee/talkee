@@ -13,6 +13,12 @@ export class ProfileService {
    */
   static async getProfileData(authId: string): Promise<UserProfileData | null> {
     try {
+      // Validate authId
+      if (!authId || authId === 'null' || authId === 'undefined') {
+        console.warn('⚠️ [getProfileData] Invalid authId:', authId);
+        return null;
+      }
+
       // Get user data by auth_id
       const { data: users, error: userError } = await supabase
         .from('users')
