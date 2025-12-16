@@ -7,6 +7,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
@@ -20,6 +21,7 @@ import { FileText } from 'lucide-react-native';
 export default function AboutScreen() {
   const router = useRouter();
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const toast = useToast();
   const { profileData, professional, isLoading: profileLoading } = useProfile();
 
@@ -250,6 +252,7 @@ export default function AboutScreen() {
           {
             backgroundColor: theme.colors.background,
             borderTopColor: theme.colors.border,
+            paddingBottom: Math.max(insets.bottom, 20),
           },
         ]}
       >

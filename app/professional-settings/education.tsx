@@ -7,6 +7,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
@@ -23,6 +24,7 @@ import type {
 } from '@/types/education_experience.types';
 
 export default function EducationScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { theme } = useTheme();
   const toast = useToast();
@@ -278,6 +280,7 @@ export default function EducationScreen() {
           {
             backgroundColor: theme.colors.background,
             borderTopColor: theme.colors.border,
+            paddingBottom: Math.max(insets.bottom, 20),
           },
         ]}
       >

@@ -109,8 +109,10 @@ export function useWalletTransactions(limit: number = 10, offset: number = 0) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        const user = await usersService.getCurrentUser();
-        setUserId(user?.id || null);
+        // Use session.user.id directly instead of calling getCurrentUser()
+        // This avoids AuthSessionMissingError during logout transitions
+        // We'll fetch the full user data when the query runs (if needed)
+        setUserId(session.user.id);
       } else {
         setUserId(null);
       }

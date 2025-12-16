@@ -81,7 +81,7 @@ export default function ProfessionalPricing() {
         </View>
       </ScrollView>
 
-      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
+      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border, paddingBottom: Math.max(insets.bottom, 20) }]}>
         <TouchableOpacity
           style={[styles.saveButton, { backgroundColor: theme.colors.pinkTwo }]}
           onPress={handleSave}

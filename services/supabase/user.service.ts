@@ -13,14 +13,19 @@ class UsersService {
   async getCurrentUser(): Promise<User | null> {
     try {
       const {
-        data: { user: authUser },
+        data: { session },
         error: authError,
-      } = await supabase.auth.getUser();
+      } = await supabase.auth.getSession();
 
-      if (authError || !authUser) {
-        console.error('Auth error:', authError);
+      if (authError || !session?.user) {
+        // Don't log error if session is just missing (normal during logout)
+        if (authError && !authError.message.includes('session missing')) {
+          console.error('Auth error:', authError);
+        }
         return null;
       }
+
+      const authUser = session.user;
 
       const { data, error } = await supabase
         .from('users')

@@ -10,6 +10,7 @@ import {
   Switch,
   TextInput,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   X,
   DollarSign,
@@ -53,6 +54,7 @@ export function FilterModal({
   onFeaturedChange,
 }: FilterModalProps) {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const { data: categoriesData = [] } = useCategories();
   const [filters, setFilters] = useState<FilterState>({
     ...initialFilters,
@@ -591,8 +593,9 @@ export function FilterModal({
           style={[
             styles.footer,
             {
-              backgroundColor: theme.colors.surface,
+              backgroundColor: '#000000',
               borderTopColor: theme.colors.border,
+              paddingBottom: Math.max(insets.bottom, 60),
             },
           ]}
         >

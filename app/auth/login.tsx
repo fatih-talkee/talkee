@@ -16,6 +16,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Link, router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Phone, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react-native';
 import { signInWithGoogle } from '@/utils/GoogleAuth';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -49,6 +50,7 @@ const PHONE_MASK = [
 
 export default function LoginScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const toast = useToast();
 
   const [phone, setPhone] = useState('');
@@ -292,7 +294,10 @@ export default function LoginScreen() {
           style={styles.keyboardView}
         >
           <ScrollView
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: Math.max(insets.bottom, 24) },
+            ]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >

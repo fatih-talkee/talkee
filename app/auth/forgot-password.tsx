@@ -15,6 +15,7 @@ import {
   Image,
 } from 'react-native';
 import { Link, router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Phone } from 'lucide-react-native';
 import MaskInput from 'react-native-mask-input';
 import { Button } from '@/components/ui/Button';
@@ -46,6 +47,7 @@ const PHONE_MASK = [
 
 export default function ForgotPasswordScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const toast = useToast();
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
@@ -160,7 +162,7 @@ export default function ForgotPasswordScreen() {
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.content}
+          style={[styles.content, { paddingBottom: Math.max(insets.bottom, 24) }]}
         >
           <View style={styles.header}>
             <Image

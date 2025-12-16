@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
@@ -40,6 +41,7 @@ import type { Availability } from '@/app/become-professional/_types';
 export default function AvailabilityScreen() {
   const router = useRouter();
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const toast = useToast();
   const { profileData, professional, isLoading: profileLoading } = useProfile();
 
@@ -620,6 +622,7 @@ export default function AvailabilityScreen() {
           {
             backgroundColor: theme.colors.background,
             borderTopColor: theme.colors.border,
+            paddingBottom: Math.max(insets.bottom, 20),
           },
         ]}
       >
