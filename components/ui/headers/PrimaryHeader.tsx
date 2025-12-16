@@ -69,7 +69,11 @@ export function PrimaryHeader({
 
   // Ensure proper top padding for Android status bar
   // Android status bars can be taller on some devices, use a safe minimum
-  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? 56 : 0);
+  // Add extra padding for Android action bar
+  const topPadding = Math.max(
+    insets.top + (Platform.OS === 'android' ? 8 : 0),
+    Platform.OS === 'android' ? 56 : 0
+  );
 
   // Header background adapts to theme
   // For dark theme: black, for other themes: use surface color (lighter backgrounds)
@@ -96,7 +100,7 @@ export function PrimaryHeader({
         styles.header,
         {
           backgroundColor: headerBackground,
-          paddingTop: 24,
+          paddingTop: topPadding,
         },
         containerStyle,
       ]}
