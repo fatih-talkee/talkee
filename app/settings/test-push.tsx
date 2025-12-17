@@ -17,7 +17,16 @@ import { useToast } from '@/lib/toastService';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { notificationsService } from '@/services/notifications.service';
-import { ArrowLeft, Send, CheckCircle, XCircle, RefreshCw } from 'lucide-react-native';
+import * as Notifications from 'expo-notifications';
+import { Platform, AppState, Linking } from 'react-native';
+import {
+  ArrowLeft,
+  Send,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+  AlertCircle,
+} from 'lucide-react-native';
 
 export default function TestPushScreen() {
   const { theme } = useTheme();
@@ -32,6 +41,78 @@ export default function TestPushScreen() {
     message: string;
     details?: any;
   } | null>(null);
+  const [deviceInfo, setDeviceInfo] = useState<any[] | null>(null);
+  const [permissionStatus, setPermissionStatus] = useState<string | null>(null);
+  const [notificationChannelStatus, setNotificationChannelStatus] = useState<
+    string | null
+  >(null);
+  const [appState, setAppState] = useState<string>(AppState.currentState);
+
+  const loadDeviceInfo = async () => {
+    if (!user?.id) return;
+    try {
+      const { data: devices } = await supabase
+        .from('user_devices')
+        .select(
+          'push_token, platform, is_active, device_name, device_id, created_at, updated_at'
+        )
+        .eq('user_id', user.id)
+        .eq('is_active', true);
+      setDeviceInfo(devices || []);
+    } catch (error) {
+      console.error('Error loading device info:', error);
+    }
+  };
+
+  React.useEffect(() => {
+    loadDeviceInfo();
+    checkPermissions();
+    checkNotificationChannel();
+
+    // Monitor app state
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      setAppState(nextAppState);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [user?.id]);
+
+  const checkPermissions = async () => {
+    if (Platform.OS === 'web') {
+      setPermissionStatus('Web platform - notifications not supported');
+      return;
+    }
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      setPermissionStatus(status);
+    } catch (error) {
+      console.error('Error checking permissions:', error);
+      setPermissionStatus('Error checking permissions');
+    }
+  };
+
+  const checkNotificationChannel = async () => {
+    if (Platform.OS !== 'android') {
+      setNotificationChannelStatus('iOS - channels not applicable');
+      return;
+    }
+    try {
+      const channels = await Notifications.getNotificationChannelsAsync();
+      const defaultChannel = channels.find((ch) => ch.id === 'default');
+      if (defaultChannel) {
+        setNotificationChannelStatus(
+          `Configured (importance: ${defaultChannel.importance})`
+        );
+      } else {
+        setNotificationChannelStatus('Not configured - using system default');
+      }
+    } catch (error) {
+      console.error('Error checking notification channel:', error);
+      setNotificationChannelStatus('Error checking channel');
+    }
+  };
 
   const testPushNotification = async () => {
     if (!user?.id) {
@@ -46,27 +127,42 @@ export default function TestPushScreen() {
     setResult(null);
 
     try {
+      console.log('🧪 [TEST-PUSH] ==========================================');
       console.log('🧪 [TEST-PUSH] Starting push notification test...', {
         user_id: user.id,
+        timestamp: new Date().toISOString(),
       });
 
       // First, check device tokens
       const { data: devices, error: devicesError } = await supabase
         .from('user_devices')
-        .select('push_token, platform, is_active, device_name')
+        .select(
+          'push_token, platform, is_active, device_name, device_id, created_at, updated_at'
+        )
         .eq('user_id', user.id)
         .eq('is_active', true);
+
+      // Update device info state
+      setDeviceInfo(devices || []);
 
       if (devicesError) {
         throw new Error(`Failed to fetch devices: ${devicesError.message}`);
       }
 
-      console.log('📱 [TEST-PUSH] Device tokens:', {
+      console.log('📱 [TEST-PUSH] Device tokens fetched:', {
         count: devices?.length || 0,
         devices: devices?.map((d) => ({
           platform: d.platform,
           device_name: d.device_name,
+          device_id: d.device_id,
           has_token: !!d.push_token,
+          token_length: d.push_token?.length || 0,
+          token_preview: d.push_token
+            ? d.push_token.substring(0, 40) + '...'
+            : 'NO TOKEN',
+          token_valid_format:
+            d.push_token?.startsWith('ExponentPushToken[') ||
+            d.push_token?.startsWith('ExpoPushToken['),
         })),
       });
 
@@ -83,13 +179,15 @@ export default function TestPushScreen() {
         throw new Error('SUPABASE_URL or SUPABASE_ANON_KEY not configured');
       }
 
-      // Call send-push function via Supabase client (uses service role internally)
-      console.log('📤 [TEST-PUSH] Calling send-push function...', {
-        url: `${supabaseUrl}/functions/v1/send-push`,
-        user_id: user.id,
+      console.log('🔐 [TEST-PUSH] Environment check:', {
+        has_supabase_url: !!supabaseUrl,
+        supabase_url: supabaseUrl,
+        has_anon_key: !!supabaseAnonKey,
+        anon_key_preview: supabaseAnonKey?.substring(0, 20) + '...',
       });
 
       // Get session for auth header
+      console.log('🔑 [TEST-PUSH] Getting session...');
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -97,7 +195,36 @@ export default function TestPushScreen() {
         throw new Error('No active session');
       }
 
+      console.log('✅ [TEST-PUSH] Session obtained:', {
+        has_session: !!session,
+        user_id: session.user?.id,
+        access_token_preview: session.access_token?.substring(0, 30) + '...',
+      });
+
+      // Prepare request payload
+      const requestPayload = {
+        user_id: user.id,
+        title: '🧪 Test Push Notification',
+        body: 'This is a test push notification from the test screen!',
+        data: {
+          type: 'test',
+          test_id: Date.now().toString(),
+          timestamp: new Date().toISOString(),
+        },
+        sound: 'default',
+        priority: 'high' as const,
+      };
+
+      console.log('📤 [TEST-PUSH] Preparing request:', {
+        url: `${supabaseUrl}/functions/v1/send-push`,
+        method: 'POST',
+        payload: requestPayload,
+        payload_stringified: JSON.stringify(requestPayload, null, 2),
+      });
+
       // Try direct fetch first to see raw response
+      const requestStartTime = Date.now();
+      console.log('⏱️ [TEST-PUSH] Sending request to edge function...');
       const response = await fetch(`${supabaseUrl}/functions/v1/send-push`, {
         method: 'POST',
         headers: {
@@ -105,25 +232,23 @@ export default function TestPushScreen() {
           Authorization: `Bearer ${session.access_token}`,
           apikey: supabaseAnonKey,
         },
-        body: JSON.stringify({
-          user_id: user.id,
-          title: '🧪 Test Push Notification',
-          body: 'This is a test push notification from the test screen!',
-          data: {
-            type: 'test',
-            test_id: Date.now().toString(),
-          },
-          sound: 'default',
-          priority: 'high',
-        }),
+        body: JSON.stringify(requestPayload),
+      });
+      const requestDuration = Date.now() - requestStartTime;
+      console.log(`⏱️ [TEST-PUSH] Request completed in ${requestDuration}ms`);
+
+      console.log('📥 [TEST-PUSH] Response received:', {
+        status: response.status,
+        status_text: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        ok: response.ok,
       });
 
       const responseText = await response.text();
-      console.log('📥 [TEST-PUSH] Raw fetch response:', {
-        status: response.status,
-        statusText: response.statusText,
-        response_text: responseText,
+      console.log('📥 [TEST-PUSH] Raw response body:', {
         response_length: responseText.length,
+        response_preview: responseText.substring(0, 500) + '...',
+        full_response: responseText,
       });
 
       let data;
@@ -178,7 +303,32 @@ export default function TestPushScreen() {
         errors: errors,
         total_devices: devices?.length || 0,
         push_result: pushResult,
+        full_response_data: data,
       });
+
+      // Additional validation: check if Expo actually accepted the push
+      if (successCount > 0) {
+        console.log('✅ [TEST-PUSH] Expo API accepted push notification(s)');
+        console.log(
+          '💡 [TEST-PUSH] If notification does not appear on device:'
+        );
+        console.log('  1. Check device notification settings');
+        console.log('  2. Check if app has notification permissions');
+        console.log('  3. Check if device is online and can receive push');
+        console.log('  4. Check Expo push service status');
+        console.log('  5. Verify token is still valid in database');
+      } else {
+        console.error(
+          '❌ [TEST-PUSH] No push notifications were accepted by Expo API'
+        );
+        console.error('💡 [TEST-PUSH] Possible reasons:');
+        console.error('  - Invalid push tokens');
+        console.error('  - Device not registered with Expo');
+        console.error('  - Token expired or revoked');
+        console.error('  - Expo API error (check errors array)');
+      }
+
+      console.log('🧪 [TEST-PUSH] ==========================================');
 
       const isSuccess = data?.success !== false && successCount > 0;
 
@@ -322,6 +472,126 @@ export default function TestPushScreen() {
             </Text>
           </View>
 
+          {/* Permission Status */}
+          <View style={styles.infoSection}>
+            <Text style={[styles.infoLabel, { color: theme.colors.text }]}>
+              Notification Permissions:
+            </Text>
+            <View style={styles.statusRow}>
+              {permissionStatus === 'granted' ? (
+                <CheckCircle size={16} color={theme.colors.success} />
+              ) : (
+                <AlertCircle size={16} color={theme.colors.error} />
+              )}
+              <Text
+                style={[
+                  styles.statusText,
+                  {
+                    color:
+                      permissionStatus === 'granted'
+                        ? theme.colors.success
+                        : theme.colors.error,
+                  },
+                ]}
+              >
+                {permissionStatus || 'Checking...'}
+              </Text>
+            </View>
+            {permissionStatus !== 'granted' && (
+              <Text
+                style={[styles.statusHint, { color: theme.colors.textMuted }]}
+              >
+                Go to Settings → Apps → Talkee → Notifications → Enable
+              </Text>
+            )}
+          </View>
+
+          {/* Android Notification Channel */}
+          {Platform.OS === 'android' && (
+            <View style={styles.infoSection}>
+              <Text style={[styles.infoLabel, { color: theme.colors.text }]}>
+                Android Notification Channel:
+              </Text>
+              <Text
+                style={[
+                  styles.statusText,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                {notificationChannelStatus || 'Checking...'}
+              </Text>
+            </View>
+          )}
+
+          {/* App State */}
+          <View style={styles.infoSection}>
+            <Text style={[styles.infoLabel, { color: theme.colors.text }]}>
+              App State:
+            </Text>
+            <Text
+              style={[
+                styles.statusText,
+                {
+                  color:
+                    appState === 'active'
+                      ? theme.colors.warning
+                      : theme.colors.success,
+                },
+              ]}
+            >
+              {appState === 'active'
+                ? '⚠️ Foreground - Try backgrounding the app'
+                : appState === 'background'
+                ? '✅ Background - Notifications should appear'
+                : appState}
+            </Text>
+            {appState === 'active' && (
+              <Text
+                style={[styles.statusHint, { color: theme.colors.textMuted }]}
+              >
+                Tip: Press Home button to background the app, then send push
+              </Text>
+            )}
+          </View>
+
+          {/* Device Info Section */}
+          {deviceInfo && deviceInfo.length > 0 && (
+            <View style={styles.infoSection}>
+              <Text style={[styles.infoLabel, { color: theme.colors.text }]}>
+                Active Devices ({deviceInfo.length}):
+              </Text>
+              {deviceInfo.map((device, index) => (
+                <View key={index} style={styles.deviceItem}>
+                  <Text
+                    style={[
+                      styles.deviceText,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    {device.device_name || device.platform || 'Unknown Device'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.deviceToken,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    Token:{' '}
+                    {device.push_token?.substring(0, 40) + '...' || 'NO TOKEN'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.devicePlatform,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    Platform: {device.platform || 'Unknown'}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
           <TouchableOpacity
             style={[
               styles.testButton,
@@ -436,17 +706,129 @@ export default function TestPushScreen() {
 
         <Card style={[styles.card, { backgroundColor: theme.colors.card }]}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            Debug Information
+            📋 Logları Nasıl Görüntüleyebilirsiniz?
           </Text>
-          <Text
-            style={[styles.debugText, { color: theme.colors.textSecondary }]}
-          >
-            Check console logs for detailed debug information. Look for logs
-            starting with:
-          </Text>
-          <View style={styles.codeBlock}>
-            <Text style={[styles.codeText, { color: theme.colors.text }]}>
-              🧪 [TEST-PUSH]
+
+          <View style={styles.logSection}>
+            <Text style={[styles.logTitle, { color: theme.colors.text }]}>
+              1. Metro Bundler Terminali
+            </Text>
+            <Text
+              style={[styles.logText, { color: theme.colors.textSecondary }]}
+            >
+              Metro bundler terminalinde (npx expo start) loglar otomatik
+              görünür. Şu prefix'lerle başlayan logları arayın:
+            </Text>
+            <View style={styles.codeBlock}>
+              <Text style={[styles.codeText, { color: theme.colors.text }]}>
+                🧪 [TEST-PUSH]{'\n'}
+                📤 [TEST-PUSH]{'\n'}
+                📥 [TEST-PUSH]
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.logSection}>
+            <Text style={[styles.logTitle, { color: theme.colors.text }]}>
+              2. Android Logcat (Terminal)
+            </Text>
+            <Text
+              style={[styles.logText, { color: theme.colors.textSecondary }]}
+            >
+              Android cihazınızdan logları görmek için terminalde şu komutu
+              çalıştırın:
+            </Text>
+            <View style={styles.codeBlock}>
+              <Text style={[styles.codeText, { color: theme.colors.text }]}>
+                adb logcat *:S ReactNativeJS:V | grep -i "test-push"
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.logSection}>
+            <Text style={[styles.logTitle, { color: theme.colors.text }]}>
+              3. Supabase Dashboard (Edge Function Logları)
+            </Text>
+            <Text
+              style={[styles.logText, { color: theme.colors.textSecondary }]}
+            >
+              Supabase Dashboard → Edge Functions → send-push → Logs
+              {'\n'}
+              Şu prefix'lerle başlayan logları arayın:
+            </Text>
+            <View style={styles.codeBlock}>
+              <Text style={[styles.codeText, { color: theme.colors.text }]}>
+                📤 [SEND-PUSH]{'\n'}
+                📥 [SEND-PUSH]{'\n'}
+                🎫 [SEND-PUSH]
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.logSection}>
+            <Text style={[styles.logTitle, { color: theme.colors.text }]}>
+              🔍 Troubleshooting
+            </Text>
+            <Text
+              style={[styles.logText, { color: theme.colors.textSecondary }]}
+            >
+              If Expo API accepts push (success: 1) but notification doesn't
+              appear:
+            </Text>
+            <View style={styles.troubleshootList}>
+              <Text
+                style={[
+                  styles.troubleshootItem,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                1. Background the app (press Home button) before sending push
+              </Text>
+              <Text
+                style={[
+                  styles.troubleshootItem,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                2. Wait 10-30 seconds for notification to arrive
+              </Text>
+              <Text
+                style={[
+                  styles.troubleshootItem,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                3. Check device settings: Settings → Apps → Talkee →
+                Notifications
+              </Text>
+              <Text
+                style={[
+                  styles.troubleshootItem,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                4. Try Expo Push Tool: https://expo.dev/notifications
+              </Text>
+              <Text
+                style={[
+                  styles.troubleshootItem,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                5. Verify token format in database matches
+                ExponentPushToken[...]
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.logSection}>
+            <Text style={[styles.logTitle, { color: theme.colors.text }]}>
+              💡 İpucu
+            </Text>
+            <Text
+              style={[styles.logText, { color: theme.colors.textSecondary }]}
+            >
+              Detaylı rehber için: docs/VIEW_TEST_PUSH_LOGS.md dosyasına bakın
             </Text>
           </View>
         </Card>
@@ -575,5 +957,65 @@ const styles = StyleSheet.create({
   codeText: {
     fontSize: 12,
     fontFamily: 'monospace',
+  },
+  logSection: {
+    marginBottom: 20,
+  },
+  logTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 8,
+  },
+  logText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  deviceItem: {
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  deviceText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    marginBottom: 4,
+  },
+  deviceToken: {
+    fontSize: 12,
+    fontFamily: 'monospace',
+    marginBottom: 2,
+  },
+  devicePlatform: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  statusText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+  },
+  statusHint: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  troubleshootList: {
+    marginTop: 8,
+    paddingLeft: 16,
+  },
+  troubleshootItem: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    marginBottom: 8,
+    lineHeight: 20,
   },
 });
