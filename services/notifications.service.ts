@@ -46,8 +46,16 @@ class NotificationsService {
         return null;
       }
 
-      // Get Expo push token
-      const token = (await Notifications.getExpoPushTokenAsync()).data;
+      // Get Expo push token with project ID
+      // Project ID is required for Expo Push API to work correctly
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      const tokenOptions = projectId
+        ? { projectId }
+        : undefined;
+      
+      const token = (
+        await Notifications.getExpoPushTokenAsync(tokenOptions)
+      ).data;
       this.expoPushToken = token;
 
       // Configure notification behavior

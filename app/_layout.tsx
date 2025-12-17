@@ -24,6 +24,7 @@ import { setupGlobalErrorHandlers } from '../lib/globalErrorHandler';
 import * as Sentry from '@sentry/react-native';
 import { SentryAdapter } from '../lib/sentryAdapter';
 import { notificationsService } from '../services';
+import { twilioVoiceService } from '../services/twilioVoice.service';
 import { Platform } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { OfflineBanner } from '../components/ui/OfflineBanner';
@@ -31,8 +32,8 @@ import { StripeProvider } from '@stripe/stripe-react-native';
 
 // Initialize Sentry
 Sentry.init({
-  dsn: 'https://18e1c6ac9df262bbd98c89fd2db05f06@o4510523149647872.ingest.de.sentry.io/4510523154563152', // Sentry panelinden aldığınız DSN'i buraya yapıştırın
-  debug: __DEV__, // Geliştirme ortamında debug modunu açar
+  dsn: 'https://18e1c6ac9df262bbd98c89fd2db05f06@o4510523149647872.ingest.de.sentry.io/4510523154563152',
+  debug: __DEV__,
 });
 
 try {
@@ -49,7 +50,7 @@ SplashScreen.preventAutoHideAsync();
 const asyncStoragePersister = createAsyncStoragePersister({
   storage: AsyncStorage,
   key: 'REACT_QUERY_OFFLINE_CACHE',
-  throttleTime: 1000, // Throttle saves to avoid too frequent writes
+  throttleTime: 1000,
 });
 
 // Create a QueryClient instance with offline support
@@ -57,22 +58,18 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: (failureCount, error: any) => {
-        // Don't retry if offline
         if (
           error?.message?.includes('network') ||
           error?.message?.includes('fetch')
         ) {
           return false;
         }
-        // Retry once for other errors
         return failureCount < 1;
       },
       refetchOnWindowFocus: false,
-      // Use cached data when offline
       networkMode: 'offlineFirst',
     },
     mutations: {
-      // Don't retry mutations when offline
       retry: (failureCount, error: any) => {
         if (
           error?.message?.includes('network') ||
@@ -88,23 +85,16 @@ const queryClient = new QueryClient({
 });
 
 // Setup network status listener for React Query
-// Works on both mobile and web
 if (Platform.OS === 'web') {
-  // Web: Use navigator.onLine events
   if (typeof window !== 'undefined') {
     const handleOnline = () => {
       queryClient.refetchQueries();
     };
-
-    window.addEventListener('online', handleOnline);
-
-    // Cleanup is handled by app lifecycle
+    (window as any).addEventListener('online', handleOnline);
   }
 } else {
-  // Mobile: Use NetInfo
   NetInfo.addEventListener((state) => {
     if (state.isConnected) {
-      // When back online, refetch all queries
       queryClient.refetchQueries();
     }
   });
@@ -115,13 +105,64 @@ function AutoAvailabilityWrapper({ children }: { children: React.ReactNode }) {
   const { isProfessional } = useProfile();
 
   // 🟢 AUTO ONLINE/OFFLINE
-  // Automatically manages professional availability based on app state
   useAutoAvailability({
     enabled: isProfessional,
     setOnlineOnForeground: true,
     setOfflineOnBackground: true,
-    backgroundDelay: 30000, // 30 seconds delay before going offline
+    backgroundDelay: 30000,
   });
+
+  return <>{children}</>;
+}
+
+// Twilio Voice Initialization Component
+function TwilioVoiceInitializer({ children }: { children: React.ReactNode }) {
+  const { user } = useProfile();
+  const [twilioReady, setTwilioReady] = useState(false);
+
+  useEffect(() => {
+    // Only initialize Twilio if user is authenticated
+    if (!user) {
+      setTwilioReady(false);
+      return;
+    }
+
+    let mounted = true;
+
+    const initializeTwilio = async () => {
+      try {
+        logger.info('[Twilio] Initializing Voice SDK...');
+
+        await twilioVoiceService.initialize();
+        await twilioVoiceService.register();
+
+        if (mounted) {
+          setTwilioReady(true);
+          logger.info(
+            '[Twilio] Voice SDK initialized and registered successfully'
+          );
+        }
+      } catch (error) {
+        logger.error('[Twilio] Initialization error:', error);
+        // Don't block app if Twilio fails
+        if (mounted) {
+          setTwilioReady(false);
+        }
+      }
+    };
+
+    initializeTwilio();
+
+    // Cleanup on unmount or user logout
+    return () => {
+      mounted = false;
+      if (twilioReady) {
+        twilioVoiceService.cleanup().catch((error) => {
+          logger.error('[Twilio] Cleanup error:', error);
+        });
+      }
+    };
+  }, [user]);
 
   return <>{children}</>;
 }
@@ -185,7 +226,7 @@ export default function RootLayout() {
         console.warn('Initialization timeout - forcing ready state');
         setI18nReady(true);
       }
-    }, 10000); // 10 second timeout
+    }, 10000);
 
     return () => clearTimeout(timeout);
   }, [i18nReady]);
@@ -199,7 +240,6 @@ export default function RootLayout() {
       } catch (error) {
         logger.error('[App] Failed to initialize i18n', error);
         setInitError(error instanceof Error ? error : new Error(String(error)));
-        // Still set ready to prevent app from hanging
         if (mounted) setI18nReady(true);
       }
     })();
@@ -234,8 +274,8 @@ export default function RootLayout() {
       client={queryClient}
       persistOptions={{
         persister: asyncStoragePersister,
-        maxAge: 1000 * 60 * 60 * 24, // 24 hours
-        buster: '', // Cache version - change this to invalidate all cache
+        maxAge: 1000 * 60 * 60 * 24,
+        buster: '',
       }}
     >
       <StripeProvider
@@ -244,35 +284,39 @@ export default function RootLayout() {
         urlScheme="talkee"
       >
         <ThemeProvider>
-          <AutoAvailabilityWrapper>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="auth" />
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="become-professional/index" />
-              <Stack.Screen name="credit-selection" />
-              <Stack.Screen name="purchase" />
-              <Stack.Screen name="notifications/index" />
-              <Stack.Screen name="wallet-history" />
-              <Stack.Screen name="blocked-users" />
-              <Stack.Screen name="how-it-works" />
-              <Stack.Screen name="help" />
-              <Stack.Screen name="settings/theme" />
-              <Stack.Screen name="settings/language" />
-              <Stack.Screen name="settings/notifications" />
-              <Stack.Screen name="settings/test-push" />
-              <Stack.Screen name="settings/change-password" />
-              <Stack.Screen name="+not-found" />
-              <Stack.Screen name="profile/professional-settings" />
-              <Stack.Screen name="profile/privacy-policy" />
-              <Stack.Screen name="profile/devices" />
-            </Stack>
-            <StatusBar style="auto" translucent={false} />
-            <OfflineBanner />
-            <ToastStack />
-          </AutoAvailabilityWrapper>
+          <TwilioVoiceInitializer>
+            <AutoAvailabilityWrapper>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="auth" />
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="become-professional/index" />
+                <Stack.Screen name="credit-selection" />
+                <Stack.Screen name="purchase" />
+                <Stack.Screen name="notifications/index" />
+                <Stack.Screen name="wallet-history" />
+                <Stack.Screen name="blocked-users" />
+                <Stack.Screen name="how-it-works" />
+                <Stack.Screen name="help" />
+                <Stack.Screen name="settings/theme" />
+                <Stack.Screen name="settings/language" />
+                <Stack.Screen name="settings/notifications" />
+                <Stack.Screen name="settings/test-push" />
+                <Stack.Screen name="settings/change-password" />
+                <Stack.Screen name="+not-found" />
+                <Stack.Screen name="profile/professional-settings" />
+                <Stack.Screen name="profile/privacy-policy" />
+                <Stack.Screen name="profile/devices" />
+              </Stack>
+              <StatusBar style="auto" translucent={false} />
+              <OfflineBanner />
+              <ToastStack />
+            </AutoAvailabilityWrapper>
+          </TwilioVoiceInitializer>
         </ThemeProvider>
-        {__DEV__ && Platform.OS === 'web' && (
+        {__DEV__ && Platform.OS === 'web' && __DEV__ ? (
           <ReactQueryDevtools initialIsOpen={false} />
+        ) : (
+          <></>
         )}
       </StripeProvider>
     </PersistQueryClientProvider>

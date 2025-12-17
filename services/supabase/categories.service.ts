@@ -302,87 +302,140 @@ class CategoriesService {
       const categories = await this.getCategories();
 
       // Get professional counts for each category
-      const categoriesWithCounts = await Promise.all(
+      // Use Promise.allSettled to handle individual failures gracefully
+      const categoriesWithCounts = await Promise.allSettled(
         categories.map(async (category) => {
-          // Get professional IDs from category_id field
-          const { data: directProfessionals, error: directError } = await supabase
-            .from('professionals')
-            .select('id')
-            .eq('category_id', category.id)
-            .eq('is_active', true)
-            .eq('is_public', true);
-
-          if (directError) {
-            console.error(
-              `❌ [getCategoriesWithCounts] Error fetching direct professionals for ${category.name} (${category.id}):`,
-              directError
-            );
-          }
-
-          // Get professional IDs from professional_categories junction table
-          const { data: junctionData, error: junctionError } = await supabase
-            .from('professional_categories')
-            .select('professional_id')
-            .eq('category_id', category.id);
-
-          if (junctionError) {
-            console.error(
-              `❌ [getCategoriesWithCounts] Error fetching junction professionals for ${category.name} (${category.id}):`,
-              junctionError
-            );
-          }
-
-          // Get unique professional IDs from both sources
-          const directIds = new Set(
-            (directProfessionals || []).map((p) => p.id)
-          );
-          const junctionIds = new Set(
-            (junctionData || []).map((item) => item.professional_id)
-          );
-
-          // Combine and get unique count (union of both sets)
-          const uniqueIds = new Set([...directIds, ...junctionIds]);
-
-          console.log(`📊 [getCategoriesWithCounts] ${category.name}:`, {
-            directCount: directIds.size,
-            junctionCount: junctionIds.size,
-            uniqueCount: uniqueIds.size,
-          });
-
-          // Verify these professionals are active and public
-          if (uniqueIds.size > 0) {
-            const { count, error: countError } = await supabase
+          try {
+            // Get professional IDs from category_id field
+            const { data: directProfessionals, error: directError } = await supabase
               .from('professionals')
-              .select('id', { count: 'exact', head: true })
-              .in('id', Array.from(uniqueIds))
+              .select('id')
+              .eq('category_id', category.id)
               .eq('is_active', true)
               .eq('is_public', true);
 
-            if (countError) {
+            if (directError) {
               console.error(
-                `❌ [getCategoriesWithCounts] Error counting professionals for ${category.name} (${category.id}):`,
-                countError
+                `❌ [getCategoriesWithCounts] Error fetching direct professionals for ${category.name} (${category.id}):`,
+                directError
               );
+              // Continue with empty array on error
+            }
+
+            // Get professional IDs from professional_categories junction table
+            // Add retry logic for network errors
+            let junctionData = null;
+            let junctionError = null;
+            let retries = 3;
+            
+            while (retries > 0) {
+              const result = await supabase
+                .from('professional_categories')
+                .select('professional_id')
+                .eq('category_id', category.id);
+              
+              junctionData = result.data;
+              junctionError = result.error;
+              
+              // If no error or not a network error, break
+              if (!junctionError || !junctionError.message?.includes('Network')) {
+                break;
+              }
+              
+              // Wait before retry (exponential backoff)
+              await new Promise(resolve => setTimeout(resolve, 1000 * (4 - retries)));
+              retries--;
+            }
+
+            if (junctionError) {
+              console.error(
+                `❌ [getCategoriesWithCounts] Error fetching junction professionals for ${category.name} (${category.id}):`,
+                junctionError
+              );
+              // Continue with empty array on error
+            }
+
+            // Get unique professional IDs from both sources
+            const directIds = new Set(
+              (directProfessionals || []).map((p) => p.id)
+            );
+            const junctionIds = new Set(
+              (junctionData || []).map((item) => item.professional_id)
+            );
+
+            // Combine and get unique count (union of both sets)
+            const uniqueIds = new Set([...directIds, ...junctionIds]);
+
+            console.log(`📊 [getCategoriesWithCounts] ${category.name}:`, {
+              directCount: directIds.size,
+              junctionCount: junctionIds.size,
+              uniqueCount: uniqueIds.size,
+            });
+
+            // Verify these professionals are active and public
+            if (uniqueIds.size > 0) {
+              const { count, error: countError } = await supabase
+                .from('professionals')
+                .select('id', { count: 'exact', head: true })
+                .in('id', Array.from(uniqueIds))
+                .eq('is_active', true)
+                .eq('is_public', true);
+
+              if (countError) {
+                console.error(
+                  `❌ [getCategoriesWithCounts] Error counting professionals for ${category.name} (${category.id}):`,
+                  countError
+                );
+                return {
+                  ...category,
+                  professionalCount: uniqueIds.size, // Fallback to set size
+                };
+              }
+
               return {
                 ...category,
-                professionalCount: uniqueIds.size, // Fallback to set size
+                professionalCount: count || 0,
               };
             }
 
             return {
               ...category,
-              professionalCount: count || 0,
+              professionalCount: 0,
+            };
+          } catch (error) {
+            // Handle any unexpected errors for this category
+            console.error(
+              `❌ [getCategoriesWithCounts] Unexpected error for ${category.name} (${category.id}):`,
+              error
+            );
+            // Return category with 0 count on error
+            return {
+              ...category,
+              professionalCount: 0,
             };
           }
-
-          return {
-            ...category,
-            professionalCount: 0,
-          };
         })
       );
 
-      return categoriesWithCounts;
+      // Process Promise.allSettled results
+      const results = categoriesWithCounts.map((result, index) => {
+        if (result.status === 'fulfilled') {
+          return result.value;
+        } else {
+          // If a promise was rejected, log and return a default value
+          console.error(
+            `❌ [getCategoriesWithCounts] Promise rejected for category at index ${index}:`,
+            result.reason
+          );
+          // Return default value for the category at this index
+          return {
+            ...categories[index],
+            professionalCount: 0,
+          };
+        }
+      });
+
+      return results;
     } catch (error) {
       console.error('Error in getCategoriesWithCounts:', error);
       return [];
