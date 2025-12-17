@@ -26,12 +26,14 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useTheme } from '@/contexts/ThemeContext';
-import { mockCategories } from '@/mockData/professionals';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { usersService, notificationsService } from '@/services';
+import { useCategories } from '@/hooks/useCategories';
 
 export default function SetupAccountScreen() {
   const { theme } = useTheme();
+  const { data: categories = [], isLoading: categoriesLoading } =
+    useCategories();
   const [currentStep, setCurrentStep] = useState(1);
   const progressAnim = useRef(new Animated.Value(33.33)).current;
 
@@ -92,9 +94,49 @@ export default function SetupAccountScreen() {
   };
 
   const handleComplete = async () => {
-    // TODO: Save user profile data (interests, bio, etc.)
-    await sendWelcomeNotification();
-    router.replace('/(tabs)');
+    try {
+      const currentUser = await usersService.getCurrentUser();
+      if (!currentUser) {
+        console.error('No user found');
+        await sendWelcomeNotification();
+        router.replace('/(tabs)');
+        return;
+      }
+
+      // Save user profile data
+      const updates: any = {};
+
+      if (fullName.trim()) {
+        updates.name = fullName.trim();
+      }
+
+      if (nickname.trim()) {
+        // You might want to add a nickname field to the users table
+        // For now, we'll skip it or store it in a different way
+      }
+
+      // Save birth date and gender if you have these fields in users table
+      // For now, we'll just save the name
+
+      if (Object.keys(updates).length > 0) {
+        await usersService.updateProfile(updates);
+      }
+
+      // TODO: Save selectedInterests to user_interests table if it exists
+      // For now, we'll just log it
+      if (selectedInterests.length > 0) {
+        console.log('Selected interests:', selectedInterests);
+        // You can implement saving interests to a user_interests table here
+      }
+
+      await sendWelcomeNotification();
+      router.replace('/(tabs)');
+    } catch (error) {
+      console.error('Error saving profile data:', error);
+      // Still send notification and navigate even if save fails
+      await sendWelcomeNotification();
+      router.replace('/(tabs)');
+    }
   };
 
   const handleBecomeProfessional = () => {
@@ -318,51 +360,65 @@ export default function SetupAccountScreen() {
       </Text>
 
       <View style={styles.interestsGrid}>
-        {mockCategories.map((category) => {
-          const isSelected = selectedInterests.includes(category.id);
-          return (
-            <TouchableOpacity
-              key={category.id}
-              onPress={() => toggleInterest(category.id)}
-              style={[
-                styles.interestCard,
-                {
-                  backgroundColor: isSelected
-                    ? theme.colors.primary
-                    : theme.colors.surface,
-                  borderColor: isSelected
-                    ? theme.colors.primary
-                    : theme.colors.border,
-                },
-              ]}
-            >
-              {isSelected && (
-                <View style={styles.checkBadge}>
-                  <Check
-                    size={14}
-                    color={theme.colors.surface}
-                    strokeWidth={3}
-                  />
-                </View>
-              )}
-              <Text style={styles.interestEmoji}>
-                {getCategoryEmoji(category.name)}
-              </Text>
-              <Text
+        {categoriesLoading ? (
+          <Text
+            style={[styles.loadingText, { color: theme.colors.textSecondary }]}
+          >
+            Loading categories...
+          </Text>
+        ) : categories.length === 0 ? (
+          <Text
+            style={[styles.loadingText, { color: theme.colors.textSecondary }]}
+          >
+            No categories available
+          </Text>
+        ) : (
+          categories.map((category) => {
+            const isSelected = selectedInterests.includes(category.id);
+            return (
+              <TouchableOpacity
+                key={category.id}
+                onPress={() => toggleInterest(category.id)}
                 style={[
-                  styles.interestName,
+                  styles.interestCard,
                   {
-                    color: isSelected
-                      ? theme.colors.surface
-                      : theme.colors.text,
+                    backgroundColor: isSelected
+                      ? theme.colors.primary
+                      : theme.colors.surface,
+                    borderColor: isSelected
+                      ? theme.colors.primary
+                      : theme.colors.border,
                   },
                 ]}
               >
-                {category.name}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+                {isSelected && (
+                  <View style={styles.checkBadge}>
+                    <Check
+                      size={14}
+                      color={theme.colors.surface}
+                      strokeWidth={3}
+                    />
+                  </View>
+                )}
+                <Text style={styles.interestEmoji}>
+                  {category.emoji || getCategoryEmoji(category.name)}
+                </Text>
+                <Text
+                  style={[
+                    styles.interestName,
+                    {
+                      color: isSelected
+                        ? theme.colors.surface
+                        : theme.colors.text,
+                    },
+                  ]}
+                >
+                  {category.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })
+        )}
       </View>
     </View>
   );
@@ -745,6 +801,13 @@ const styles = StyleSheet.create({
   maybeLaterText: {
     fontSize: 15,
     fontFamily: 'Inter-Medium',
+  },
+  loadingText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
+    paddingVertical: 20,
+    width: '100%',
   },
   footer: {
     padding: 24,

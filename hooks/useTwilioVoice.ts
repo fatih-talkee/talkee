@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { twilioVoiceService, CallState } from '@/services/twilioVoice.service';
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 import { useProfile } from './useProfile';
 
 export interface UseTwilioVoiceOptions {

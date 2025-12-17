@@ -16,7 +16,8 @@ import { Card } from '@/components/ui/Card';
 import { useToast } from '@/lib/toastService';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
-import { ArrowLeft, Send, CheckCircle, XCircle } from 'lucide-react-native';
+import { notificationsService } from '@/services/notifications.service';
+import { ArrowLeft, Send, CheckCircle, XCircle, RefreshCw } from 'lucide-react-native';
 
 export default function TestPushScreen() {
   const { theme } = useTheme();
@@ -25,6 +26,7 @@ export default function TestPushScreen() {
   const toast = useToast();
   const { user } = useProfile();
   const [loading, setLoading] = useState(false);
+  const [refreshingToken, setRefreshingToken] = useState(false);
   const [result, setResult] = useState<{
     success: boolean;
     message: string;
@@ -147,8 +149,6 @@ export default function TestPushScreen() {
         error: error
           ? {
               message: error.message,
-              name: error.name,
-              stack: error.stack,
             }
           : null,
       });
@@ -233,22 +233,65 @@ export default function TestPushScreen() {
     }
   };
 
+  const refreshPushToken = async () => {
+    if (!user?.id) {
+      toast.error({
+        title: 'Error',
+        message: 'User not found',
+      });
+      return;
+    }
+
+    setRefreshingToken(true);
+    setResult(null);
+
+    try {
+      console.log('🔄 [REFRESH-TOKEN] Refreshing push token...', {
+        user_id: user.id,
+      });
+
+      // Re-initialize notifications to get a fresh token
+      const token = await notificationsService.initialize();
+
+      if (token) {
+        console.log('✅ [REFRESH-TOKEN] Token refreshed successfully', {
+          token: token.substring(0, 30) + '...',
+        });
+        setResult({
+          success: true,
+          message: 'Push token refreshed successfully!',
+          details: {
+            token: token.substring(0, 30) + '...',
+          },
+        });
+        toast.success({
+          title: 'Success',
+          message: 'Push token refreshed! Try sending a test push now.',
+        });
+      } else {
+        throw new Error('Failed to get push token. Check permissions.');
+      }
+    } catch (error: any) {
+      console.error('❌ [REFRESH-TOKEN] Error:', error);
+      setResult({
+        success: false,
+        message: error.message || 'Failed to refresh push token',
+        details: error,
+      });
+      toast.error({
+        title: 'Error',
+        message: error.message || 'Failed to refresh push token',
+      });
+    } finally {
+      setRefreshingToken(false);
+    }
+  };
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <Header
-        showLogo={false}
-        leftComponent={
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <ArrowLeft size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-        }
-        title="Test Push Notification"
-      />
+      <Header showLogo={false} title="Test Push Notification" />
 
       <ScrollView
         style={styles.content}
@@ -296,6 +339,35 @@ export default function TestPushScreen() {
               <>
                 <Send size={20} color="#ffffff" />
                 <Text style={styles.testButtonText}>Send Test Push</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.refreshButton,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                opacity: refreshingToken ? 0.6 : 1,
+              },
+            ]}
+            onPress={refreshPushToken}
+            disabled={refreshingToken}
+          >
+            {refreshingToken ? (
+              <ActivityIndicator color={theme.colors.primary} />
+            ) : (
+              <>
+                <RefreshCw size={20} color={theme.colors.primary} />
+                <Text
+                  style={[
+                    styles.refreshButtonText,
+                    { color: theme.colors.primary },
+                  ]}
+                >
+                  Refresh Push Token
+                </Text>
               </>
             )}
           </TouchableOpacity>
@@ -437,6 +509,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter-Bold',
   },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 8,
+    marginTop: 12,
+  },
+  refreshButtonText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+  },
   resultContainer: {
     marginTop: 20,
     padding: 16,
@@ -469,7 +556,6 @@ const styles = StyleSheet.create({
   detailsText: {
     fontSize: 12,
     fontFamily: 'Inter-Regular',
-    fontFamily: 'monospace',
   },
   sectionTitle: {
     fontSize: 18,

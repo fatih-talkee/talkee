@@ -166,19 +166,8 @@ class CategoriesService {
    */
   async getPopularCategories(limit: number = 8): Promise<Category[]> {
     try {
-      console.log('🔍 [getPopularCategories] Starting...', { limit });
-      
       // Get all categories with their professional counts
       const categoriesWithCounts = await this.getCategoriesWithCounts();
-      
-      console.log('📊 [getPopularCategories] Categories with counts:', 
-        categoriesWithCounts.map(c => ({ 
-          name: c.name, 
-          count: c.professionalCount,
-          sort_order: c.sort_order 
-        }))
-      );
-
       // Sort by professional count (descending), then by sort_order as tie-breaker
       const sorted = categoriesWithCounts.sort((a, b) => {
         // First sort by professional count (descending)
@@ -189,18 +178,11 @@ class CategoriesService {
         return a.sort_order - b.sort_order;
       });
 
-      console.log('✅ [getPopularCategories] Sorted categories:', 
-        sorted.slice(0, limit).map(c => ({ 
-          name: c.name, 
-          count: c.professionalCount 
-        }))
-      );
-
       // Take top N and return as Category[] (without professionalCount)
-      const result = sorted.slice(0, limit).map(({ professionalCount, ...category }) => category);
-      
-      console.log('🎯 [getPopularCategories] Returning top', limit, 'categories');
-      
+      const result = sorted
+        .slice(0, limit)
+        .map(({ professionalCount, ...category }) => category);
+
       return result;
     } catch (error) {
       console.error('❌ [getPopularCategories] Error:', error);
@@ -307,12 +289,13 @@ class CategoriesService {
         categories.map(async (category) => {
           try {
             // Get professional IDs from category_id field
-            const { data: directProfessionals, error: directError } = await supabase
-              .from('professionals')
-              .select('id')
-              .eq('category_id', category.id)
-              .eq('is_active', true)
-              .eq('is_public', true);
+            const { data: directProfessionals, error: directError } =
+              await supabase
+                .from('professionals')
+                .select('id')
+                .eq('category_id', category.id)
+                .eq('is_active', true)
+                .eq('is_public', true);
 
             if (directError) {
               console.error(
@@ -327,23 +310,28 @@ class CategoriesService {
             let junctionData = null;
             let junctionError = null;
             let retries = 3;
-            
+
             while (retries > 0) {
               const result = await supabase
                 .from('professional_categories')
                 .select('professional_id')
                 .eq('category_id', category.id);
-              
+
               junctionData = result.data;
               junctionError = result.error;
-              
+
               // If no error or not a network error, break
-              if (!junctionError || !junctionError.message?.includes('Network')) {
+              if (
+                !junctionError ||
+                !junctionError.message?.includes('Network')
+              ) {
                 break;
               }
-              
+
               // Wait before retry (exponential backoff)
-              await new Promise(resolve => setTimeout(resolve, 1000 * (4 - retries)));
+              await new Promise((resolve) =>
+                setTimeout(resolve, 1000 * (4 - retries))
+              );
               retries--;
             }
 
@@ -365,12 +353,6 @@ class CategoriesService {
 
             // Combine and get unique count (union of both sets)
             const uniqueIds = new Set([...directIds, ...junctionIds]);
-
-            console.log(`📊 [getCategoriesWithCounts] ${category.name}:`, {
-              directCount: directIds.size,
-              junctionCount: junctionIds.size,
-              uniqueCount: uniqueIds.size,
-            });
 
             // Verify these professionals are active and public
             if (uniqueIds.size > 0) {

@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import jwt from 'https://esm.sh/jsonwebtoken@9.0.2';
+import { SignJWT } from 'https://deno.land/x/jose@v5.2.0/jwt/sign.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,7 +8,7 @@ const corsHeaders = {
     'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req: any) => {
+serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -69,7 +69,7 @@ serve(async (req: any) => {
     const identity = profile.id;
     console.log('✅ [twilio-token] User identity:', identity);
 
-    // Create JWT token for Twilio
+    // Create JWT token for Twilio using jose (Deno-compatible)
     const now = Math.floor(Date.now() / 1000);
     const exp = now + 3600; // 1 hour expiry
 
@@ -91,13 +91,22 @@ serve(async (req: any) => {
       },
     };
 
-    const token = jwt.sign(payload, TWILIO_API_SECRET, {
-      algorithm: 'HS256',
-      header: {
-        cty: 'twilio-fpa;v=1',
+    // Encode secret as Uint8Array
+    const secret = new TextEncoder().encode(TWILIO_API_SECRET);
+
+    // Create JWT with jose
+    const token = await new SignJWT(payload)
+      .setProtectedHeader({
+        alg: 'HS256',
         typ: 'JWT',
-      },
-    });
+        cty: 'twilio-fpa;v=1',
+      })
+      .setIssuedAt(now)
+      .setExpirationTime(exp)
+      .setJti(`${TWILIO_API_KEY}-${now}`)
+      .setIssuer(TWILIO_API_KEY)
+      .setSubject(TWILIO_ACCOUNT_SID)
+      .sign(secret);
 
     console.log('✅ [twilio-token] Token generated successfully');
 

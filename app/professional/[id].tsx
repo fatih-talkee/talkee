@@ -10,8 +10,12 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { Href, router, useLocalSearchParams } from 'expo-router';
+import { logger } from '@/lib/logger';
 import {
   ArrowLeft,
   Star,
@@ -68,9 +72,6 @@ export default function ProfessionalProfileScreen() {
   const isNetworkOnline = useIsOnline();
   const insets = useSafeAreaInsets();
   const [shareModalVisible, setShareModalVisible] = useState(false);
-  const [voiceModalVisible, setVoiceModalVisible] = useState(false);
-  const [videoModalVisible, setVideoModalVisible] = useState(false);
-  const [urgentCallModalVisible, setUrgentCallModalVisible] = useState(false);
   const [insufficientBalanceModalVisible, setInsufficientBalanceModalVisible] =
     useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('about'); // Start with 'about' since feed is not implemented yet
@@ -397,42 +398,79 @@ export default function ProfessionalProfileScreen() {
   // Check if user has sufficient balance
   const hasSufficientBalance = walletBalance >= minimumRequiredBalance;
 
-  const handleVoiceCall = () => {
-    // Check balance before showing modal
+  const handleVoiceCall = async () => {
+    // Check balance before making call
     if (!hasSufficientBalance) {
       setInsufficientBalanceModalVisible(true);
       return;
     }
-    setVoiceModalVisible(true);
-  };
 
-  const handleVideoCall = () => {
-    // Check balance before showing modal
-    if (!hasSufficientBalance) {
-      setInsufficientBalanceModalVisible(true);
-      return;
-    }
-    setVideoModalVisible(true);
-  };
-
-  const handleUrgentCall = () => {
-    // Check balance before showing modal
-    if (!hasSufficientBalance) {
-      setInsufficientBalanceModalVisible(true);
-      return;
-    }
-    setUrgentCallModalVisible(true);
-  };
-
-  const handleScheduleCall = () => {
-    if (!id) {
-      console.error('Professional ID is missing');
-      return;
-    }
     try {
-      router.push(`/schedule-call/${id}`);
+      logger.info('[ProfessionalProfile] Initiating voice call', {
+        professionalId: id,
+      });
+
+      // Navigate to call screen first
+      router.push({
+        pathname: '/call/[id]',
+        params: {
+          id: id as string,
+          type: 'voice',
+        },
+      });
     } catch (error) {
-      console.error('Navigation error:', error);
+      logger.error('[ProfessionalProfile] Voice call error:', error);
+    }
+  };
+
+  const handleVideoCall = async () => {
+    // Check balance before making call
+    if (!hasSufficientBalance) {
+      setInsufficientBalanceModalVisible(true);
+      return;
+    }
+
+    try {
+      logger.info('[ProfessionalProfile] Initiating video call', {
+        professionalId: id,
+      });
+
+      // Navigate to call screen first
+      router.push({
+        pathname: '/call/[id]',
+        params: {
+          id: id as string,
+          type: 'video',
+        },
+      });
+    } catch (error) {
+      logger.error('[ProfessionalProfile] Video call error:', error);
+    }
+  };
+
+  const handleUrgentCall = async () => {
+    // Check balance before making call
+    if (!hasSufficientBalance) {
+      setInsufficientBalanceModalVisible(true);
+      return;
+    }
+
+    try {
+      logger.info('[ProfessionalProfile] Initiating urgent call', {
+        professionalId: id,
+      });
+
+      // Navigate to call screen first
+      router.push({
+        pathname: '/call/[id]',
+        params: {
+          id: id as string,
+          type: 'voice',
+          urgent: 'true',
+        },
+      });
+    } catch (error) {
+      logger.error('[ProfessionalProfile] Urgent call error:', error);
     }
   };
 
@@ -1790,7 +1828,7 @@ export default function ProfessionalProfileScreen() {
       <View
         style={[
           styles.callActionsWrapper,
-          { 
+          {
             backgroundColor: theme.colors.background,
             paddingBottom: Math.max(insets.bottom, 8),
           },
@@ -2147,365 +2185,10 @@ export default function ProfessionalProfileScreen() {
                   </Text>
                 </TouchableOpacity>
               </>
-            ) : (
-              // Available değil ve Online değil → Schedule butonu
-              <TouchableOpacity
-                style={[
-                  styles.callTypeButton,
-                  styles.scheduleCallButton,
-                  {
-                    borderColor: theme.colors.primary,
-                    backgroundColor: theme.colors.surface,
-                    flex: 1,
-                  },
-                ]}
-                onPress={handleScheduleCall}
-              >
-                <Calendar size={20} color={theme.colors.primary} />
-                <Text
-                  style={[styles.callTypeText, { color: theme.colors.primary }]}
-                >
-                  Schedule
-                </Text>
-              </TouchableOpacity>
-            )}
+            ) : null}
           </View>
         </View>
       </View>
-
-      {/* Dummy Modals for Voice/Video/Urgent Call */}
-      {voiceModalVisible && (
-        <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1000,
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: theme.colors.card,
-              padding: 24,
-              borderRadius: 16,
-              margin: 20,
-            }}
-          >
-            <Text
-              style={[
-                { fontSize: 18, fontFamily: 'Inter-Bold', marginBottom: 12 },
-                { color: theme.colors.text },
-              ]}
-            >
-              Voice Call
-            </Text>
-            <Text
-              style={[
-                { fontSize: 14, fontFamily: 'Inter-Regular', marginBottom: 20 },
-                { color: theme.colors.textSecondary },
-              ]}
-            >
-              Twilio integration will be implemented here
-            </Text>
-            <TouchableOpacity
-              style={{
-                backgroundColor: theme.colors.primary,
-                padding: 12,
-                borderRadius: 8,
-                alignItems: 'center',
-              }}
-              onPress={() => setVoiceModalVisible(false)}
-            >
-              <Text style={{ color: '#FFFFFF', fontFamily: 'Inter-Medium' }}>
-                Close
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {videoModalVisible && (
-        <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1000,
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: theme.colors.card,
-              padding: 24,
-              borderRadius: 16,
-              margin: 20,
-            }}
-          >
-            <Text
-              style={[
-                { fontSize: 18, fontFamily: 'Inter-Bold', marginBottom: 12 },
-                { color: theme.colors.text },
-              ]}
-            >
-              Video Call
-            </Text>
-            <Text
-              style={[
-                { fontSize: 14, fontFamily: 'Inter-Regular', marginBottom: 20 },
-                { color: theme.colors.textSecondary },
-              ]}
-            >
-              Twilio integration will be implemented here
-            </Text>
-            <TouchableOpacity
-              style={{
-                backgroundColor: theme.colors.primary,
-                padding: 12,
-                borderRadius: 8,
-                alignItems: 'center',
-              }}
-              onPress={() => setVideoModalVisible(false)}
-            >
-              <Text style={{ color: '#FFFFFF', fontFamily: 'Inter-Medium' }}>
-                Close
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {urgentCallModalVisible && (
-        <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1000,
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: theme.colors.card,
-              padding: 24,
-              borderRadius: 16,
-              margin: 20,
-            }}
-          >
-            <Text
-              style={[
-                { fontSize: 18, fontFamily: 'Inter-Bold', marginBottom: 12 },
-                { color: theme.colors.text },
-              ]}
-            >
-              Urgent Call
-            </Text>
-            <Text
-              style={[
-                { fontSize: 14, fontFamily: 'Inter-Regular', marginBottom: 20 },
-                { color: theme.colors.textSecondary },
-              ]}
-            >
-              Professional is online but not in their scheduled availability.
-              Twilio integration will be implemented here.
-            </Text>
-            <TouchableOpacity
-              style={{
-                backgroundColor: '#F59E0B',
-                padding: 12,
-                borderRadius: 8,
-                alignItems: 'center',
-              }}
-              onPress={() => setUrgentCallModalVisible(false)}
-            >
-              <Text style={{ color: '#FFFFFF', fontFamily: 'Inter-Medium' }}>
-                Close
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* Dummy Modals for Voice/Video/Urgent Call */}
-      {voiceModalVisible && (
-        <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1000,
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: theme.colors.card,
-              padding: 24,
-              borderRadius: 16,
-              margin: 20,
-            }}
-          >
-            <Text
-              style={[
-                { fontSize: 18, fontFamily: 'Inter-Bold', marginBottom: 12 },
-                { color: theme.colors.text },
-              ]}
-            >
-              Voice Call
-            </Text>
-            <Text
-              style={[
-                { fontSize: 14, fontFamily: 'Inter-Regular', marginBottom: 20 },
-                { color: theme.colors.textSecondary },
-              ]}
-            >
-              Twilio integration will be implemented here
-            </Text>
-            <TouchableOpacity
-              style={{
-                backgroundColor: theme.colors.primary,
-                padding: 12,
-                borderRadius: 8,
-                alignItems: 'center',
-              }}
-              onPress={() => setVoiceModalVisible(false)}
-            >
-              <Text style={{ color: '#FFFFFF', fontFamily: 'Inter-Medium' }}>
-                Close
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {videoModalVisible && (
-        <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1000,
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: theme.colors.card,
-              padding: 24,
-              borderRadius: 16,
-              margin: 20,
-            }}
-          >
-            <Text
-              style={[
-                { fontSize: 18, fontFamily: 'Inter-Bold', marginBottom: 12 },
-                { color: theme.colors.text },
-              ]}
-            >
-              Video Call
-            </Text>
-            <Text
-              style={[
-                { fontSize: 14, fontFamily: 'Inter-Regular', marginBottom: 20 },
-                { color: theme.colors.textSecondary },
-              ]}
-            >
-              Twilio integration will be implemented here
-            </Text>
-            <TouchableOpacity
-              style={{
-                backgroundColor: theme.colors.primary,
-                padding: 12,
-                borderRadius: 8,
-                alignItems: 'center',
-              }}
-              onPress={() => setVideoModalVisible(false)}
-            >
-              <Text style={{ color: '#FFFFFF', fontFamily: 'Inter-Medium' }}>
-                Close
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {urgentCallModalVisible && (
-        <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1000,
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: theme.colors.card,
-              padding: 24,
-              borderRadius: 16,
-              margin: 20,
-            }}
-          >
-            <Text
-              style={[
-                { fontSize: 18, fontFamily: 'Inter-Bold', marginBottom: 12 },
-                { color: theme.colors.text },
-              ]}
-            >
-              Urgent Call
-            </Text>
-            <Text
-              style={[
-                { fontSize: 14, fontFamily: 'Inter-Regular', marginBottom: 20 },
-                { color: theme.colors.textSecondary },
-              ]}
-            >
-              Professional is online but not in their scheduled availability.
-              Twilio integration will be implemented here.
-            </Text>
-            <TouchableOpacity
-              style={{
-                backgroundColor: '#F59E0B',
-                padding: 12,
-                borderRadius: 8,
-                alignItems: 'center',
-              }}
-              onPress={() => setUrgentCallModalVisible(false)}
-            >
-              <Text style={{ color: '#FFFFFF', fontFamily: 'Inter-Medium' }}>
-                Close
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
 
       <ShareProfileModal
         visible={shareModalVisible}
@@ -2566,7 +2249,10 @@ export default function ProfessionalProfileScreen() {
             </View>
 
             <Text
-              style={[styles.insufficientBalanceModalTitle, { color: theme.colors.text }]}
+              style={[
+                styles.insufficientBalanceModalTitle,
+                { color: theme.colors.text },
+              ]}
             >
               Insufficient Balance
             </Text>
@@ -2597,7 +2283,10 @@ export default function ProfessionalProfileScreen() {
                   Current Balance:
                 </Text>
                 <Text
-                  style={[styles.balanceInfoValue, { color: theme.colors.text }]}
+                  style={[
+                    styles.balanceInfoValue,
+                    { color: theme.colors.text },
+                  ]}
                 >
                   ${walletBalance.toFixed(2)}
                 </Text>

@@ -25,6 +25,7 @@ import * as Sentry from '@sentry/react-native';
 import { SentryAdapter } from '../lib/sentryAdapter';
 import { notificationsService } from '../services';
 import { twilioVoiceService } from '../services/twilioVoice.service';
+import { IncomingCallHandler } from '../components/call/Incomingcallhandler';
 import { Platform } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { OfflineBanner } from '../components/ui/OfflineBanner';
@@ -310,6 +311,8 @@ export default function RootLayout() {
               <StatusBar style="auto" translucent={false} />
               <OfflineBanner />
               <ToastStack />
+              {/* Incoming Call Handler - Shows modal when receiving calls */}
+              <IncomingCallHandler />
             </AutoAvailabilityWrapper>
           </TwilioVoiceInitializer>
         </ThemeProvider>

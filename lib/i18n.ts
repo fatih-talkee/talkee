@@ -32,7 +32,6 @@ async function detect(): Promise<string> {
   try {
     const saved = await getItem<string>('lang');
     if (saved) {
-      console.log('[i18n] Using saved language:', saved);
       return saved;
     }
 
@@ -43,12 +42,6 @@ async function detect(): Promise<string> {
       const normalized = aliases[base] || base;
       const supported = Object.keys(resources);
       const detected = supported.includes(normalized) ? normalized : fallback;
-      console.log(
-        '[i18n] Detected device language:',
-        detected,
-        'from tag:',
-        deviceTag
-      );
       return detected;
     } catch (error) {
       console.warn(
@@ -67,14 +60,11 @@ let initialized = false;
 
 export async function initI18n(): Promise<void> {
   if (initialized) {
-    console.log('[i18n] Already initialized, skipping');
     return;
   }
 
   try {
-    console.log('[i18n] Starting initialization...');
     const lng = await detect();
-    console.log('[i18n] Detected language:', lng);
 
     await i18n.use(initReactI18next).init({
       resources,
@@ -86,8 +76,6 @@ export async function initI18n(): Promise<void> {
       // Use v3 compatibility format to avoid Intl.PluralRules requirement
       compatibilityJSON: 'v3',
     });
-
-    console.log('[i18n] Initialization complete');
     initialized = true;
   } catch (error) {
     console.error('[i18n] Initialization error:', error);

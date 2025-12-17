@@ -1,6 +1,6 @@
 import { Voice, Call, CallInvite } from '@twilio/voice-react-native-sdk';
 import { supabase } from '@/lib/supabase';
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 import { Platform } from 'react-native';
 
 export type CallStatus =
@@ -74,6 +74,12 @@ class TwilioVoiceService {
 
       this.accessToken = data.token;
       logger.info('[TwilioVoice] Token received successfully');
+
+      // Debug: Log token details
+      console.log('[DEBUG] Token length:', data.token.length);
+      console.log('[DEBUG] Full Token:', data.token);
+      console.log('[DEBUG] Identity:', data.identity);
+      console.log('[DEBUG] Expires:', data.expiresAt);
 
       return data.token;
     } catch (error) {
@@ -225,7 +231,7 @@ class TwilioVoiceService {
       await this.activeCall.mute(newMuteState);
 
       this.updateState({ isMuted: newMuteState });
-      logger.info('[TwilioVoice] Mute toggled:', newMuteState);
+      logger.info('[TwilioVoice] Mute toggled', { isMuted: newMuteState });
 
       return newMuteState;
     } catch (error) {
@@ -249,7 +255,7 @@ class TwilioVoiceService {
       await this.activeCall.hold(newHoldState);
 
       this.updateState({ isOnHold: newHoldState });
-      logger.info('[TwilioVoice] Hold toggled:', newHoldState);
+      logger.info('[TwilioVoice] Hold toggled', { isOnHold: newHoldState });
 
       return newHoldState;
     } catch (error) {
@@ -268,7 +274,7 @@ class TwilioVoiceService {
       }
 
       await this.activeCall.sendDigits(digits);
-      logger.info('[TwilioVoice] Sent digits:', digits);
+      logger.info('[TwilioVoice] Sent digits', { digits });
     } catch (error) {
       logger.error('[TwilioVoice] Send digits error:', error);
       throw error;
@@ -315,7 +321,9 @@ class TwilioVoiceService {
 
     // Incoming call
     this.voice.on(Voice.Event.CallInvite, (callInvite: CallInvite) => {
-      logger.info('[TwilioVoice] Incoming call:', callInvite.getCallSid());
+      logger.info('[TwilioVoice] Incoming call', {
+        callSid: callInvite.getCallSid(),
+      });
 
       this.updateState({
         status: 'ringing',
@@ -366,7 +374,7 @@ class TwilioVoiceService {
 
     // Call connecting
     call.on(Call.Event.Reconnecting, () => {
-      logger.info('[TwilioVoice] Call reconnecting...');
+      logger.info('[TwilioVoice] Call connecting...');
       this.updateState({ status: 'connecting' });
     });
 

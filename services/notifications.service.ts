@@ -49,13 +49,10 @@ class NotificationsService {
       // Get Expo push token with project ID
       // Project ID is required for Expo Push API to work correctly
       const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-      const tokenOptions = projectId
-        ? { projectId }
-        : undefined;
-      
-      const token = (
-        await Notifications.getExpoPushTokenAsync(tokenOptions)
-      ).data;
+      const tokenOptions = projectId ? { projectId } : undefined;
+
+      const token = (await Notifications.getExpoPushTokenAsync(tokenOptions))
+        .data;
       this.expoPushToken = token;
 
       // Configure notification behavior
@@ -650,6 +647,43 @@ class NotificationsService {
   }
 
   /**
+   * Listen for notifications received while app is in foreground
+   * Returns unsubscribe function
+   */
+  onNotificationReceived(
+    callback: (notification: {
+      title: string;
+      body: string;
+      data?: Record<string, any>;
+    }) => void
+  ): () => void {
+    if (Platform.OS === 'web') {
+      return () => {};
+    }
+
+    const subscription = Notifications.addNotificationReceivedListener(
+      (notification) => {
+        const { title, body, data } = notification.request.content;
+
+        logger.info('[NotificationService] Notification received', {
+          title,
+          type: data?.type,
+        });
+
+        callback({
+          title: title || '',
+          body: body || '',
+          data: data as Record<string, any>,
+        });
+      }
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }
+
+  /**
    * Create notification (typically called by backend/system)
    */
   async createNotification(
@@ -878,11 +912,11 @@ class NotificationsService {
       // Since our current send-push function handles one user_id at a time,
       // we'll iterate and send individual requests for now.
       // Ideally, the Edge Function should be updated to accept an array of user_ids for better performance.
-      
-      const promises = userIds.map(userId => 
+
+      const promises = userIds.map((userId) =>
         this.sendPushNotification(userId, title, body, data)
       );
-      
+
       await Promise.allSettled(promises);
       return true;
     } catch (error) {

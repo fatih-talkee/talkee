@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
   Platform,
+  Alert,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
@@ -20,40 +21,123 @@ import {
   MoveVertical as MoreVertical,
   Minimize2,
 } from 'lucide-react-native';
-import { mockProfessionals } from '@/mockData/professionals';
 import { LinearGradient } from 'expo-linear-gradient';
+import { logger } from '@/lib/logger';
+
+// ✅ TWILIO IMPORTS
+import { useTwilioVoice } from '@/hooks/useTwilioVoice';
+import { useProfessional } from '@/hooks/useProfessionals';
+import { useProfile } from '@/hooks/useProfile';
 
 export default function CallScreen() {
-  const { id, type } = useLocalSearchParams();
-  const professional = mockProfessionals.find((p) => p.id === id);
-  const [isConnected, setIsConnected] = useState(false);
+  const { id, type, urgent } = useLocalSearchParams();
+  const { user } = useProfile();
+
+  // ✅ FETCH PROFESSIONAL DATA (real, not mock)
+  const { data: professionalData, isLoading: professionalLoading } =
+    useProfessional(id as string);
+  const professional = professionalData || null;
+
+  // ✅ TWILIO VOICE HOOK
+  const {
+    isInitialized,
+    isConnecting,
+    isConnected,
+    isMuted,
+    callSid,
+    error: twilioError,
+    makeCall,
+    disconnect,
+    toggleMute,
+  } = useTwilioVoice();
+
+  // ✅ LOCAL STATE
   const [duration, setDuration] = useState(0);
-  const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [callInitiated, setCallInitiated] = useState(false);
   const [costPerSecond] = useState(
-    professional ? professional.ratePerMinute / 60 : 0
+    professional ? Number(professional.rate_per_minute) / 60 : 0
   );
 
+  // ✅ INITIATE CALL ON MOUNT
   useEffect(() => {
-    // Simulate call connection
-    const connectTimer = setTimeout(() => {
-      setIsConnected(true);
-    }, 3000);
+    if (!callInitiated && professional && user && isInitialized) {
+      initiateCall();
+    }
+  }, [callInitiated, professional, user, isInitialized]);
 
-    return () => clearTimeout(connectTimer);
-  }, []);
-
+  // ✅ DURATION TIMER (only when connected)
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     if (isConnected) {
       interval = setInterval(() => {
         setDuration((prev) => prev + 1);
       }, 1000);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [isConnected]);
 
+  // ✅ HANDLE TWILIO ERRORS
+  useEffect(() => {
+    if (twilioError) {
+      logger.error('[CallScreen] Twilio error:', twilioError);
+      Alert.alert(
+        'Call Error',
+        twilioError.message || 'Failed to connect call',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.back(),
+          },
+        ]
+      );
+    }
+  }, [twilioError]);
+
+  // ✅ INITIATE CALL FUNCTION
+  const initiateCall = async () => {
+    if (!professional || !user) {
+      logger.error('[CallScreen] Missing professional or user data');
+      return;
+    }
+
+    try {
+      setCallInitiated(true);
+
+      logger.info('[CallScreen] Initiating call', {
+        professionalId: professional.id,
+        professionalUserId: professional.user_id,
+        callType: type,
+        urgent: urgent === 'true',
+      });
+
+      // Call Twilio makeCall
+      await makeCall(
+        professional.user_id, // To (professional's user_id)
+        type as 'voice' | 'video',
+        urgent === 'true'
+      );
+
+      logger.info('[CallScreen] Call initiated successfully');
+    } catch (error) {
+      logger.error('[CallScreen] Failed to initiate call:', error);
+      Alert.alert(
+        'Call Failed',
+        'Could not start the call. Please try again.',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.back(),
+          },
+        ]
+      );
+    }
+  };
+
+  // ✅ FORMAT DURATION
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -62,28 +146,53 @@ export default function CallScreen() {
       .padStart(2, '0')}`;
   };
 
+  // ✅ CALCULATE CURRENT COST
   const currentCost = duration * costPerSecond;
 
-  const handleEndCall = () => {
-    if (!professional?.id) {
-      console.error('Professional ID is missing');
-      return;
-    }
+  // ✅ HANDLE END CALL
+  const handleEndCall = async () => {
     try {
-      router.replace(`/call-review/${professional.id}`);
+      logger.info('[CallScreen] Ending call');
+
+      // Disconnect Twilio call
+      await disconnect();
+
+      // Go back to previous screen
+      router.back();
     } catch (error) {
-      console.error('Navigation error:', error);
+      logger.error('[CallScreen] Error ending call:', error);
+      // Go back anyway
+      router.back();
     }
   };
 
-  if (!professional) {
+  // ✅ HANDLE MUTE TOGGLE
+  const handleMuteToggle = () => {
+    try {
+      toggleMute();
+      logger.info('[CallScreen] Mute toggled', { muted: !isMuted });
+    } catch (error) {
+      logger.error('[CallScreen] Error toggling mute:', error);
+    }
+  };
+
+  // ✅ LOADING STATE
+  if (professionalLoading || !professional) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text>Professional not found</Text>
+        <LinearGradient
+          colors={['#1f2937', '#374151']}
+          style={styles.background}
+        >
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
+        </LinearGradient>
       </SafeAreaView>
     );
   }
 
+  // ✅ MINIMIZED VIEW
   if (isMinimized) {
     return (
       <View style={styles.minimizedCall}>
@@ -92,11 +201,13 @@ export default function CallScreen() {
           onPress={() => setIsMinimized(false)}
         >
           <Image
-            source={{ uri: professional.avatar }}
+            source={{ uri: professional.users?.avatar_url || '' }}
             style={styles.minimizedAvatar}
           />
           <View style={styles.minimizedInfo}>
-            <Text style={styles.minimizedName}>{professional.name}</Text>
+            <Text style={styles.minimizedName}>
+              {professional.users?.name || 'Unknown'}
+            </Text>
             <Text style={styles.minimizedDuration}>
               {formatDuration(duration)}
             </Text>
@@ -112,6 +223,7 @@ export default function CallScreen() {
     );
   }
 
+  // ✅ MAIN CALL SCREEN
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient colors={['#1f2937', '#374151']} style={styles.background}>
@@ -125,10 +237,15 @@ export default function CallScreen() {
           </TouchableOpacity>
           <View style={styles.callInfo}>
             <Text style={styles.callStatus}>
-              {!isConnected ? 'Connecting...' : 'Connected'}
+              {isConnecting
+                ? 'Connecting...'
+                : isConnected
+                ? 'Connected'
+                : 'Initiating...'}
             </Text>
             <Text style={styles.callType}>
               {type === 'video' ? 'Video Call' : 'Voice Call'}
+              {urgent === 'true' && ' (Urgent)'}
             </Text>
           </View>
           <TouchableOpacity style={styles.moreButton}>
@@ -140,11 +257,15 @@ export default function CallScreen() {
         <View style={styles.professionalInfo}>
           <View style={styles.professionalCard}>
             <Image
-              source={{ uri: professional.avatar }}
+              source={{ uri: professional.users?.avatar_url || '' }}
               style={styles.professionalAvatar}
             />
-            <Text style={styles.professionalName}>{professional.name}</Text>
-            <Text style={styles.professionalTitle}>{professional.title}</Text>
+            <Text style={styles.professionalName}>
+              {professional.users?.name || 'Unknown Professional'}
+            </Text>
+            <Text style={styles.professionalTitle}>
+              {professional.title || professional.profession || 'Professional'}
+            </Text>
           </View>
         </View>
 
@@ -163,7 +284,7 @@ export default function CallScreen() {
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Rate</Text>
             <Text style={styles.statValue}>
-              {'$' + professional.ratePerMinute.toFixed(2)}/min
+              {'$' + Number(professional.rate_per_minute || 0).toFixed(2)}/min
             </Text>
           </View>
         </View>
@@ -186,7 +307,8 @@ export default function CallScreen() {
               styles.controlButton,
               isMuted && styles.controlButtonActive,
             ]}
-            onPress={() => setIsMuted(!isMuted)}
+            onPress={handleMuteToggle}
+            disabled={!isConnected}
           >
             {isMuted ? (
               <MicOff size={24} color="#ffffff" />
@@ -202,6 +324,7 @@ export default function CallScreen() {
                 isVideoOff && styles.controlButtonActive,
               ]}
               onPress={() => setIsVideoOff(!isVideoOff)}
+              disabled={!isConnected}
             >
               {isVideoOff ? (
                 <VideoOff size={24} color="#ffffff" />
@@ -211,7 +334,10 @@ export default function CallScreen() {
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity style={styles.controlButton}>
+          <TouchableOpacity
+            style={styles.controlButton}
+            disabled={!isConnected}
+          >
             <MessageCircle size={24} color="#ffffff" />
           </TouchableOpacity>
 
@@ -222,6 +348,13 @@ export default function CallScreen() {
             <PhoneOff size={24} color="#ffffff" />
           </TouchableOpacity>
         </View>
+
+        {/* Call SID Debug Info (remove in production) */}
+        {__DEV__ && callSid && (
+          <View style={styles.debugInfo}>
+            <Text style={styles.debugText}>Call SID: {callSid}</Text>
+          </View>
+        )}
       </LinearGradient>
     </SafeAreaView>
   );
@@ -233,6 +366,16 @@ const styles = StyleSheet.create({
   },
   background: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#ffffff',
   },
   header: {
     flexDirection: 'row',
@@ -427,5 +570,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#ef4444',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  debugInfo: {
+    position: 'absolute',
+    bottom: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: 10,
+    borderRadius: 8,
+  },
+  debugText: {
+    fontSize: 10,
+    fontFamily: 'Inter-Regular',
+    color: '#ffffff',
   },
 });
