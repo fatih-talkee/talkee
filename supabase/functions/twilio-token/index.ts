@@ -68,15 +68,27 @@ serve(async (req) => {
 
     const identity = profile.id;
     console.log('✅ [twilio-token] User identity:', identity);
+    console.log('🔑 [twilio-token] API Key:', TWILIO_API_KEY);
+    console.log('🔑 [twilio-token] Account SID:', TWILIO_ACCOUNT_SID);
+    console.log('🔑 [twilio-token] TwiML App SID:', TWILIO_TWIML_APP_SID);
 
     // Create JWT token for Twilio using jose (Deno-compatible)
     const now = Math.floor(Date.now() / 1000);
     const exp = now + 3600; // 1 hour expiry
 
-    const payload = {
-      jti: `${TWILIO_API_KEY}-${now}`,
+    // Encode secret as Uint8Array
+    const secret = new TextEncoder().encode(TWILIO_API_SECRET);
+
+    const jti = `${TWILIO_API_KEY}-${now}`;
+    console.log('🆔 [twilio-token] JTI:', jti);
+    console.log('⏰ [twilio-token] Now:', now, 'Exp:', exp);
+
+    // Create JWT with jose - include all claims in payload
+    const token = await new SignJWT({
+      jti,
       iss: TWILIO_API_KEY,
       sub: TWILIO_ACCOUNT_SID,
+      iat: now,
       exp,
       grants: {
         identity,
@@ -89,26 +101,20 @@ serve(async (req) => {
           },
         },
       },
-    };
-
-    // Encode secret as Uint8Array
-    const secret = new TextEncoder().encode(TWILIO_API_SECRET);
-
-    // Create JWT with jose
-    const token = await new SignJWT(payload)
+    })
       .setProtectedHeader({
         alg: 'HS256',
         typ: 'JWT',
         cty: 'twilio-fpa;v=1',
       })
-      .setIssuedAt(now)
-      .setExpirationTime(exp)
-      .setJti(`${TWILIO_API_KEY}-${now}`)
-      .setIssuer(TWILIO_API_KEY)
-      .setSubject(TWILIO_ACCOUNT_SID)
       .sign(secret);
 
     console.log('✅ [twilio-token] Token generated successfully');
+    console.log('📝 [twilio-token] Token length:', token.length);
+    console.log(
+      '📝 [twilio-token] Token preview:',
+      token.substring(0, 50) + '...'
+    );
 
     return new Response(
       JSON.stringify({
