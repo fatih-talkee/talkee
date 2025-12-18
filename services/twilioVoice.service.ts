@@ -215,6 +215,48 @@ class TwilioVoiceService {
         },
       });
 
+      // Persist Twilio CallSid on our DB call row so webhooks can correlate even when CallId isn't included.
+      try {
+        const anyCall = call as any;
+        const callSid =
+          anyCall?.callSid ??
+          anyCall?.sid ??
+          (typeof anyCall?.getSid === 'function'
+            ? anyCall.getSid()
+            : undefined);
+
+        if (callSid) {
+          const { error: sidErr } = await supabase
+            .from('calls')
+            .update({ call_sid: callSid })
+            .eq('id', callRecord.id);
+
+          if (sidErr) {
+            logger.warn('[TwilioVoice] Failed saving call_sid on call record', {
+              debugId: params.debugId,
+              callId: callRecord.id,
+              callSid,
+              message: sidErr.message,
+              details: (sidErr as any).details,
+              hint: (sidErr as any).hint,
+              code: (sidErr as any).code,
+            });
+          } else {
+            logger.info('[TwilioVoice] Saved call_sid on call record', {
+              debugId: params.debugId,
+              callId: callRecord.id,
+              callSid,
+            });
+          }
+        }
+      } catch (e) {
+        logger.warn('[TwilioVoice] call_sid persist failed (non-fatal)', {
+          debugId: params.debugId,
+          callId: callRecord.id,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+
       this.activeCall = call;
       this.setupCallListeners(call, callRecord.id, params.debugId);
 
@@ -339,6 +381,52 @@ class TwilioVoiceService {
 
     // Twilio SDK: accept() returns an active Call
     const call = await (callInvite as any).accept();
+
+    // Persist invite CallSid on our DB call row so webhooks can correlate.
+    if (params?.callId) {
+      try {
+        const inviteSid = callInvite.getCallSid?.();
+        if (inviteSid) {
+          const { error: sidErr } = await supabase
+            .from('calls')
+            .update({ call_sid: inviteSid })
+            .eq('id', params.callId);
+
+          if (sidErr) {
+            logger.warn(
+              '[TwilioVoice] Failed saving call_sid on incoming call accept',
+              {
+                debugId: params.debugId,
+                callId: params.callId,
+                callSid: inviteSid,
+                message: sidErr.message,
+                details: (sidErr as any).details,
+                hint: (sidErr as any).hint,
+                code: (sidErr as any).code,
+              }
+            );
+          } else {
+            logger.info(
+              '[TwilioVoice] Saved call_sid on incoming call accept',
+              {
+                debugId: params.debugId,
+                callId: params.callId,
+                callSid: inviteSid,
+              }
+            );
+          }
+        }
+      } catch (e) {
+        logger.warn(
+          '[TwilioVoice] call_sid persist failed on incoming accept (non-fatal)',
+          {
+            debugId: params?.debugId,
+            callId: params?.callId,
+            error: e instanceof Error ? e.message : String(e),
+          }
+        );
+      }
+    }
 
     this.activeCall = call;
     this.updateState({

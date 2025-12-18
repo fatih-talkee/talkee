@@ -67,6 +67,8 @@ serve(async (req: Request) => {
     const professionalNameFromClient: string | undefined =
       body.professional_name;
     const actionUrl: string | undefined = body.action_url;
+    const eventType: 'created' | 'updated' =
+      body.event_type === 'updated' ? 'updated' : 'created';
 
     if (!professionalId || !feedId) {
       return new Response(
@@ -154,12 +156,18 @@ serve(async (req: Request) => {
       }
     }
 
-    const title = `New Post${
-      professionalName ? ` from ${professionalName}` : ''
-    }`;
-    const messageBody = professionalName
-      ? `${professionalName} just shared a new update. Check it out!`
-      : `A professional you follow just shared a new update. Check it out!`;
+    const title =
+      eventType === 'updated'
+        ? `Updated Post${professionalName ? ` from ${professionalName}` : ''}`
+        : `New Post${professionalName ? ` from ${professionalName}` : ''}`;
+    const messageBody =
+      eventType === 'updated'
+        ? professionalName
+          ? `${professionalName} updated their post. Check it out!`
+          : `A professional you follow updated their post. Check it out!`
+        : professionalName
+        ? `${professionalName} just shared a new update. Check it out!`
+        : `A professional you follow just shared a new update. Check it out!`;
 
     // 2) Get followers (favorites)
     const { data: favorites, error: favErr } = await supabase
@@ -251,6 +259,7 @@ serve(async (req: Request) => {
       type: 'feed_post',
       professional_id: professionalId,
       feed_id: feedId,
+      event_type: eventType,
       action_url:
         actionUrl ??
         `talkee://professional/${professionalId}?tab=feed&feed_id=${feedId}`,

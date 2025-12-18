@@ -75,7 +75,8 @@ class ProfessionalFeedsService {
       void this.notifyFollowers(
         professionalId,
         feedWithDetails.professional_name,
-        feedWithDetails.id
+        feedWithDetails.id,
+        'created'
       );
 
       return { success: true, feed: feedWithDetails };
@@ -91,7 +92,8 @@ class ProfessionalFeedsService {
   private async notifyFollowers(
     professionalId: string,
     professionalName: string,
-    feedId: string
+    feedId: string,
+    eventType: 'created' | 'updated'
   ) {
     try {
       // IMPORTANT: Favorites table is typically protected by RLS (users can only read their own favorites).
@@ -103,6 +105,7 @@ class ProfessionalFeedsService {
             professional_id: professionalId,
             professional_name: professionalName,
             feed_id: feedId,
+            event_type: eventType,
             // Open professional profile directly, on Feed tab
             action_url: `talkee://professional/${professionalId}?tab=feed&feed_id=${feedId}`,
           },
@@ -328,6 +331,16 @@ class ProfessionalFeedsService {
         category_name: feed.professional.category?.name || '',
         category_emoji: feed.professional.category?.emoji || null,
       };
+
+      // Notify followers on actual content changes (not pin/unpin toggles).
+      if (data.content || data.is_active !== undefined) {
+        void this.notifyFollowers(
+          (feed as any).professional_id,
+          feedWithDetails.professional_name,
+          feedWithDetails.id,
+          'updated'
+        );
+      }
 
       return { success: true, feed: feedWithDetails };
     } catch (error: any) {

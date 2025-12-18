@@ -10,6 +10,7 @@ const corsHeaders = {
 function extractUserIdFromTwilioAddress(value?: string | null): string | null {
   if (!value) return null;
   const s = value.trim();
+  if (!s) return null;
   if (s.startsWith('client:')) return s.slice('client:'.length);
   // Some setups may send the identity directly
   if (
@@ -18,6 +19,20 @@ function extractUserIdFromTwilioAddress(value?: string | null): string | null {
     return s;
   }
   return null;
+}
+
+function resolveCalleeUserIdFromWebhookPayload(
+  data: Record<string, string>
+): string | null {
+  // Twilio status callbacks can provide the dialed party under different fields depending on configuration.
+  // We prefer `To`, but fall back to `Called` (often present) and a couple other variants.
+  return (
+    extractUserIdFromTwilioAddress(data.To) ||
+    extractUserIdFromTwilioAddress((data as any).Called) ||
+    extractUserIdFromTwilioAddress((data as any).ToFormatted) ||
+    extractUserIdFromTwilioAddress((data as any).CalledVia) ||
+    null
+  );
 }
 
 async function sendPush(
@@ -91,6 +106,8 @@ serve(async (req: Request) => {
       CallStatus: data.CallStatus,
       From: data.From,
       To: data.To,
+      Called: (data as any).Called,
+      CalledVia: (data as any).CalledVia,
       Duration: data.CallDuration,
     });
 
@@ -101,9 +118,88 @@ serve(async (req: Request) => {
     );
 
     const callSid = data.CallSid;
-    const callId = data.CallId || data.CallID || data.call_id;
+    let callId: string | undefined = data.CallId || data.CallID || data.call_id;
     const status = mapTwilioStatus(data.CallStatus);
     const duration = data.CallDuration ? parseInt(data.CallDuration) : 0;
+
+    // If the Twilio callback doesn't include our internal CallId, try to resolve it.
+    // Some configurations don't forward custom params to status callbacks.
+    if (!callId) {
+      // First, try to resolve via call_sid (CallSid is always provided by Twilio).
+      // Our mobile app persists call_sid on the calls row after connect/accept.
+      if (callSid) {
+        const { data: bySid, error: bySidErr } = await supabase
+          .from('calls')
+          .select('id')
+          .eq('call_sid', callSid)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (bySidErr) {
+          console.warn(
+            '⚠️ [twilio-webhook] Failed resolving CallId from call_sid',
+            {
+              CallSid: callSid,
+              message: bySidErr.message,
+            }
+          );
+        } else if (bySid?.id) {
+          callId = bySid.id;
+          console.log(
+            'ℹ️ [twilio-webhook] Resolved CallId from call_sid (fallback)',
+            {
+              CallSid: callSid,
+              CallId: callId,
+            }
+          );
+        }
+      }
+
+      if (callId) {
+        // resolved already
+      } else {
+        const callerUserId =
+          extractUserIdFromTwilioAddress(data.From) ||
+          extractUserIdFromTwilioAddress((data as any).Caller) ||
+          extractUserIdFromTwilioAddress((data as any).FromFormatted) ||
+          null;
+
+        if (callerUserId) {
+          const sinceIso = new Date(Date.now() - 30 * 60_000).toISOString();
+          const { data: recentCall, error: recentErr } = await supabase
+            .from('calls')
+            .select('id')
+            .eq('caller_id', callerUserId)
+            .in('status', ['pending', 'active'])
+            .gte('created_at', sinceIso)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (recentErr) {
+            console.warn(
+              '⚠️ [twilio-webhook] Failed resolving CallId from caller',
+              {
+                CallSid: callSid,
+                callerUserId,
+                message: recentErr.message,
+              }
+            );
+          } else if (recentCall?.id) {
+            callId = recentCall.id;
+            console.log(
+              'ℹ️ [twilio-webhook] Resolved CallId from caller (fallback)',
+              {
+                CallSid: callSid,
+                CallId: callId,
+                callerUserId,
+              }
+            );
+          }
+        }
+      }
+    }
 
     // Map Twilio status -> DB + push semantics
     const isEnded = [
@@ -146,7 +242,7 @@ serve(async (req: Request) => {
 
       // Fallback: parse from Twilio To/From (usually "client:<identity>")
       if (!calleeUserId) {
-        calleeUserId = extractUserIdFromTwilioAddress(data.To);
+        calleeUserId = resolveCalleeUserIdFromWebhookPayload(data);
       }
 
       if (calleeUserId) {
@@ -253,7 +349,15 @@ serve(async (req: Request) => {
         }
       }
     } else {
-      console.log('ℹ️ [twilio-webhook] No CallId provided; skipping DB update');
+      console.log(
+        'ℹ️ [twilio-webhook] No CallId provided; skipping DB update',
+        {
+          CallSid: callSid,
+          From: data.From,
+          To: data.To,
+          Called: (data as any).Called,
+        }
+      );
     }
 
     // Handle billing for completed calls
