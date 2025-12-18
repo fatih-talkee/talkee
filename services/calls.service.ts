@@ -31,6 +31,81 @@ export interface ProfessionalEarnings {
 }
 
 class CallsService {
+  private lastPendingCleanupAt: number | null = null;
+
+  /**
+   * Best-effort cleanup for calls stuck in "pending".
+   *
+   * Pending means: call record created, but never transitioned to active/completed/missed/cancelled.
+   * This can happen if the app/background callbacks/webhooks didn't run.
+   *
+   * We auto-cancel stale pending calls to keep call history sane.
+   */
+  async cleanupStalePendingCalls(
+    olderThanMinutes: number = 5
+  ): Promise<{ updated: number }> {
+    try {
+      const now = Date.now();
+
+      // Avoid hammering the DB on repeated history fetches.
+      if (
+        this.lastPendingCleanupAt &&
+        now - this.lastPendingCleanupAt < 60_000
+      ) {
+        return { updated: 0 };
+      }
+      this.lastPendingCleanupAt = now;
+
+      const currentUser = await usersService.getCurrentUser();
+      if (!currentUser) return { updated: 0 };
+
+      const cutoffIso = new Date(now - olderThanMinutes * 60_000).toISOString();
+      const endedAt = new Date().toISOString();
+
+      const { data, error } = await supabase
+        .from('calls')
+        .update({
+          status: CallStatus.CANCELLED as CallStatus,
+          end_time: endedAt,
+          cancelled_by: currentUser.id,
+          updated_at: endedAt,
+        })
+        .eq('caller_id', currentUser.id)
+        .eq('status', CallStatus.PENDING as CallStatus)
+        .is('end_time', null)
+        .lt('created_at', cutoffIso)
+        .select('id');
+
+      if (error) {
+        console.warn(
+          '⚠️ [callsService] Failed to cleanup stale pending calls',
+          {
+            message: error.message,
+            details: (error as any).details,
+            hint: (error as any).hint,
+            code: (error as any).code,
+          }
+        );
+        return { updated: 0 };
+      }
+
+      const updated = (data || []).length;
+      if (updated > 0) {
+        console.log('🧹 [callsService] Cleaned up stale pending calls', {
+          updated,
+          olderThanMinutes,
+        });
+      }
+
+      return { updated };
+    } catch (error) {
+      console.warn('⚠️ [callsService] cleanupStalePendingCalls threw', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return { updated: 0 };
+    }
+  }
+
   /**
    * Initiate a new call
    */
@@ -94,7 +169,9 @@ class CallsService {
             id,
             user_id,
             rate_per_minute,
-            users!inner(id, name, avatar_url),
+            is_active,
+            is_available,
+            users!inner(id, name, avatar_url, is_verified),
             categories!inner(id, name, icon_name)
           )
         `
@@ -107,19 +184,35 @@ class CallsService {
       }
 
       // Send push notification to professional
-      // We don't await this so it doesn't block the UI
-      notificationsService.sendPushNotification(
-        professional.user_id,
-        'Incoming Call',
-        `${currentUser.name || 'Someone'} is calling you...`,
-        {
-          type: 'call_request',
-          call_id: data.id,
-          caller_id: currentUser.id,
-          caller_name: currentUser.name,
-          call_type: callType,
+      // Don't block the UI, but log success/failure so we can debug "callee didn't get push".
+      void (async () => {
+        try {
+          const ok = await notificationsService.sendPushNotification(
+            professional.user_id,
+            'Incoming Call',
+            `${currentUser.name || 'Someone'} is calling you...`,
+            {
+              type: 'call_request',
+              call_id: data.id,
+              caller_id: currentUser.id,
+              caller_name: currentUser.name,
+              call_type: callType,
+              // Helps deep-link routing when the notification is tapped (background/killed app).
+              action_url: `talkee://call/${data.id}?incoming=true&type=${callType}`,
+            }
+          );
+          console.log('📲 [callsService] call_request push send result:', {
+            ok,
+            callId: data.id,
+            professionalUserId: professional.user_id,
+          });
+        } catch (err) {
+          console.error(
+            '❌ [callsService] Error sending call_request push:',
+            err
+          );
         }
-      ).catch(err => console.error('Error sending call notification:', err));
+      })();
 
       return data as CallWithRelations;
     } catch (error) {
@@ -154,6 +247,8 @@ class CallsService {
             id,
             user_id,
             rate_per_minute,
+            is_active,
+            is_available,
             users!inner(id, name, avatar_url, is_verified),
             categories!inner(id, name, icon_name)
           )
@@ -209,6 +304,8 @@ class CallsService {
             id,
             user_id,
             rate_per_minute,
+            is_active,
+            is_available,
             users!inner(id, name, avatar_url, is_verified),
             categories!inner(id, name, icon_name)
           )

@@ -15,6 +15,8 @@
 		B887FE83CCEA84DED9199EAA /* Pods_Talkee.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 65A29567D58669EE9E784465 /* Pods_Talkee.framework */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
+		F11748AC2D1B6C3B0044C1D9 /* TalkeeAudioRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748AA2D1B6C3B0044C1D9 /* TalkeeAudioRoute.swift */; };
+		F11748AD2D1B6C3B0044C1D9 /* TalkeeAudioRoute.m in Sources */ = {isa = PBXBuildFile; fileRef = F11748AB2D1B6C3B0044C1D9 /* TalkeeAudioRoute.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +34,8 @@
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Talkee/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Talkee-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Talkee-Bridging-Header.h"; path = "Talkee/Talkee-Bridging-Header.h"; sourceTree = "<group>"; };
+		F11748AA2D1B6C3B0044C1D9 /* TalkeeAudioRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TalkeeAudioRoute.swift; path = Talkee/TalkeeAudioRoute.swift; sourceTree = "<group>"; };
+		F11748AB2D1B6C3B0044C1D9 /* TalkeeAudioRoute.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = TalkeeAudioRoute.m; path = Talkee/TalkeeAudioRoute.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -50,6 +54,8 @@
 			isa = PBXGroup;
 			children = (
 				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
+				F11748AA2D1B6C3B0044C1D9 /* TalkeeAudioRoute.swift */,
+				F11748AB2D1B6C3B0044C1D9 /* TalkeeAudioRoute.m */,
 				F11748442D0722820044C1D9 /* Talkee-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
@@ -366,6 +372,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
+				F11748AC2D1B6C3B0044C1D9 /* TalkeeAudioRoute.swift in Sources */,
+				F11748AD2D1B6C3B0044C1D9 /* TalkeeAudioRoute.m in Sources */,
 				985702A3CB1FF7C7DBD82872 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

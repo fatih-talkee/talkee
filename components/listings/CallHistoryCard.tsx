@@ -125,9 +125,31 @@ export function CallHistoryCard({
     return { dateStr, timeStr };
   };
 
-  // Format duration
-  const formatDuration = (minutes: number) => {
-    if (minutes === 0) return '0 min';
+  // Format duration.
+  // If duration_minutes is 0 but we have start/end timestamps, show seconds (< 1 min) instead of "0 min".
+  const formatDuration = () => {
+    const minutes = call.duration_minutes ?? 0;
+
+    if (minutes <= 0) {
+      const start = call.start_time
+        ? new Date(call.start_time).getTime()
+        : null;
+      const end = call.end_time ? new Date(call.end_time).getTime() : null;
+
+      if (
+        start != null &&
+        end != null &&
+        Number.isFinite(start) &&
+        Number.isFinite(end)
+      ) {
+        const seconds = Math.max(0, Math.floor((end - start) / 1000));
+        if (seconds < 60) return `${seconds} sec`;
+        return `${Math.ceil(seconds / 60)} min`;
+      }
+
+      return '0 min';
+    }
+
     if (minutes < 60) return `${minutes} min`;
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
@@ -137,6 +159,18 @@ export function CallHistoryCard({
   // Get status text and color
   const getStatusInfo = (status: string) => {
     switch (status) {
+      case 'pending':
+        return {
+          text: 'Pending',
+          color: theme.colors.warning,
+          bgColor: theme.colors.warning + '20',
+        };
+      case 'active':
+        return {
+          text: 'In progress',
+          color: theme.colors.primary,
+          bgColor: theme.colors.primary + '20',
+        };
       case 'completed':
         return {
           text: 'Completed',
@@ -449,7 +483,7 @@ export function CallHistoryCard({
                           },
                         ]}
                       >
-                        {formatDuration(call.duration_minutes)}
+                        {formatDuration()}
                       </Text>
                     </View>
                   )}

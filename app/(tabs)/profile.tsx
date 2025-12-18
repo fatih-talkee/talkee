@@ -39,6 +39,7 @@ import { ShareProfileModal } from '@/components/profile/ShareProfileModal';
 import { AvatarUploadModal } from '@/components/profile/AvatarUploadModal';
 import { useProfile } from '@/hooks/useProfile';
 import { useAuth } from '@/hooks/useAuth';
+import { useUnreadCount } from '@/hooks/useNotifications';
 import { supabase } from '@/lib/supabase';
 import { PageLoading } from '@/components/ui/PageLoading';
 
@@ -66,8 +67,23 @@ export default function ProfileScreen() {
   const { isAuthenticated } = useAuth();
 
   // ✅ Use real profile data
-  const { user, stats, isProfessional, professional, isLoading, profileData, refetch } =
-    useProfile();
+  const {
+    user,
+    stats,
+    isProfessional,
+    professional,
+    isLoading,
+    profileData,
+    refetch,
+  } = useProfile();
+
+  const { data: unreadNotificationsCount = 0 } = useUnreadCount();
+
+  const formatBadgeCount = (count: number): string | undefined => {
+    if (!count || count <= 0) return undefined;
+    if (count > 99) return '99+';
+    return String(count);
+  };
 
   // Reset avatar error when user changes
   useEffect(() => {
@@ -77,7 +93,8 @@ export default function ProfileScreen() {
   // Refetch profile data when screen comes into focus (e.g., after credit purchase)
   useEffect(() => {
     // Check if we're on the profile tab
-    const isOnProfileTab = segments[0] === '(tabs)' && segments[1] === 'profile';
+    const isOnProfileTab =
+      segments[0] === '(tabs)' && segments[1] === 'profile';
     if (isOnProfileTab) {
       // Small delay to ensure navigation is complete and webhook has processed
       const timer = setTimeout(() => {
@@ -200,7 +217,7 @@ export default function ProfileScreen() {
     try {
       // Invalidate and refetch profile data to show updated avatar
       await refetch();
-      
+
       toast.success({
         title: 'Avatar Updated',
         message: 'Your profile photo has been updated successfully',
@@ -326,7 +343,7 @@ export default function ProfileScreen() {
               console.error('Navigation error:', error);
             }
           },
-          badge: '3', // TODO: Replace with real notification count
+          badge: formatBadgeCount(unreadNotificationsCount),
         },
         {
           id: 'test-push',

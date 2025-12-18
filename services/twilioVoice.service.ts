@@ -85,11 +85,12 @@ class TwilioVoiceService {
       this.accessToken = data.token;
       logger.info('[TwilioVoice] Token received successfully');
 
-      // Debug: Log token details
-      console.log('[DEBUG] Token length:', data.token.length);
-      console.log('[DEBUG] Full Token:', data.token);
-      console.log('[DEBUG] Identity:', data.identity);
-      console.log('[DEBUG] Expires:', data.expiresAt);
+      // Debug: Log token details (never log the full token - it's sensitive)
+      if (__DEV__) {
+        console.log('[DEBUG] Token length:', data.token.length);
+        console.log('[DEBUG] Identity:', data.identity);
+        console.log('[DEBUG] Expires:', data.expiresAt);
+      }
 
       return data.token;
     } catch (error) {
@@ -179,11 +180,14 @@ class TwilioVoiceService {
       createdCallId = callRecord.id;
 
       if (callRecord.caller_id !== params.callerId) {
-        logger.warn('[TwilioVoice] Caller mismatch while creating call record', {
-          debugId: params.debugId,
-          expectedCallerId: params.callerId,
-          actualCallerId: callRecord.caller_id,
-        });
+        logger.warn(
+          '[TwilioVoice] Caller mismatch while creating call record',
+          {
+            debugId: params.debugId,
+            expectedCallerId: params.callerId,
+            actualCallerId: callRecord.caller_id,
+          }
+        );
       }
 
       logger.info('[TwilioVoice] Call record created', {
@@ -230,23 +234,32 @@ class TwilioVoiceService {
       if (createdCallId) {
         supabase
           .from('calls')
-          .update({ status: DbCallStatus.CANCELLED, end_time: new Date().toISOString() })
+          .update({
+            status: DbCallStatus.CANCELLED,
+            end_time: new Date().toISOString(),
+          })
           .eq('id', createdCallId)
           .then(({ error: updateErr }) => {
             if (updateErr) {
-              logger.warn('[TwilioVoice] Failed to cancel call record after connect failure', {
-                debugId: params.debugId,
-                callId: createdCallId,
-                message: updateErr.message,
-                details: (updateErr as any).details,
-                hint: (updateErr as any).hint,
-                code: (updateErr as any).code,
-              });
+              logger.warn(
+                '[TwilioVoice] Failed to cancel call record after connect failure',
+                {
+                  debugId: params.debugId,
+                  callId: createdCallId,
+                  message: updateErr.message,
+                  details: (updateErr as any).details,
+                  hint: (updateErr as any).hint,
+                  code: (updateErr as any).code,
+                }
+              );
             } else {
-              logger.info('[TwilioVoice] Cancelled call record after connect failure', {
-                debugId: params.debugId,
-                callId: createdCallId,
-              });
+              logger.info(
+                '[TwilioVoice] Cancelled call record after connect failure',
+                {
+                  debugId: params.debugId,
+                  callId: createdCallId,
+                }
+              );
             }
           });
       }
@@ -280,14 +293,19 @@ class TwilioVoiceService {
     const alreadyGranted = await PermissionsAndroid.check(permission);
     if (alreadyGranted) return;
 
-    logger.info('[TwilioVoice] Requesting RECORD_AUDIO permission', { debugId });
+    logger.info('[TwilioVoice] Requesting RECORD_AUDIO permission', {
+      debugId,
+    });
     const result = await PermissionsAndroid.request(permission, {
       title: 'Microphone permission',
       message: 'Talkee needs microphone access to start a call.',
       buttonPositive: 'Allow',
       buttonNegative: 'Deny',
     });
-    logger.info('[TwilioVoice] RECORD_AUDIO permission result', { debugId, result });
+    logger.info('[TwilioVoice] RECORD_AUDIO permission result', {
+      debugId,
+      result,
+    });
 
     if (result !== PermissionsAndroid.RESULTS.GRANTED) {
       throw new Error('Microphone permission not granted');
@@ -298,7 +316,10 @@ class TwilioVoiceService {
    * Accept an incoming call invite (callee side).
    * Optionally provides the DB call record id so we can update call status.
    */
-  async acceptIncomingCall(params?: { callId?: string; debugId?: string }): Promise<Call> {
+  async acceptIncomingCall(params?: {
+    callId?: string;
+    debugId?: string;
+  }): Promise<Call> {
     if (!this.voice) {
       throw new Error('Voice SDK not initialized');
     }
@@ -334,7 +355,10 @@ class TwilioVoiceService {
   /**
    * Reject an incoming call invite (callee side).
    */
-  async rejectIncomingCall(params?: { callId?: string; debugId?: string }): Promise<void> {
+  async rejectIncomingCall(params?: {
+    callId?: string;
+    debugId?: string;
+  }): Promise<void> {
     const callInvite = this.state.callInvite;
     if (!callInvite) return;
 
@@ -364,14 +388,17 @@ class TwilioVoiceService {
         .eq('id', params.callId)
         .then(({ error }) => {
           if (error) {
-            logger.warn('[TwilioVoice] Failed updating call as missed (reject)', {
-              debugId: params.debugId,
-              callId: params.callId,
-              message: error.message,
-              details: (error as any).details,
-              hint: (error as any).hint,
-              code: (error as any).code,
-            });
+            logger.warn(
+              '[TwilioVoice] Failed updating call as missed (reject)',
+              {
+                debugId: params.debugId,
+                callId: params.callId,
+                message: error.message,
+                details: (error as any).details,
+                hint: (error as any).hint,
+                code: (error as any).code,
+              }
+            );
           }
         });
     }
@@ -538,7 +565,11 @@ class TwilioVoiceService {
   /**
    * Setup Call listeners
    */
-  private setupCallListeners(call: Call, callId?: string, debugId?: string): void {
+  private setupCallListeners(
+    call: Call,
+    callId?: string,
+    debugId?: string
+  ): void {
     // Call connected
     call.on(Call.Event.Connected, () => {
       logger.info('[TwilioVoice] Call connected', { debugId, callId });
@@ -581,7 +612,11 @@ class TwilioVoiceService {
       logger.info('[TwilioVoice] Call disconnected', {
         debugId,
         callId,
-        error: error ? (error instanceof Error ? error.message : String(error)) : undefined,
+        error: error
+          ? error instanceof Error
+            ? error.message
+            : String(error)
+          : undefined,
       });
 
       this.activeCall = null;
@@ -602,7 +637,10 @@ class TwilioVoiceService {
     });
   }
 
-  private async updateCallOnConnect(callId: string, debugId?: string): Promise<void> {
+  private async updateCallOnConnect(
+    callId: string,
+    debugId?: string
+  ): Promise<void> {
     const startedAt = new Date().toISOString();
 
     // Always set start_time first (some invoice/db logic depends on this being non-null later).
@@ -612,14 +650,18 @@ class TwilioVoiceService {
       .eq('id', callId);
 
     if (startRes.error) {
-      logger.error('[TwilioVoice] Failed updating call start_time on connect', undefined, {
-        debugId,
-        callId,
-        message: startRes.error.message,
-        details: (startRes.error as any).details,
-        hint: (startRes.error as any).hint,
-        code: (startRes.error as any).code,
-      });
+      logger.error(
+        '[TwilioVoice] Failed updating call start_time on connect',
+        undefined,
+        {
+          debugId,
+          callId,
+          message: startRes.error.message,
+          details: (startRes.error as any).details,
+          hint: (startRes.error as any).hint,
+          code: (startRes.error as any).code,
+        }
+      );
       // Don't return; still attempt status update.
     }
 
@@ -627,7 +669,10 @@ class TwilioVoiceService {
     // Try the canonical value first, then fallback(s) if a CHECK constraint rejects it.
     const candidates: string[] = ['active', 'in-progress', 'in_progress'];
     for (const status of candidates) {
-      const res = await supabase.from('calls').update({ status }).eq('id', callId);
+      const res = await supabase
+        .from('calls')
+        .update({ status })
+        .eq('id', callId);
       if (!res.error) {
         logger.info('[TwilioVoice] Call record updated (connected)', {
           debugId,
@@ -637,38 +682,88 @@ class TwilioVoiceService {
         return;
       }
 
-      logger.warn('[TwilioVoice] Call status update rejected, trying fallback', {
-        debugId,
-        callId,
-        attemptedStatus: status,
-        message: res.error.message,
-        details: (res.error as any).details,
-        hint: (res.error as any).hint,
-        code: (res.error as any).code,
-      });
+      logger.warn(
+        '[TwilioVoice] Call status update rejected, trying fallback',
+        {
+          debugId,
+          callId,
+          attemptedStatus: status,
+          message: res.error.message,
+          details: (res.error as any).details,
+          hint: (res.error as any).hint,
+          code: (res.error as any).code,
+        }
+      );
     }
   }
 
-  private async updateCallOnDisconnect(callId: string, debugId?: string): Promise<void> {
+  private async updateCallOnDisconnect(
+    callId: string,
+    debugId?: string
+  ): Promise<void> {
     const endedAt = new Date().toISOString();
 
     // Always set end_time first.
-    const endRes = await supabase.from('calls').update({ end_time: endedAt }).eq('id', callId);
+    const endRes = await supabase
+      .from('calls')
+      .update({ end_time: endedAt })
+      .eq('id', callId);
     if (endRes.error) {
-      logger.error('[TwilioVoice] Failed updating call end_time on disconnect', undefined, {
+      logger.error(
+        '[TwilioVoice] Failed updating call end_time on disconnect',
+        undefined,
+        {
+          debugId,
+          callId,
+          message: endRes.error.message,
+          details: (endRes.error as any).details,
+          hint: (endRes.error as any).hint,
+          code: (endRes.error as any).code,
+        }
+      );
+      // Still attempt status update.
+    }
+
+    // Ensure start_time is non-null before finalizing the call.
+    // Some DB/invoice logic (triggers, constraints) depends on this being set.
+    //
+    // We do this as a conditional UPDATE (only when start_time IS NULL) so we don't
+    // overwrite the accurate Connected timestamp set by updateCallOnConnect.
+    try {
+      const startRes = await supabase
+        .from('calls')
+        .update({ start_time: endedAt })
+        .eq('id', callId)
+        .is('start_time', null);
+
+      if (startRes.error) {
+        logger.error(
+          '[TwilioVoice] Failed backfilling call start_time on disconnect (start_time safeguard)',
+          undefined,
+          {
+            debugId,
+            callId,
+            message: startRes.error.message,
+            details: (startRes.error as any).details,
+            hint: (startRes.error as any).hint,
+            code: (startRes.error as any).code,
+          }
+        );
+      }
+    } catch (error) {
+      logger.warn('[TwilioVoice] start_time safeguard threw on disconnect', {
         debugId,
         callId,
-        message: endRes.error.message,
-        details: (endRes.error as any).details,
-        hint: (endRes.error as any).hint,
-        code: (endRes.error as any).code,
+        error: error instanceof Error ? error.message : String(error),
       });
-      // Still attempt status update.
     }
 
     const candidates: string[] = ['completed', 'completed']; // keep hook for future fallbacks
     for (const status of candidates) {
-      const res = await supabase.from('calls').update({ status }).eq('id', callId);
+      const res = await supabase
+        .from('calls')
+        .update({ status })
+        .eq('id', callId);
       if (!res.error) {
         logger.info('[TwilioVoice] Call record finalized (disconnected)', {
           debugId,
@@ -678,15 +773,19 @@ class TwilioVoiceService {
         return;
       }
 
-      logger.error('[TwilioVoice] Failed updating call status on disconnect', undefined, {
-        debugId,
-        callId,
-        attemptedStatus: status,
-        message: res.error.message,
-        details: (res.error as any).details,
-        hint: (res.error as any).hint,
-        code: (res.error as any).code,
-      });
+      logger.error(
+        '[TwilioVoice] Failed updating call status on disconnect',
+        undefined,
+        {
+          debugId,
+          callId,
+          attemptedStatus: status,
+          message: res.error.message,
+          details: (res.error as any).details,
+          hint: (res.error as any).hint,
+          code: (res.error as any).code,
+        }
+      );
     }
   }
 

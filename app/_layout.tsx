@@ -31,11 +31,19 @@ import NetInfo from '@react-native-community/netinfo';
 import { OfflineBanner } from '../components/ui/OfflineBanner';
 import { StripeProvider } from '@stripe/stripe-react-native';
 
-// Initialize Sentry
-Sentry.init({
-  dsn: 'https://18e1c6ac9df262bbd98c89fd2db05f06@o4510523149647872.ingest.de.sentry.io/4510523154563152',
-  debug: __DEV__,
-});
+// Initialize Sentry (make it idempotent; Fast Refresh / re-evaluation can re-run this module)
+try {
+  const g = globalThis as any;
+  if (!g.__talkeeSentryInitialized) {
+    Sentry.init({
+      dsn: 'https://18e1c6ac9df262bbd98c89fd2db05f06@o4510523149647872.ingest.de.sentry.io/4510523154563152',
+      debug: __DEV__,
+    });
+    g.__talkeeSentryInitialized = true;
+  }
+} catch (e) {
+  console.error('Sentry.init failed (continuing without Sentry)', e);
+}
 
 try {
   // Register adapter immediately to catch early boot errors

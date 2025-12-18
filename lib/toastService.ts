@@ -26,9 +26,11 @@
  * ```
  */
 
-import { toastStackManager, ToastType, ToastOptions } from '@/components/ui/ToastStack';
+import { toastStackManager, ToastType } from '@/components/ui/ToastStack';
+import type { ToastOptions } from '@/components/ui/ToastStack';
 
-export { ToastType, type ToastOptions };
+export { ToastType };
+export type { ToastOptions };
 
 class ToastService {
   /**

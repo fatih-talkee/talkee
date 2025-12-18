@@ -97,6 +97,7 @@ if (Platform.OS !== 'web') {
 
 class NotificationsService {
   private expoPushToken: string | null = null;
+  private authStateSubscription: { unsubscribe: () => void } | null = null;
   private notificationResponseSubscription: { remove: () => void } | null =
     null;
   private notificationReceivedSubscription: { remove: () => void } | null =
@@ -115,10 +116,14 @@ class NotificationsService {
   async initialize(): Promise<string | null> {
     try {
       if (Platform.OS === 'web') {
+        logger.info('[NotificationService] Skipping push init on web');
         return null;
       }
 
       if (!Device.isDevice) {
+        logger.warn(
+          '[NotificationService] Push not available on simulator/emulator (Device.isDevice=false)'
+        );
         return null;
       }
 
@@ -133,8 +138,15 @@ class NotificationsService {
       }
 
       if (finalStatus !== 'granted') {
+        logger.warn('[NotificationService] Push permission not granted', {
+          status: finalStatus,
+        });
         return null;
       }
+
+      // Keep device token in sync with DB across login/logout.
+      // (App can start before login; we still want to save token once the user signs in.)
+      this.setupAuthStateListener();
 
       // Get Expo push token with project ID
       // Project ID is required for Expo Push API to work correctly
@@ -186,6 +198,34 @@ class NotificationsService {
     } catch (error) {
       logger.error('Error initializing notifications', error);
       return null;
+    }
+  }
+
+  /**
+   * Keep push token synced after auth changes (login after boot is common).
+   */
+  private setupAuthStateListener(): void {
+    if (this.authStateSubscription) return;
+
+    try {
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (!session?.user) return;
+        if (!this.expoPushToken) return;
+
+        logger.info('[NotificationService] Auth changed; syncing push token', {
+          event,
+        });
+        await this.savePushToken(this.expoPushToken);
+      });
+
+      this.authStateSubscription = subscription;
+    } catch (e) {
+      logger.error(
+        '[NotificationService] Failed to setup auth state listener',
+        e
+      );
     }
   }
 
@@ -740,11 +780,11 @@ class NotificationsService {
           if (data?.call_id) {
             const { Linking } = require('react-native');
             // call_id is the DB call record id; open CallScreen in "incoming" mode
-            Linking.openURL(`talkee://call/${data.call_id}?incoming=true`).catch(
-              (err: Error) => {
-                logger.error('Failed to open call link', err);
-              }
-            );
+            Linking.openURL(
+              `talkee://call/${data.call_id}?incoming=true`
+            ).catch((err: Error) => {
+              logger.error('Failed to open call link', err);
+            });
           }
         } else {
           const { Linking } = require('react-native');
@@ -1018,8 +1058,15 @@ class NotificationsService {
         return false;
       }
 
-      if (!response?.success) {
-        logger.warn('Push notification sent with errors', response);
+      const acceptedCount = Number(response?.result?.success || 0);
+      if (!response?.success || acceptedCount <= 0) {
+        logger.warn(
+          'Push notification not delivered (no active/valid devices?)',
+          {
+            response,
+            acceptedCount,
+          }
+        );
         return false;
       }
 

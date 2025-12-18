@@ -8,7 +8,9 @@ import {
   Image,
   Platform,
   Alert,
+  AppState,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   Phone,
@@ -17,6 +19,8 @@ import {
   VideoOff,
   Mic,
   MicOff,
+  Volume2,
+  VolumeX,
   MessageCircle,
   MoveVertical as MoreVertical,
   Minimize2,
@@ -29,10 +33,12 @@ import { supabase } from '@/lib/supabase';
 import { useTwilioVoice } from '@/hooks/useTwilioVoice';
 import { useProfessional } from '@/hooks/useProfessionals';
 import { useProfile } from '@/hooks/useProfile';
+import { getSpeakerEnabled, setSpeakerEnabled } from '@/lib/audioRoute';
 
 export default function CallScreen() {
   const { id, type, urgent, incoming } = useLocalSearchParams();
   const isIncoming = incoming === 'true';
+  const insets = useSafeAreaInsets();
   const { user } = useProfile();
 
   const professionalId = isIncoming ? '' : (id as string);
@@ -69,6 +75,7 @@ export default function CallScreen() {
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [callInitiated, setCallInitiated] = useState(false);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(false);
   const [incomingCallDetails, setIncomingCallDetails] = useState<{
     callId: string;
     callerId?: string;
@@ -83,6 +90,79 @@ export default function CallScreen() {
   const callAttemptId = useMemo(() => {
     const rand = Math.random().toString(36).slice(2, 8);
     return `call_${Date.now()}_${rand}`;
+  }, []);
+
+  // End the call if the user leaves this screen or backgrounds the app.
+  // (We can't reliably run code on process-kill; Twilio status callbacks + webhook push are the safety net.)
+  const hasEndedRef = useRef(false);
+  const callStateRef = useRef(callState);
+
+  useEffect(() => {
+    callStateRef.current = callState;
+  }, [callState]);
+
+  // If the remote party ends the call, the Twilio SDK will transition our call state to "disconnected".
+  // In that case, exit the call screen automatically (otherwise the user gets stuck on the call UI).
+  useEffect(() => {
+    if (!callInitiated) return;
+    if (hasEndedRef.current) return;
+
+    if (callState.status === 'disconnected') {
+      hasEndedRef.current = true;
+      logger.info('[CallScreen] Call ended by remote/SDK; leaving screen', {
+        callAttemptId,
+      });
+      // Don't call disconnect() here; SDK already disconnected.
+      router.back();
+    }
+  }, [callState.status, callInitiated, callAttemptId]);
+
+  const safeEndCall = async (reason: string) => {
+    if (hasEndedRef.current) return;
+
+    // If there's no active call/invite, don't spam disconnect.
+    const active =
+      callStateRef.current.status === 'connecting' ||
+      callStateRef.current.status === 'ringing' ||
+      callStateRef.current.status === 'connected' ||
+      !!callStateRef.current.callInvite;
+
+    if (!active) return;
+
+    hasEndedRef.current = true;
+    logger.info('[CallScreen] Auto-ending call', {
+      callAttemptId,
+      reason,
+      status: callStateRef.current.status,
+    });
+    try {
+      await disconnect();
+    } catch (e) {
+      logger.warn('[CallScreen] Auto-end call failed', {
+        callAttemptId,
+        reason,
+      });
+    }
+  };
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        void safeEndCall(`appstate:${nextState}`);
+      }
+    });
+
+    return () => {
+      sub.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      void safeEndCall('unmount');
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ✅ LOAD CALL DETAILS (incoming calls)
@@ -328,6 +408,43 @@ export default function CallScreen() {
     }
   };
 
+  const handleSpeakerToggle = async () => {
+    try {
+      // Prefer local state for UX responsiveness; then verify actual route.
+      const desired = !isSpeakerOn;
+      const ok = await setSpeakerEnabled(desired);
+      const actual = ok
+        ? await getSpeakerEnabled().catch(() => desired)
+        : isSpeakerOn;
+      setIsSpeakerOn(actual);
+
+      logger.info('[CallScreen] Speaker toggled', {
+        callAttemptId,
+        desired,
+        ok,
+        actual,
+      });
+    } catch (e) {
+      logger.error('[CallScreen] Speaker toggle failed', e, { callAttemptId });
+    }
+  };
+
+  // Keep the speaker UI in sync with the real audio route after connect.
+  useEffect(() => {
+    if (!isConnected) return;
+    if (Platform.OS === 'web') return;
+
+    let cancelled = false;
+    (async () => {
+      const current = await getSpeakerEnabled().catch(() => false);
+      if (!cancelled) setIsSpeakerOn(current);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isConnected]);
+
   // ✅ LOADING STATE
   if (isIncoming) {
     // Incoming call screen doesn't need professional profile; show incoming UI
@@ -349,7 +466,12 @@ export default function CallScreen() {
             {callerAvatarUrl ? (
               <Image
                 source={{ uri: callerAvatarUrl }}
-                style={{ width: 96, height: 96, borderRadius: 48, marginTop: 18 }}
+                style={{
+                  width: 96,
+                  height: 96,
+                  borderRadius: 48,
+                  marginTop: 18,
+                }}
               />
             ) : null}
 
@@ -507,7 +629,16 @@ export default function CallScreen() {
         )}
 
         {/* Call Controls */}
-        <View style={styles.callControls}>
+        <View
+          style={[
+            styles.callControls,
+            {
+              // Keep controls above Android system navigation bar / gesture area
+              paddingBottom:
+                (Platform.OS === 'android' ? 64 : 40) + (insets.bottom || 0),
+            },
+          ]}
+        >
           <TouchableOpacity
             style={[
               styles.controlButton,
@@ -520,6 +651,21 @@ export default function CallScreen() {
               <MicOff size={24} color="#ffffff" />
             ) : (
               <Mic size={24} color="#ffffff" />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.controlButton,
+              isSpeakerOn && styles.controlButtonActiveSpeaker,
+            ]}
+            onPress={handleSpeakerToggle}
+            disabled={!isConnected || Platform.OS === 'web'}
+          >
+            {isSpeakerOn ? (
+              <Volume2 size={24} color="#ffffff" />
+            ) : (
+              <VolumeX size={24} color="#ffffff" />
             )}
           </TouchableOpacity>
 
@@ -717,6 +863,9 @@ const styles = StyleSheet.create({
   },
   controlButtonActive: {
     backgroundColor: '#ef4444',
+  },
+  controlButtonActiveSpeaker: {
+    backgroundColor: '#10B981',
   },
   endCallButton: {
     width: 64,

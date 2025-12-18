@@ -37,3 +37,13 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/get-invoice-url/deno.json"
 entrypoint = "./functions/get-invoice-url/index.ts"
+
+[functions.send-push]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/send-push/index.ts"
+
+[functions.twilio-webhook]
+enabled = true
+verify_jwt = false # Twilio status callbacks don't send Supabase JWTs
+entrypoint = "./functions/twilio-webhook/index.ts"

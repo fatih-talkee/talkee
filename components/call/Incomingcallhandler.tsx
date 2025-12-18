@@ -42,6 +42,34 @@ export function IncomingCallHandler() {
           call_id: notification.data?.call_id,
         });
 
+        // If we receive an "ended/missed" signal, clear the in-app incoming UI.
+        if (
+          notification.data?.type === 'call_missed' ||
+          notification.data?.type === 'call_ended'
+        ) {
+          const endedCallId = notification.data?.call_id;
+          const endedCallSid = notification.data?.call_sid;
+
+          setIncomingCall((prev) => {
+            if (!prev) return null;
+
+            // If payload includes identifiers, only clear when it matches the current modal call.
+            if (endedCallId && prev.call_id && endedCallId !== prev.call_id) return prev;
+            if (endedCallSid && prev.call_sid && endedCallSid !== prev.call_sid) return prev;
+
+            return null;
+          });
+
+          setIsVisible(false);
+
+          logger.info('[IncomingCall] Dismissing incoming call modal (ended/missed)', {
+            type: notification.data?.type,
+            call_id: endedCallId,
+            call_sid: endedCallSid,
+          });
+          return;
+        }
+
         // We currently send "call_request" from our backend/app when a user is calling a professional.
         // Twilio's own call invite is handled via the Voice SDK (see second effect below).
         if (

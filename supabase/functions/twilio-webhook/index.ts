@@ -12,7 +12,9 @@ function extractUserIdFromTwilioAddress(value?: string | null): string | null {
   const s = value.trim();
   if (s.startsWith('client:')) return s.slice('client:'.length);
   // Some setups may send the identity directly
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) {
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)
+  ) {
     return s;
   }
   return null;
@@ -25,8 +27,15 @@ async function sendPush(
   data: Record<string, unknown>
 ): Promise<void> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   if (!supabaseUrl) {
     console.warn('⚠️ [twilio-webhook] SUPABASE_URL missing; cannot send push');
+    return;
+  }
+  if (!serviceRoleKey) {
+    console.warn(
+      '⚠️ [twilio-webhook] SUPABASE_SERVICE_ROLE_KEY missing; cannot send push'
+    );
     return;
   }
 
@@ -34,8 +43,9 @@ async function sendPush(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      // `send-push` only checks header presence; it uses service role key internally.
-      Authorization: 'Bearer twilio-webhook',
+      // Use service role JWT so this works even when verify_jwt=true on the function.
+      Authorization: `Bearer ${serviceRoleKey}`,
+      apikey: serviceRoleKey,
     },
     body: JSON.stringify({
       user_id: userId,
@@ -91,98 +101,168 @@ serve(async (req: Request) => {
     );
 
     const callSid = data.CallSid;
+    const callId = data.CallId || data.CallID || data.call_id;
     const status = mapTwilioStatus(data.CallStatus);
     const duration = data.CallDuration ? parseInt(data.CallDuration) : 0;
 
-    // Prepare update object
-    const updates: any = {
-      status,
-      updated_at: new Date().toISOString(),
-    };
+    // Map Twilio status -> DB + push semantics
+    const isEnded = [
+      'completed',
+      'failed',
+      'busy',
+      'no-answer',
+      'canceled',
+    ].includes(status);
+    const isMissed = status === 'no-answer' || status === 'busy';
 
-    // Handle different call states
-    if (status === 'ringing') {
-      console.log('📱 [twilio-webhook] Call is ringing');
-    } else if (status === 'in-progress') {
-      updates.started_at = new Date().toISOString();
-      console.log('✅ [twilio-webhook] Call started');
-    } else if (
-      ['completed', 'failed', 'busy', 'no-answer', 'canceled'].includes(status)
-    ) {
-      updates.ended_at = new Date().toISOString();
-      updates.duration_seconds = duration;
+    // If ended-without-answer, send a follow-up push so the callee doesn't keep seeing "Incoming call" indefinitely.
+    if (isEnded) {
+      // Prefer looking up the callee from our DB call record (CallId we passed from the app).
+      let calleeUserId: string | null = null;
+      let callerName: string | null = null;
 
-      if (data.RecordingSid) {
-        updates.recording_sid = data.RecordingSid;
-        updates.recording_url = data.RecordingUrl;
+      if (callId) {
+        const { data: callRow, error: callErr } = await supabase
+          .from('calls')
+          .select(
+            'id, caller:users!caller_id(name), professional:professionals!professional_id(user_id)'
+          )
+          .eq('id', callId)
+          .single();
+
+        if (callErr) {
+          console.warn(
+            '⚠️ [twilio-webhook] Could not load call row for follow-up push',
+            {
+              CallId: callId,
+              message: callErr.message,
+            }
+          );
+        } else {
+          calleeUserId = (callRow as any)?.professional?.user_id ?? null;
+          callerName = (callRow as any)?.caller?.name ?? null;
+        }
       }
 
-      console.log('🏁 [twilio-webhook] Call ended:', { status, duration });
-    }
+      // Fallback: parse from Twilio To/From (usually "client:<identity>")
+      if (!calleeUserId) {
+        calleeUserId = extractUserIdFromTwilioAddress(data.To);
+      }
 
-    // Update or insert call record
-    const { data: callData, error } = await supabase
-      .from('calls')
-      .upsert(
-        {
-          call_sid: callSid,
-          ...updates,
-        },
-        {
-          onConflict: 'call_sid',
-          ignoreDuplicates: false,
-        }
-      )
-      .select()
-      .single();
+      if (calleeUserId) {
+        const pushType = isMissed ? 'call_missed' : 'call_ended';
+        const title = isMissed ? 'Missed Call' : 'Call Ended';
+        const body = isMissed
+          ? `You missed a call from ${callerName || 'Someone'}.`
+          : `The call has ended.`;
 
-    if (error) {
-      console.error('❌ [twilio-webhook] Database error:', error);
-      throw error;
-    }
-
-    console.log('✅ [twilio-webhook] Call record updated');
-
-    // If the call ended without being answered, send a follow-up push so the callee
-    // doesn't keep seeing "Incoming call" indefinitely.
-    if (['no-answer', 'busy', 'canceled', 'failed'].includes(status)) {
-      const toUserId = extractUserIdFromTwilioAddress(data.To);
-      const fromUserId = extractUserIdFromTwilioAddress(data.From);
-
-      if (toUserId) {
-        const fromLabel = fromUserId ? 'Someone' : (data.From ? data.From : 'Someone');
-        const pushType =
-          status === 'no-answer' || status === 'busy' ? 'call_missed' : 'call_ended';
-
-        const title = status === 'no-answer' || status === 'busy' ? 'Missed Call' : 'Call Ended';
-        const body =
-          status === 'no-answer' || status === 'busy'
-            ? `You missed a call from ${fromLabel}.`
-            : `The call has ended.`;
-
-        await sendPush(toUserId, title, body, {
+        await sendPush(calleeUserId, title, body, {
           type: pushType,
+          call_id: callId ?? null,
           call_sid: callSid,
           twilio_status: status,
-          from: fromUserId ?? data.From,
-          to: toUserId,
         });
       } else {
-        console.warn('⚠️ [twilio-webhook] Could not resolve callee user id from To:', {
-          To: data.To,
-          CallSid: callSid,
-          status,
-        });
+        console.warn(
+          '⚠️ [twilio-webhook] Could not resolve callee user id for follow-up push',
+          {
+            CallId: callId,
+            To: data.To,
+            CallSid: callSid,
+            status,
+          }
+        );
       }
+    }
+
+    // Best-effort DB update (only if we have our internal CallId).
+    // IMPORTANT: Never upsert here. If the call row doesn't exist, we skip DB writes.
+    if (callId) {
+      const nowIso = new Date().toISOString();
+      const durationMinutes = Math.max(0, Math.ceil(duration / 60));
+
+      // Verify call exists. If it doesn't, DO NOT create a new calls row here (caller_id/professional_id are required).
+      const { data: existingCall, error: existingErr } = await supabase
+        .from('calls')
+        .select('id')
+        .eq('id', callId)
+        .maybeSingle();
+
+      if (existingErr) {
+        console.warn(
+          '⚠️ [twilio-webhook] Failed checking call existence; skipping DB update',
+          {
+            CallId: callId,
+            message: existingErr.message,
+          }
+        );
+      } else if (!existingCall) {
+        console.warn(
+          '⚠️ [twilio-webhook] CallId not found in DB; skipping DB update',
+          {
+            CallId: callId,
+            CallSid: callSid,
+            status,
+          }
+        );
+      } else {
+        const dbStatus =
+          status === 'in-progress'
+            ? 'active'
+            : status === 'completed'
+            ? 'completed'
+            : status === 'no-answer' || status === 'busy'
+            ? 'missed'
+            : status === 'canceled' || status === 'failed'
+            ? 'cancelled'
+            : 'pending';
+
+        const updatePayload: Record<string, unknown> = {
+          status: dbStatus,
+          updated_at: nowIso,
+        };
+
+        if (status === 'in-progress') {
+          updatePayload.start_time = nowIso;
+        }
+        if (isEnded) {
+          updatePayload.end_time = nowIso;
+          updatePayload.duration_minutes = durationMinutes;
+        }
+
+        const { error: updateErr } = await supabase
+          .from('calls')
+          .update(updatePayload)
+          .eq('id', callId);
+
+        if (updateErr) {
+          console.warn(
+            '⚠️ [twilio-webhook] Failed updating call row (best-effort)',
+            {
+              CallId: callId,
+              message: updateErr.message,
+            }
+          );
+        } else {
+          console.log('✅ [twilio-webhook] Call row updated (best-effort)', {
+            CallId: callId,
+            dbStatus,
+            isEnded,
+            duration,
+          });
+        }
+      }
+    } else {
+      console.log('ℹ️ [twilio-webhook] No CallId provided; skipping DB update');
     }
 
     // Handle billing for completed calls
-    if (status === 'completed' && duration > 0) {
+    if (status === 'completed' && duration > 0 && callId) {
       try {
         const { data: call } = await supabase
           .from('calls')
           .select('caller_id, professional_id, total_cost, rate_per_minute')
-          .eq('call_sid', callSid)
+          .eq('id', callId)
           .single();
 
         if (call && call.total_cost > 0) {

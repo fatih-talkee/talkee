@@ -228,7 +228,14 @@ export function useTwilioVoice(
         throw error;
       }
 
-      if (callState.status !== 'idle') {
+      // Allow starting a new call after a completed/disconnected call.
+      // Only block while a call is actively in progress.
+      if (
+        callState.status === 'connecting' ||
+        callState.status === 'ringing' ||
+        callState.status === 'connected' ||
+        callState.status === 'reconnecting'
+      ) {
         const error = new Error('A call is already in progress');
         setError(error);
         logger.warn(

@@ -38,6 +38,10 @@ export function useCallHistory(
     queryKey: callsKeys.history(filters, limit, offset),
     queryFn: async () => {
       try {
+        // Best-effort: clean up old calls that got stuck in "pending".
+        // Keeps "All Calls" from showing stale pending entries.
+        void callsService.cleanupStalePendingCalls(1);
+
         const history = await callsService.getCallHistory(
           filters,
           limit,

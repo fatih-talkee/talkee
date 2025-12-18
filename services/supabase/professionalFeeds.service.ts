@@ -90,11 +90,14 @@ class ProfessionalFeedsService {
 
       // 1. Get all users who favorited this professional
       const { data: favorites, error } = await supabase
-        .from('professional_favorites')
+        .from('favorites')
         .select('user_id')
         .eq('professional_id', professionalId);
 
       if (error || !favorites || favorites.length === 0) {
+        if (error) {
+          console.warn('⚠️ Error fetching favorites for feed notification:', error);
+        }
         return;
       }
 
