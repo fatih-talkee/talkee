@@ -83,6 +83,55 @@ serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    // AuthZ: Only the owner professional can notify their followers.
+    // verify_jwt=true already ensures a valid JWT, but we still need to enforce ownership.
+    const token = authHeader.toLowerCase().startsWith('bearer ')
+      ? authHeader.slice('bearer '.length)
+      : authHeader;
+    const {
+      data: { user: authUser },
+      error: authErr,
+    } = await supabase.auth.getUser(token);
+    if (authErr || !authUser) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Unauthorized' }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    const { data: ownerRow, error: ownerErr } = await supabase
+      .from('professionals')
+      .select('id, user:users!inner(auth_id)')
+      .eq('id', professionalId)
+      .maybeSingle();
+
+    if (ownerErr) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Failed to verify professional ownership',
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    const ownerAuthId = (ownerRow as any)?.user?.auth_id as string | undefined;
+    if (!ownerAuthId || ownerAuthId !== authUser.id) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Forbidden' }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     // 1) Resolve professional name (optional)
     let professionalName = professionalNameFromClient;
     if (!professionalName) {
@@ -200,6 +249,7 @@ serve(async (req: Request) => {
 
     const payloadData: Record<string, unknown> = {
       type: 'feed_post',
+      professional_id: professionalId,
       feed_id: feedId,
       action_url:
         actionUrl ??

@@ -15,6 +15,7 @@ import { twilioVoiceService } from '@/services/twilioVoice.service';
 import { router } from 'expo-router';
 import { logger } from '@/lib/logger';
 import { LinearGradient } from 'expo-linear-gradient';
+import { supabase } from '@/lib/supabase';
 
 interface IncomingCallData {
   call_sid?: string;
@@ -33,6 +34,8 @@ export function IncomingCallHandler() {
   const [isVisible, setIsVisible] = useState(false);
   const hadTwilioInviteRef = useRef(false);
   const lastInviteSidRef = useRef<string | undefined>(undefined);
+  const ringTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     // Listen for incoming call notifications (app-level)
@@ -110,6 +113,88 @@ export function IncomingCallHandler() {
     };
   }, []);
 
+  // Safety net: if we show the modal from a push (call_request) but the caller hangs up quickly,
+  // we may never receive a Twilio CallInvite (or the webhook push might fail).
+  // In that case, auto-dismiss after a short ring window, and also poll the DB call record if we have call_id.
+  useEffect(() => {
+    // cleanup previous timers
+    if (ringTimeoutRef.current) {
+      clearTimeout(ringTimeoutRef.current);
+      ringTimeoutRef.current = null;
+    }
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
+    if (!isVisible || !incomingCall) return;
+
+    // Auto-dismiss after 45s if nothing happens.
+    ringTimeoutRef.current = setTimeout(() => {
+      if (!isVisible) return;
+      if (hadTwilioInviteRef.current) return; // let SDK drive it if invite exists
+
+      logger.info('[IncomingCall] Auto-dismissing incoming modal (timeout)', {
+        call_id: incomingCall.call_id,
+        call_sid: incomingCall.call_sid,
+      });
+      setIsVisible(false);
+      setIncomingCall(null);
+    }, 45_000);
+
+    // If we have a DB call_id, poll it for end_time/status to dismiss as soon as caller cancels.
+    if (incomingCall.call_id) {
+      pollIntervalRef.current = setInterval(async () => {
+        try {
+          const { data, error } = await supabase
+            .from('calls')
+            .select('status, end_time')
+            .eq('id', incomingCall.call_id as string)
+            .maybeSingle();
+
+          if (error) return;
+          if (!data) return;
+
+          const ended =
+            Boolean(data.end_time) ||
+            data.status === 'cancelled' ||
+            data.status === 'missed' ||
+            data.status === 'completed';
+
+          if (ended) {
+            logger.info(
+              '[IncomingCall] Auto-dismissing incoming modal (call ended in DB)',
+              {
+                call_id: incomingCall.call_id,
+                status: data.status,
+                end_time: data.end_time,
+              }
+            );
+            void notificationsService.dismissIncomingCallNotifications({
+              callId: incomingCall.call_id,
+              callSid: incomingCall.call_sid,
+            });
+            setIsVisible(false);
+            setIncomingCall(null);
+          }
+        } catch (_e) {
+          // ignore polling errors
+        }
+      }, 2500);
+    }
+
+    return () => {
+      if (ringTimeoutRef.current) {
+        clearTimeout(ringTimeoutRef.current);
+        ringTimeoutRef.current = null;
+      }
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [isVisible, incomingCall]);
+
   useEffect(() => {
     // Listen for Twilio Voice CallInvite (SDK-level "ringing" when app is foreground)
     const unsubscribe = twilioVoiceService.subscribe((state) => {
@@ -180,6 +265,12 @@ export function IncomingCallHandler() {
 
       // Hide modal immediately
       setIsVisible(false);
+
+      // Remove the OS-level incoming notification once the user interacts (so it doesn't linger).
+      void notificationsService.dismissIncomingCallNotifications({
+        callId: incomingCall.call_id,
+        callSid: incomingCall.call_sid,
+      });
 
       // Navigate to call screen (incoming=true). We prefer DB call_id if present.
       if (incomingCall.call_id) {

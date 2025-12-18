@@ -47,3 +47,8 @@ entrypoint = "./functions/send-push/index.ts"
 enabled = true
 verify_jwt = false # Twilio status callbacks don't send Supabase JWTs
 entrypoint = "./functions/twilio-webhook/index.ts"
+
+[functions.notify-feed-followers]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/notify-feed-followers/index.ts"

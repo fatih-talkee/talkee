@@ -179,6 +179,13 @@ export default function CallScreen() {
     if (!isIncoming) return;
     if (!id) return;
 
+    // If the user opened this screen from an OS notification, dismiss the original call_request
+    // so it doesn't stay in the tray while they're viewing/answering.
+    void notificationsService.dismissIncomingCallNotifications({
+      callId: id as string,
+      callSid: callSid as any,
+    });
+
     (async () => {
       try {
         logger.info('[CallScreen] Loading incoming call details', {

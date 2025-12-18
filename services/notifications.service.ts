@@ -111,6 +111,62 @@ class NotificationsService {
   >();
 
   /**
+   * Remove previously-delivered call_request notifications from the OS tray.
+   * Useful when the call ends but the original "Incoming Call" notification lingers.
+   */
+  async dismissIncomingCallNotifications(params: {
+    callId?: string | null;
+    callSid?: string | null;
+  }): Promise<void> {
+    if (Platform.OS === 'web') return;
+
+    const callId = params.callId ?? undefined;
+    const callSid = params.callSid ?? undefined;
+    if (!callId && !callSid) return;
+
+    try {
+      const presented = await Notifications.getPresentedNotificationsAsync();
+      const matches = presented.filter((n) => {
+        const data = (n.request.content.data || {}) as any;
+        const type = data?.type;
+
+        if (type !== 'call_request' && type !== 'incoming_call') return false;
+        if (callId && data?.call_id && data.call_id === callId) return true;
+        if (callSid && data?.call_sid && data.call_sid === callSid) return true;
+        return false;
+      });
+
+      for (const n of matches) {
+        try {
+          await Notifications.dismissNotificationAsync(n.request.identifier);
+        } catch {
+          // ignore
+        }
+      }
+
+      if (matches.length > 0) {
+        logger.info(
+          '[NotificationService] Dismissed incoming call notifications',
+          {
+            callId,
+            callSid,
+            count: matches.length,
+          }
+        );
+      }
+    } catch (e) {
+      logger.warn(
+        '[NotificationService] Failed dismissing incoming call notifications',
+        {
+          callId,
+          callSid,
+          error: e instanceof Error ? e.message : String(e),
+        }
+      );
+    }
+  }
+
+  /**
    * Initialize notifications (request permissions and get token)
    */
   async initialize(): Promise<string | null> {
@@ -830,6 +886,15 @@ class NotificationsService {
             body: body || '',
             data: data as Record<string, any>,
           };
+
+          // If we receive an end/missed signal, clear any lingering call_request notification.
+          const nType = (payload.data as any)?.type;
+          if (nType === 'call_ended' || nType === 'call_missed') {
+            void this.dismissIncomingCallNotifications({
+              callId: (payload.data as any)?.call_id,
+              callSid: (payload.data as any)?.call_sid,
+            });
+          }
 
           // Fan-out to all subscribers (IncomingCallHandler, screens, etc.)
           for (const cb of this.notificationReceivedCallbacks) {

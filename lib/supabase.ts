@@ -61,7 +61,31 @@ const getStorage = () => {
   return AsyncStorage;
 };
 
+// Add a hard timeout to Supabase network calls so the UI doesn't get stuck in infinite loading
+// (e.g. first boot, flaky network, stalled DNS, etc.).
+const createTimeoutFetch = (timeoutMs: number): typeof fetch => {
+  return async (input: any, init?: any) => {
+    const controller =
+      typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const signal = init?.signal ?? controller?.signal;
+
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    if (controller && !init?.signal) {
+      timeout = setTimeout(() => controller.abort(), timeoutMs);
+    }
+
+    try {
+      return await fetch(input, { ...(init || {}), signal });
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  };
+};
+
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  global: {
+    fetch: createTimeoutFetch(15_000),
+  },
   auth: {
     storage: getStorage() as any,
     autoRefreshToken: true,
