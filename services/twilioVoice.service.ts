@@ -535,14 +535,65 @@ class TwilioVoiceService {
 
     // Incoming call
     this.voice.on(Voice.Event.CallInvite, (callInvite: CallInvite) => {
-      logger.info('[TwilioVoice] Incoming call', {
-        callSid: callInvite.getCallSid(),
-      });
+      const inviteSid = callInvite.getCallSid?.();
+      logger.info('[TwilioVoice] Incoming call', { callSid: inviteSid });
 
       this.updateState({
         status: 'ringing',
         callInvite,
       });
+
+      // If the caller hangs up before the callee answers, the SDK should emit a cancellation on the invite.
+      // If we don't clear it, the in-app incoming modal can get stuck.
+      try {
+        const inviteAny = callInvite as any;
+
+        const clearInvite = (reason: string, payload?: any) => {
+          const currentSid = (this.state.callInvite as any)?.getCallSid?.();
+          if (currentSid && inviteSid && currentSid !== inviteSid) return;
+
+          logger.info('[TwilioVoice] Incoming call invite ended', {
+            callSid: inviteSid,
+            reason,
+            payload: payload
+              ? payload instanceof Error
+                ? payload.message
+                : String(payload)
+              : undefined,
+          });
+
+          this.updateState({
+            status: 'idle',
+            callInvite: null,
+          });
+        };
+
+        // Try both typed event names and raw strings to be resilient across SDK versions.
+        const typedEvents = (CallInvite as any)?.Event ?? {};
+        const candidates = [
+          typedEvents.Cancelled,
+          typedEvents.Canceled,
+          typedEvents.Rejected,
+          typedEvents.Failed,
+          'cancelled',
+          'canceled',
+          'rejected',
+          'failed',
+          'cancel',
+        ].filter(Boolean);
+
+        for (const ev of candidates) {
+          inviteAny?.on?.(ev, (err: any) => clearInvite(String(ev), err));
+        }
+      } catch (e) {
+        logger.warn(
+          '[TwilioVoice] Failed binding CallInvite cancellation listeners',
+          {
+            callSid: inviteSid,
+            error: e instanceof Error ? e.message : String(e),
+          }
+        );
+      }
     });
 
     // Registration successful

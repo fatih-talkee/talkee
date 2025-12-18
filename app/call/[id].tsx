@@ -28,6 +28,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
+import { notificationsService } from '@/services';
 
 // ✅ TWILIO IMPORTS
 import { useTwilioVoice } from '@/hooks/useTwilioVoice';
@@ -69,6 +70,7 @@ export default function CallScreen() {
     (callState.call as any)?.callSid ??
     (callState.call as any)?.sid ??
     (callState.call as any)?.getSid?.();
+  const inviteSid = (callState.callInvite as any)?.getCallSid?.();
 
   // ✅ LOCAL STATE
   const [duration, setDuration] = useState(0);
@@ -147,8 +149,14 @@ export default function CallScreen() {
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'background' || nextState === 'inactive') {
-        void safeEndCall(`appstate:${nextState}`);
+      // Don't auto-hangup on transient 'inactive' (common on iOS during interruptions/overlays).
+      // Only auto-end when the app is truly backgrounded AND we haven't connected yet.
+      if (nextState === 'background') {
+        const status = callStateRef.current.status;
+        const stillConnecting = status === 'connecting' || status === 'ringing';
+        if (stillConnecting) {
+          void safeEndCall(`appstate:${nextState}`);
+        }
       }
     });
 
@@ -219,6 +227,58 @@ export default function CallScreen() {
       mounted = false;
     };
   }, [isIncoming, id, callAttemptId]);
+
+  // Incoming screen: if the caller hangs up before we accept (or before invite arrives),
+  // we might be sitting on this screen. Listen for webhook follow-up pushes and exit.
+  useEffect(() => {
+    if (!isIncoming) return;
+
+    const unsubscribe = notificationsService.onNotificationReceived(
+      (notification) => {
+        const type = notification.data?.type;
+        if (type !== 'call_ended' && type !== 'call_missed') return;
+
+        const endedCallId = notification.data?.call_id;
+        const endedCallSid = notification.data?.call_sid;
+
+        const matchesCallId =
+          Boolean(endedCallId) &&
+          Boolean(incomingCallDetails?.callId) &&
+          endedCallId === incomingCallDetails?.callId;
+
+        const matchesSid =
+          Boolean(endedCallSid) &&
+          (endedCallSid === callSid || endedCallSid === inviteSid);
+
+        if (!matchesCallId && !matchesSid) return;
+        if (hasEndedRef.current) return;
+
+        hasEndedRef.current = true;
+        logger.info(
+          '[CallScreen] Incoming call ended before answer; leaving screen',
+          {
+            callAttemptId,
+            type,
+            endedCallId,
+            endedCallSid,
+            callSid,
+            inviteSid,
+          }
+        );
+        router.back();
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [
+    isIncoming,
+    incomingCallDetails?.callId,
+    callAttemptId,
+    callSid,
+    inviteSid,
+  ]);
 
   // ✅ INITIATE CALL ON MOUNT (outgoing only)
   useEffect(() => {

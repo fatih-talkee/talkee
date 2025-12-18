@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -31,6 +31,8 @@ export function IncomingCallHandler() {
     null
   );
   const [isVisible, setIsVisible] = useState(false);
+  const hadTwilioInviteRef = useRef(false);
+  const lastInviteSidRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     // Listen for incoming call notifications (app-level)
@@ -54,19 +56,24 @@ export function IncomingCallHandler() {
             if (!prev) return null;
 
             // If payload includes identifiers, only clear when it matches the current modal call.
-            if (endedCallId && prev.call_id && endedCallId !== prev.call_id) return prev;
-            if (endedCallSid && prev.call_sid && endedCallSid !== prev.call_sid) return prev;
+            if (endedCallId && prev.call_id && endedCallId !== prev.call_id)
+              return prev;
+            if (endedCallSid && prev.call_sid && endedCallSid !== prev.call_sid)
+              return prev;
 
             return null;
           });
 
           setIsVisible(false);
 
-          logger.info('[IncomingCall] Dismissing incoming call modal (ended/missed)', {
-            type: notification.data?.type,
-            call_id: endedCallId,
-            call_sid: endedCallSid,
-          });
+          logger.info(
+            '[IncomingCall] Dismissing incoming call modal (ended/missed)',
+            {
+              type: notification.data?.type,
+              call_id: endedCallId,
+              call_sid: endedCallSid,
+            }
+          );
           return;
         }
 
@@ -106,10 +113,35 @@ export function IncomingCallHandler() {
   useEffect(() => {
     // Listen for Twilio Voice CallInvite (SDK-level "ringing" when app is foreground)
     const unsubscribe = twilioVoiceService.subscribe((state) => {
-      if (!state.callInvite) return;
+      if (!state.callInvite) {
+        // If we previously had a Twilio invite and it disappeared, dismiss the modal.
+        if (hadTwilioInviteRef.current) {
+          hadTwilioInviteRef.current = false;
+          const lastSid = lastInviteSidRef.current;
+          lastInviteSidRef.current = undefined;
+
+          setIncomingCall((prev) => {
+            if (!prev) return null;
+            // If we can correlate via SID, only dismiss the matching one.
+            if (lastSid && prev.call_sid && prev.call_sid !== lastSid)
+              return prev;
+            return null;
+          });
+          setIsVisible(false);
+          logger.info(
+            '[IncomingCall] Dismissing incoming call modal (invite ended)',
+            {
+              call_sid: lastSid,
+            }
+          );
+        }
+        return;
+      }
 
       const invite = state.callInvite as any;
       const callSid = invite.getCallSid?.();
+      hadTwilioInviteRef.current = true;
+      lastInviteSidRef.current = callSid;
       const from = invite.getFrom?.() || invite.getCaller?.() || 'Unknown';
       const custom = invite.getCustomParameters?.() as any;
       const callIdFromCustom =
