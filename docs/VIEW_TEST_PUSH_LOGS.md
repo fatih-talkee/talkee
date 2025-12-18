@@ -112,3 +112,8 @@ adb logcat *:S ReactNativeJS:V | grep -i "test-push\|send-push"
    - Metro bundler terminalinde `Cmd+F` (Mac) veya `Ctrl+F` (Windows/Linux) ile arama yapabilirsiniz
 
 
+
+
+
+
+

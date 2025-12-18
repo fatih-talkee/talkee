@@ -176,9 +176,11 @@ export default function RootLayout() {
   // Initialize logger and error handlers
   useEffect(() => {
     // Configure logger for production
+    const forceConsoleLogs = process.env.EXPO_PUBLIC_DEBUG_LOGS === '1';
     logger.configure({
       enableRemoteLogging: !__DEV__,
-      logLevel: __DEV__ ? 'debug' : 'error',
+      logLevel: __DEV__ || forceConsoleLogs ? 'debug' : 'error',
+      enableConsoleInProd: forceConsoleLogs,
       enableBreadcrumbs: true,
       enablePerformanceTracking: true,
     });

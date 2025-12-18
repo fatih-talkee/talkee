@@ -81,6 +81,11 @@ export interface PerformanceMetric {
 interface LoggerConfig {
   enabled: boolean;
   logLevel: LogLevel;
+  /**
+   * Force console logging even in production builds.
+   * Useful for short-lived debugging sessions on release/dev-client builds where Metro logs are not available.
+   */
+  enableConsoleInProd: boolean;
   enableRemoteLogging: boolean;
   enableBreadcrumbs: boolean;
   enablePerformanceTracking: boolean;
@@ -93,6 +98,7 @@ interface LoggerConfig {
 const defaultConfig: LoggerConfig = {
   enabled: true,
   logLevel: __DEV__ ? 'debug' : 'error',
+  enableConsoleInProd: false,
   enableRemoteLogging: !__DEV__, // Enable in production
   enableBreadcrumbs: true,
   enablePerformanceTracking: true,
@@ -324,7 +330,7 @@ class Logger {
    * Log to console (development only)
    */
   private logToConsole(entry: LogEntry): void {
-    if (!__DEV__) return;
+    if (!__DEV__ && !this._config.enableConsoleInProd) return;
 
     const { level, message, context, error } = entry;
     const prefix = `[${level.toUpperCase()}]`;

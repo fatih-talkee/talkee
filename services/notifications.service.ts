@@ -6,18 +6,108 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
-  Notification,
+  Notification as ExpoNotification,
+  NotificationBehavior,
+} from 'expo-notifications';
+import type {
+  Notification as DbNotification,
   NotificationInsert,
   NotificationType,
 } from '../types/database.types';
-import { NotificationBehavior } from 'expo-notifications';
 import { logger } from '../lib/logger';
 
 // NotificationSettings is already in database.types.ts
 export type { NotificationSettings } from '../types/database.types';
 
+// Configure notification behavior globally
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async (
+      notification: ExpoNotification
+    ): Promise<NotificationBehavior> => {
+      // Güvenli tip kontrolü ile trigger tipini alalım
+      const trigger = notification.request.trigger;
+      const triggerType = (trigger as any)?.type;
+      const content = notification.request.content;
+      const data = (content?.data || {}) as any;
+
+      logger.info('[NotificationService] Foreground notification handler', {
+        title: content.title,
+        triggerType,
+      });
+
+      const isAndroid = Platform.OS === 'android';
+      const isLocal = Boolean(data?.is_local);
+      const isRemotePush =
+        triggerType === 'push' || Boolean((trigger as any)?.remoteMessage);
+
+      // Android: If a remote push arrives while foreground, the OS may not show it reliably.
+      // We re-publish it as a local notification on our channel for consistent behavior.
+      let republishedOk = false;
+      const shouldRepublishAndroidRemote =
+        isAndroid && isRemotePush && !isLocal;
+
+      if (shouldRepublishAndroidRemote) {
+        try {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: content.title || 'Talkee',
+              body: content.body || '',
+              data: { ...data, is_local: true },
+              sound: 'default',
+              priority: Notifications.AndroidNotificationPriority.MAX,
+            },
+            trigger: { channelId: 'talkee-default-v2' },
+          });
+          republishedOk = true;
+          logger.info(
+            '[NotificationService] Republished remote push as local (foreground)',
+            { title: content.title, triggerType }
+          );
+        } catch (e) {
+          logger.error(
+            '[NotificationService] Failed to republish remote push as local',
+            e
+          );
+        }
+      }
+
+      // Only suppress the original remote notification if we successfully republished it.
+      const shouldSuppressAndroidRemote =
+        shouldRepublishAndroidRemote && republishedOk;
+
+      return {
+        // shouldShowAlert is deprecated in this expo-notifications version.
+        // Keep it enabled for compatibility, but also set the new fields.
+        // On Android, we intentionally avoid showing the *remote* notification while foreground.
+        // We re-publish it as a local notification in `onNotificationReceived` to ensure consistent UX
+        // and prevent duplicates on devices where the OS would also show it.
+        // Android: suppress ONLY remote push in foreground; allow local notifications.
+        // Remote push will be re-published as local in `onNotificationReceived`.
+        shouldShowAlert: !shouldSuppressAndroidRemote,
+        shouldShowBanner: !shouldSuppressAndroidRemote,
+        shouldShowList: !shouldSuppressAndroidRemote,
+        shouldPlaySound: !shouldSuppressAndroidRemote,
+        shouldSetBadge: true,
+        priority: Notifications.AndroidNotificationPriority.MAX,
+      };
+    },
+  });
+}
+
 class NotificationsService {
   private expoPushToken: string | null = null;
+  private notificationResponseSubscription: { remove: () => void } | null =
+    null;
+  private notificationReceivedSubscription: { remove: () => void } | null =
+    null;
+  private notificationReceivedCallbacks = new Set<
+    (notification: {
+      title: string;
+      body: string;
+      data?: Record<string, any>;
+    }) => void
+  >();
 
   /**
    * Initialize notifications (request permissions and get token)
@@ -57,11 +147,35 @@ class NotificationsService {
 
       // Configure notification behavior
       if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('default', {
-          name: 'default',
+        // Change channel ID to force update on device
+        const channelId = 'talkee-default-v2';
+
+        // Remove old channel if possible
+        try {
+          await Notifications.deleteNotificationChannelAsync('default');
+        } catch (e) {
+          // Ignore
+        }
+
+        await Notifications.setNotificationChannelAsync(channelId, {
+          name: 'Talkee Notifications',
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: '#FF231F7C',
+          showBadge: true,
+          enableVibrate: true,
+          enableLights: true,
+          lockscreenVisibility:
+            Notifications.AndroidNotificationVisibility.PUBLIC,
+          bypassDnd: true,
+          sound: 'default', // Using string 'default' for system default sound
+        });
+
+        // Also ensure the default channel is configured for fallback
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Default',
+          importance: Notifications.AndroidImportance.MAX,
+          sound: 'default',
         });
       }
 
@@ -228,7 +342,7 @@ class NotificationsService {
   async getNotifications(
     limit: number = 20,
     offset: number = 0
-  ): Promise<Notification[]> {
+  ): Promise<DbNotification[]> {
     try {
       const currentUser = await usersService.getCurrentUser();
 
@@ -309,7 +423,7 @@ class NotificationsService {
         return notification;
       });
 
-      return enrichedNotifications as Notification[];
+      return enrichedNotifications as DbNotification[];
     } catch (error) {
       logger.error('Error in getNotifications', error);
       return [];
@@ -470,10 +584,14 @@ class NotificationsService {
         content: {
           title,
           body,
-          data: data || {},
-          sound: true,
+          data: { ...(data || {}), is_local: true },
+          sound: 'default',
+          priority: Notifications.AndroidNotificationPriority.MAX,
+          vibrate: [0, 250, 250, 250],
         },
-        trigger: null, // Send immediately
+        // On Android, specify the channel via trigger (ChannelAwareTriggerInput) for immediate delivery.
+        trigger:
+          Platform.OS === 'android' ? { channelId: 'talkee-default-v2' } : null,
       });
     } catch (error) {
       logger.error('Error sending local notification', error);
@@ -544,7 +662,7 @@ class NotificationsService {
    * Subscribe to real-time notifications
    */
   subscribeToNotifications(
-    callback: (notification: Notification) => void
+    callback: (notification: DbNotification) => void
   ): () => void {
     let subscription: any;
 
@@ -566,7 +684,7 @@ class NotificationsService {
             filter: `user_id=eq.${currentUser.id}`,
           },
           (payload) => {
-            callback(payload.new as Notification);
+            callback(payload.new as DbNotification);
           }
         )
         .subscribe();
@@ -585,65 +703,56 @@ class NotificationsService {
   setupListeners(): void {
     if (Platform.OS === 'web') return;
 
-    // Handle notification received while app is foregrounded
-    Notifications.setNotificationHandler({
-      handleNotification: async (): Promise<NotificationBehavior> => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
-    });
+    // Make idempotent (hot reload / remount safety)
+    if (this.notificationResponseSubscription) {
+      this.notificationResponseSubscription.remove();
+      this.notificationResponseSubscription = null;
+    }
 
     // Handle notification tap
-    Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data;
+    this.notificationResponseSubscription =
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        const data = response.notification.request.content.data;
 
-      // Log notification tap
-      logger.userAction('notification_tapped', {
-        notificationId: data?.notification_id,
-        type: data?.type,
-      });
-
-      // Handle navigation based on notification data
-      // Navigation will be handled by the app using Linking API
-      // The app can listen to deep links and navigate accordingly
-      if (data?.professional_id) {
-        // Navigate to professional profile
-        const { Linking } = require('react-native');
-        Linking.openURL(`talkee://professional/${data.professional_id}`).catch(
-          (err: Error) => {
-            logger.error('Failed to open professional link', err);
-          }
-        );
-      } else if (data?.action_url) {
-        // Navigate to action URL
-        const { Linking } = require('react-native');
-        Linking.openURL(data.action_url).catch((err: Error) => {
-          logger.error('Failed to open action URL', err);
+        // Log notification tap
+        logger.userAction('notification_tapped', {
+          notificationId: data?.notification_id,
+          type: data?.type,
         });
-      } else if (
-        data?.type === 'call_request' ||
-        data?.type === 'call_started'
-      ) {
-        // Navigate to call screen if call_id exists
-        if (data?.call_id) {
+
+        // Handle navigation based on notification data
+        if (data?.professional_id) {
           const { Linking } = require('react-native');
-          Linking.openURL(`talkee://call/${data.call_id}`).catch(
-            (err: Error) => {
-              logger.error('Failed to open call link', err);
-            }
-          );
+          Linking.openURL(
+            `talkee://professional/${data.professional_id}`
+          ).catch((err: Error) => {
+            logger.error('Failed to open professional link', err);
+          });
+        } else if (data?.action_url) {
+          const { Linking } = require('react-native');
+          Linking.openURL(data.action_url).catch((err: Error) => {
+            logger.error('Failed to open action URL', err);
+          });
+        } else if (
+          data?.type === 'call_request' ||
+          data?.type === 'call_started'
+        ) {
+          if (data?.call_id) {
+            const { Linking } = require('react-native');
+            // call_id is the DB call record id; open CallScreen in "incoming" mode
+            Linking.openURL(`talkee://call/${data.call_id}?incoming=true`).catch(
+              (err: Error) => {
+                logger.error('Failed to open call link', err);
+              }
+            );
+          }
+        } else {
+          const { Linking } = require('react-native');
+          Linking.openURL('talkee://notifications').catch((err: Error) => {
+            logger.error('Failed to open notifications link', err);
+          });
         }
-      } else {
-        // Default: Navigate to notifications screen
-        const { Linking } = require('react-native');
-        Linking.openURL('talkee://notifications').catch((err: Error) => {
-          logger.error('Failed to open notifications link', err);
-        });
-      }
-    });
+      });
   }
 
   /**
@@ -661,25 +770,47 @@ class NotificationsService {
       return () => {};
     }
 
-    const subscription = Notifications.addNotificationReceivedListener(
-      (notification) => {
-        const { title, body, data } = notification.request.content;
+    this.notificationReceivedCallbacks.add(callback);
 
-        logger.info('[NotificationService] Notification received', {
-          title,
-          type: data?.type,
-        });
+    if (!this.notificationReceivedSubscription) {
+      this.notificationReceivedSubscription =
+        Notifications.addNotificationReceivedListener((notification) => {
+          const { title, body, data } = notification.request.content;
+          const trigger = notification.request.trigger;
+          const triggerType = (trigger as any)?.type;
 
-        callback({
-          title: title || '',
-          body: body || '',
-          data: data as Record<string, any>,
+          logger.info('[NotificationService] Notification received', {
+            title,
+            triggerType,
+            isLocal: (data as any)?.is_local,
+          });
+
+          const payload = {
+            title: title || '',
+            body: body || '',
+            data: data as Record<string, any>,
+          };
+
+          // Fan-out to all subscribers (IncomingCallHandler, screens, etc.)
+          for (const cb of this.notificationReceivedCallbacks) {
+            try {
+              cb(payload);
+            } catch (e) {
+              logger.error(
+                '[NotificationService] onNotificationReceived cb error',
+                e
+              );
+            }
+          }
         });
-      }
-    );
+    }
 
     return () => {
-      subscription.remove();
+      this.notificationReceivedCallbacks.delete(callback);
+      if (this.notificationReceivedCallbacks.size === 0) {
+        this.notificationReceivedSubscription?.remove();
+        this.notificationReceivedSubscription = null;
+      }
     };
   }
 
@@ -692,7 +823,7 @@ class NotificationsService {
     title: string,
     message: string,
     data?: Record<string, any>
-  ): Promise<Notification | null> {
+  ): Promise<DbNotification | null> {
     try {
       const notificationData: NotificationInsert = {
         user_id: userId,
@@ -714,7 +845,7 @@ class NotificationsService {
         throw new Error(`Failed to create notification: ${error.message}`);
       }
 
-      return notification as Notification;
+      return notification as DbNotification;
     } catch (error) {
       logger.error('Error in createNotification', error);
       throw error;
@@ -931,7 +1062,7 @@ class NotificationsService {
   async getNotificationsByType(
     type: NotificationType,
     limit: number = 20
-  ): Promise<Notification[]> {
+  ): Promise<DbNotification[]> {
     try {
       const currentUser = await usersService.getCurrentUser();
 
@@ -952,7 +1083,7 @@ class NotificationsService {
         return [];
       }
 
-      return (data || []) as Notification[];
+      return (data || []) as DbNotification[];
     } catch (error) {
       logger.error('Error in getNotificationsByType', error);
       return [];

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ import {
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
 
 // ✅ TWILIO IMPORTS
 import { useTwilioVoice } from '@/hooks/useTwilioVoice';
@@ -30,42 +31,146 @@ import { useProfessional } from '@/hooks/useProfessionals';
 import { useProfile } from '@/hooks/useProfile';
 
 export default function CallScreen() {
-  const { id, type, urgent } = useLocalSearchParams();
+  const { id, type, urgent, incoming } = useLocalSearchParams();
+  const isIncoming = incoming === 'true';
   const { user } = useProfile();
 
-  // ✅ FETCH PROFESSIONAL DATA (real, not mock)
+  const professionalId = isIncoming ? '' : (id as string);
+
+  // ✅ FETCH PROFESSIONAL DATA (outgoing calls)
   const { data: professionalData, isLoading: professionalLoading } =
-    useProfessional(id as string);
+    useProfessional(professionalId);
   const professional = professionalData || null;
 
   // ✅ TWILIO VOICE HOOK
   const {
+    callState,
     isInitialized,
     isConnecting,
     isConnected,
-    isMuted,
-    callSid,
+    isIdle,
     error: twilioError,
     makeCall,
+    acceptIncomingCall,
+    rejectIncomingCall,
     disconnect,
     toggleMute,
   } = useTwilioVoice();
+
+  // Derive UI state from Twilio call state
+  const isMuted = callState.isMuted;
+  const callSid =
+    (callState.call as any)?.callSid ??
+    (callState.call as any)?.sid ??
+    (callState.call as any)?.getSid?.();
 
   // ✅ LOCAL STATE
   const [duration, setDuration] = useState(0);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [callInitiated, setCallInitiated] = useState(false);
+  const [incomingCallDetails, setIncomingCallDetails] = useState<{
+    callId: string;
+    callerId?: string;
+    callerName?: string;
+    callerAvatarUrl?: string;
+    callType?: string;
+  } | null>(null);
   const [costPerSecond] = useState(
     professional ? Number(professional.rate_per_minute) / 60 : 0
   );
 
-  // ✅ INITIATE CALL ON MOUNT
+  const callAttemptId = useMemo(() => {
+    const rand = Math.random().toString(36).slice(2, 8);
+    return `call_${Date.now()}_${rand}`;
+  }, []);
+
+  // ✅ LOAD CALL DETAILS (incoming calls)
   useEffect(() => {
-    if (!callInitiated && professional && user && isInitialized) {
+    let mounted = true;
+    if (!isIncoming) return;
+    if (!id) return;
+
+    (async () => {
+      try {
+        logger.info('[CallScreen] Loading incoming call details', {
+          callAttemptId,
+          callId: id,
+        });
+
+        const { data, error } = await supabase
+          .from('calls')
+          .select(
+            `
+            id,
+            call_type,
+            caller:users!caller_id(id, name, avatar_url)
+          `
+          )
+          .eq('id', id as string)
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        if (!mounted) return;
+        setIncomingCallDetails({
+          callId: data?.id,
+          callType: data?.call_type,
+          callerId: data?.caller?.id,
+          callerName: data?.caller?.name,
+          callerAvatarUrl: data?.caller?.avatar_url,
+        });
+      } catch (e) {
+        logger.error('[CallScreen] Failed to load incoming call details', e, {
+          callAttemptId,
+          callId: id,
+        });
+        if (mounted) {
+          setIncomingCallDetails({
+            callId: id as string,
+          });
+        }
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [isIncoming, id, callAttemptId]);
+
+  // ✅ INITIATE CALL ON MOUNT (outgoing only)
+  useEffect(() => {
+    logger.info('[CallScreen] Auto-init check', {
+      callAttemptId,
+      callInitiated,
+      hasProfessional: !!professional,
+      hasUser: !!user,
+      isInitialized,
+      callStatus: callState.status,
+      route: { id, type, urgent, incoming },
+    });
+
+    if (isIncoming) return;
+
+    if (!callInitiated && professional && user && isInitialized && isIdle) {
       initiateCall();
     }
-  }, [callInitiated, professional, user, isInitialized]);
+  }, [
+    callAttemptId,
+    callInitiated,
+    professional,
+    user,
+    isInitialized,
+    isIdle,
+    callState.status,
+    id,
+    type,
+    urgent,
+    incoming,
+    isIncoming,
+  ]);
 
   // ✅ DURATION TIMER (only when connected)
   useEffect(() => {
@@ -97,6 +202,45 @@ export default function CallScreen() {
     }
   }, [twilioError]);
 
+  const handleAcceptIncoming = async () => {
+    if (!incomingCallDetails?.callId) return;
+    try {
+      logger.info('[CallScreen] Accepting incoming call', {
+        callAttemptId,
+        callId: incomingCallDetails.callId,
+        hasInvite: !!callState.callInvite,
+        status: callState.status,
+      });
+      await acceptIncomingCall(incomingCallDetails.callId, callAttemptId);
+      setCallInitiated(true);
+    } catch (e) {
+      logger.error('[CallScreen] Accept incoming call failed', e, {
+        callAttemptId,
+        callId: incomingCallDetails.callId,
+      });
+    }
+  };
+
+  const handleRejectIncoming = async () => {
+    if (!incomingCallDetails?.callId) return;
+    try {
+      logger.info('[CallScreen] Rejecting incoming call', {
+        callAttemptId,
+        callId: incomingCallDetails.callId,
+        hasInvite: !!callState.callInvite,
+        status: callState.status,
+      });
+      await rejectIncomingCall(incomingCallDetails.callId, callAttemptId);
+      router.back();
+    } catch (e) {
+      logger.error('[CallScreen] Reject incoming call failed', e, {
+        callAttemptId,
+        callId: incomingCallDetails.callId,
+      });
+      router.back();
+    }
+  };
+
   // ✅ INITIATE CALL FUNCTION
   const initiateCall = async () => {
     if (!professional || !user) {
@@ -108,17 +252,25 @@ export default function CallScreen() {
       setCallInitiated(true);
 
       logger.info('[CallScreen] Initiating call', {
+        callAttemptId,
+        routeProfessionalId: id,
         professionalId: professional.id,
         professionalUserId: professional.user_id,
         callType: type,
         urgent: urgent === 'true',
+        twilio: {
+          isInitialized,
+          status: callState.status,
+        },
       });
 
       // Call Twilio makeCall
       await makeCall(
-        professional.user_id, // To (professional's user_id)
+        professional.id, // DB: professionals.id
+        professional.user_id, // Twilio: users.id identity of callee
         type as 'voice' | 'video',
-        urgent === 'true'
+        urgent === 'true',
+        callAttemptId
       );
 
       logger.info('[CallScreen] Call initiated successfully');
@@ -170,13 +322,67 @@ export default function CallScreen() {
   const handleMuteToggle = () => {
     try {
       toggleMute();
-      logger.info('[CallScreen] Mute toggled', { muted: !isMuted });
+      logger.info('[CallScreen] Mute toggled', { callAttemptId });
     } catch (error) {
       logger.error('[CallScreen] Error toggling mute:', error);
     }
   };
 
   // ✅ LOADING STATE
+  if (isIncoming) {
+    // Incoming call screen doesn't need professional profile; show incoming UI
+    const callerName = incomingCallDetails?.callerName || 'Unknown caller';
+    const callerAvatarUrl = incomingCallDetails?.callerAvatarUrl || '';
+    const canAccept = !!callState.callInvite;
+
+    return (
+      <SafeAreaView style={styles.container}>
+        <LinearGradient
+          colors={['#111827', '#1f2937']}
+          style={styles.background}
+        >
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Incoming call</Text>
+            <Text style={[styles.loadingText, { fontSize: 18, marginTop: 8 }]}>
+              {callerName}
+            </Text>
+            {callerAvatarUrl ? (
+              <Image
+                source={{ uri: callerAvatarUrl }}
+                style={{ width: 96, height: 96, borderRadius: 48, marginTop: 18 }}
+              />
+            ) : null}
+
+            <Text style={[styles.loadingText, { marginTop: 18, opacity: 0.8 }]}>
+              {callState.callInvite
+                ? 'Tap accept to answer'
+                : 'Waiting for call invite...'}
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: 18, marginTop: 22 }}>
+              <TouchableOpacity
+                style={[styles.endCallButton, { backgroundColor: '#EF4444' }]}
+                onPress={handleRejectIncoming}
+              >
+                <PhoneOff size={22} color="#ffffff" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.endCallButton,
+                  { backgroundColor: canAccept ? '#10B981' : '#374151' },
+                ]}
+                onPress={handleAcceptIncoming}
+                disabled={!canAccept}
+              >
+                <Phone size={22} color="#ffffff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </LinearGradient>
+      </SafeAreaView>
+    );
+  }
+
   if (professionalLoading || !professional) {
     return (
       <SafeAreaView style={styles.container}>

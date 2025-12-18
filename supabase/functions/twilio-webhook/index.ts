@@ -7,6 +7,58 @@ const corsHeaders = {
     'authorization, x-client-info, apikey, content-type',
 };
 
+function extractUserIdFromTwilioAddress(value?: string | null): string | null {
+  if (!value) return null;
+  const s = value.trim();
+  if (s.startsWith('client:')) return s.slice('client:'.length);
+  // Some setups may send the identity directly
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) {
+    return s;
+  }
+  return null;
+}
+
+async function sendPush(
+  userId: string,
+  title: string,
+  body: string,
+  data: Record<string, unknown>
+): Promise<void> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+  if (!supabaseUrl) {
+    console.warn('⚠️ [twilio-webhook] SUPABASE_URL missing; cannot send push');
+    return;
+  }
+
+  const resp = await fetch(`${supabaseUrl}/functions/v1/send-push`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      // `send-push` only checks header presence; it uses service role key internally.
+      Authorization: 'Bearer twilio-webhook',
+    },
+    body: JSON.stringify({
+      user_id: userId,
+      title,
+      body,
+      data,
+      priority: 'high',
+      channelId: 'talkee-default-v2',
+      sound: 'default',
+    }),
+  });
+
+  const text = await resp.text().catch(() => '');
+  console.log('📨 [twilio-webhook] Follow-up push sent', {
+    ok: resp.ok,
+    status: resp.status,
+    userId,
+    title,
+    bodyPreview: body.slice(0, 80),
+    responsePreview: text.slice(0, 200),
+  });
+}
+
 serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -90,6 +142,39 @@ serve(async (req: Request) => {
     }
 
     console.log('✅ [twilio-webhook] Call record updated');
+
+    // If the call ended without being answered, send a follow-up push so the callee
+    // doesn't keep seeing "Incoming call" indefinitely.
+    if (['no-answer', 'busy', 'canceled', 'failed'].includes(status)) {
+      const toUserId = extractUserIdFromTwilioAddress(data.To);
+      const fromUserId = extractUserIdFromTwilioAddress(data.From);
+
+      if (toUserId) {
+        const fromLabel = fromUserId ? 'Someone' : (data.From ? data.From : 'Someone');
+        const pushType =
+          status === 'no-answer' || status === 'busy' ? 'call_missed' : 'call_ended';
+
+        const title = status === 'no-answer' || status === 'busy' ? 'Missed Call' : 'Call Ended';
+        const body =
+          status === 'no-answer' || status === 'busy'
+            ? `You missed a call from ${fromLabel}.`
+            : `The call has ended.`;
+
+        await sendPush(toUserId, title, body, {
+          type: pushType,
+          call_sid: callSid,
+          twilio_status: status,
+          from: fromUserId ?? data.From,
+          to: toUserId,
+        });
+      } else {
+        console.warn('⚠️ [twilio-webhook] Could not resolve callee user id from To:', {
+          To: data.To,
+          CallSid: callSid,
+          status,
+        });
+      }
+    }
 
     // Handle billing for completed calls
     if (status === 'completed' && duration > 0) {

@@ -17,3 +17,8 @@ echo ""
 adb logcat | grep -E "\[TEST-PUSH\]|\[SEND-PUSH\]|TEST-PUSH|SEND-PUSH|test-push|send-push"
 
 
+
+
+
+
+

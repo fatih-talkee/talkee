@@ -89,16 +89,14 @@ serve(async (req) => {
       channelId: body.channelId,
     });
 
-    const {
-      user_id,
-      title,
-      body: messageBody,
-      data,
-      sound,
-      badge,
-      priority,
-      channelId,
-    } = body;
+    let user_id: string = body.user_id;
+    const title: string = body.title;
+    const messageBody: string = body.body;
+    const data: Record<string, any> | undefined = body.data;
+    const sound: 'default' | null | undefined = body.sound;
+    const badge: number | undefined = body.badge;
+    const priority: 'default' | 'normal' | 'high' | undefined = body.priority;
+    const channelId: string | undefined = body.channelId;
 
     // Validate required fields
     if (!user_id || !title || !messageBody) {
@@ -276,8 +274,8 @@ serve(async (req) => {
       body: messageBody,
       data,
       badge,
-      priority: priority ?? 'default',
-      channelId,
+      priority: priority ?? 'high', // Default to high for faster delivery
+      channelId: channelId ?? 'talkee-default-v2', // Use the new channel by default
     }));
 
     console.log('📨 [SEND-PUSH] Messages created:', {

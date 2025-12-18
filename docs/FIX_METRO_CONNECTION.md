@@ -91,3 +91,8 @@ Bu yöntem:
 Tek dezavantajı biraz daha yavaş olmasıdır.
 
 
+
+
+
+
+

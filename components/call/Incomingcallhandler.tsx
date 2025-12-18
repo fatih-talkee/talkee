@@ -17,11 +17,12 @@ import { logger } from '@/lib/logger';
 import { LinearGradient } from 'expo-linear-gradient';
 
 interface IncomingCallData {
-  call_sid: string;
-  caller_id: string;
+  call_sid?: string;
+  caller_id?: string;
   caller_name: string;
   caller_avatar?: string;
   call_id?: string;
+  call_type?: 'voice' | 'video';
 }
 
 export function IncomingCallHandler() {
@@ -32,21 +33,28 @@ export function IncomingCallHandler() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    // Listen for incoming call notifications
+    // Listen for incoming call notifications (app-level)
     const unsubscribe = notificationsService.onNotificationReceived(
       (notification) => {
         logger.info('[IncomingCall] Notification received', {
           type: notification.data?.type,
           call_sid: notification.data?.call_sid,
+          call_id: notification.data?.call_id,
         });
 
-        if (notification.data?.type === 'incoming_call') {
+        // We currently send "call_request" from our backend/app when a user is calling a professional.
+        // Twilio's own call invite is handled via the Voice SDK (see second effect below).
+        if (
+          notification.data?.type === 'incoming_call' ||
+          notification.data?.type === 'call_request'
+        ) {
           const callData: IncomingCallData = {
-            call_sid: notification.data.call_sid,
-            caller_id: notification.data.caller_id,
-            caller_name: notification.data.caller_name || 'Unknown',
-            caller_avatar: notification.data.caller_avatar,
-            call_id: notification.data.call_id,
+            call_sid: notification.data?.call_sid,
+            call_id: notification.data?.call_id,
+            caller_id: notification.data?.caller_id,
+            caller_name: notification.data?.caller_name || 'Unknown',
+            caller_avatar: notification.data?.caller_avatar,
+            call_type: notification.data?.call_type,
           };
 
           setIncomingCall(callData);
@@ -56,10 +64,45 @@ export function IncomingCallHandler() {
             call_sid: callData.call_sid,
             caller_id: callData.caller_id,
             caller_name: callData.caller_name,
+            call_id: callData.call_id,
           });
         }
       }
     );
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    // Listen for Twilio Voice CallInvite (SDK-level "ringing" when app is foreground)
+    const unsubscribe = twilioVoiceService.subscribe((state) => {
+      if (!state.callInvite) return;
+
+      const invite = state.callInvite as any;
+      const callSid = invite.getCallSid?.();
+      const from = invite.getFrom?.() || invite.getCaller?.() || 'Unknown';
+      const custom = invite.getCustomParameters?.() as any;
+      const callIdFromCustom =
+        custom?.CallId || custom?.call_id || custom?.callId || undefined;
+
+      setIncomingCall((prev) => ({
+        call_sid: prev?.call_sid || callSid,
+        call_id: prev?.call_id || callIdFromCustom,
+        caller_id: prev?.caller_id || from,
+        caller_name: prev?.caller_name || from || 'Unknown',
+        caller_avatar: prev?.caller_avatar,
+        call_type: prev?.call_type || 'voice',
+      }));
+      setIsVisible(true);
+
+      logger.info('[IncomingCall] Twilio CallInvite received (ringing)', {
+        call_sid: callSid,
+        from,
+        call_id: callIdFromCustom,
+      });
+    });
 
     return () => {
       unsubscribe();
@@ -72,21 +115,31 @@ export function IncomingCallHandler() {
     try {
       logger.info('[IncomingCall] Accepting call', {
         call_sid: incomingCall.call_sid,
+        call_id: incomingCall.call_id,
       });
 
       // Hide modal immediately
       setIsVisible(false);
 
-      // Navigate to call screen
-      router.push({
-        pathname: '/call/[id]',
-        params: {
-          id: incomingCall.caller_id,
-          type: 'voice',
-          incoming: 'true',
+      // Navigate to call screen (incoming=true). We prefer DB call_id if present.
+      if (incomingCall.call_id) {
+        router.push({
+          pathname: '/call/[id]',
+          params: {
+            id: incomingCall.call_id,
+            type: incomingCall.call_type || 'voice',
+            incoming: 'true',
+          },
+        });
+      } else {
+        // If we don't have a DB call record id, we can still show the modal UI;
+        // call screen currently expects a DB call id for details/accept flow.
+        logger.warn('[IncomingCall] Missing call_id; staying on modal', {
           call_sid: incomingCall.call_sid,
-        },
-      });
+        });
+        setIsVisible(true);
+        return;
+      }
 
       // Clear incoming call state
       setIncomingCall(null);
@@ -103,10 +156,13 @@ export function IncomingCallHandler() {
     try {
       logger.info('[IncomingCall] Declining call', {
         call_sid: incomingCall.call_sid,
+        call_id: incomingCall.call_id,
       });
 
-      // Disconnect the call
-      await twilioVoiceService.disconnect();
+      // Reject call invite if present (Twilio SDK)
+      await twilioVoiceService.rejectIncomingCall({
+        callId: incomingCall.call_id,
+      });
 
       setIsVisible(false);
       setIncomingCall(null);

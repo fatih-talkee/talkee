@@ -1451,7 +1451,7 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '100%',
     maxWidth: 500,
-    maxHeight: '90%',
+    height: '90%',
     borderRadius: 16,
     overflow: 'hidden',
     flexDirection: 'column',
@@ -1598,7 +1598,7 @@ const styles = StyleSheet.create({
   timePickerContent: {
     width: '100%',
     maxWidth: 400,
-    maxHeight: '80%',
+    height: '80%',
     borderRadius: 16,
     overflow: 'hidden',
   },

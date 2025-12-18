@@ -95,6 +95,7 @@ export function Step6Finish({
             </View>
             <ScrollView
               style={styles.modalBody}
+              contentContainerStyle={styles.modalBodyContent}
               showsVerticalScrollIndicator={false}
             >
               <Text style={[styles.modalText, { color: theme.colors.textSecondary }]}>
@@ -169,6 +170,7 @@ export function Step6Finish({
             </View>
             <ScrollView
               style={styles.modalBody}
+              contentContainerStyle={styles.modalBodyContent}
               showsVerticalScrollIndicator={false}
             >
               <Text style={[styles.modalText, { color: theme.colors.textSecondary }]}>
@@ -282,9 +284,10 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '100%',
     maxWidth: 500,
-    maxHeight: '80%',
+    height: '80%',
     borderRadius: 20,
     overflow: 'hidden',
+    flexDirection: 'column',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -299,6 +302,8 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     flex: 1,
+  },
+  modalBodyContent: {
     padding: 20,
   },
   modalText: {

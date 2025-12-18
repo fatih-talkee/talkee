@@ -1,5 +1,12 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Platform,
+} from 'react-native';
 import { Briefcase, Check, Search, X } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useCategoriesGrouped } from '@/hooks/useCategories';
@@ -145,10 +152,9 @@ export function Step4Categories({
           )}
 
           {/* Grouped Categories */}
-          <ScrollView
-            style={styles.categoriesScroll}
-            showsVerticalScrollIndicator={false}
-          >
+          {/* NOTE: This step is already rendered inside the parent ScrollView in `become-professional/index.tsx`.
+              Avoid nested ScrollView here (can cause collapsed height / overlapping layouts). */}
+          <View style={styles.groupsContainer}>
             {filteredGroups.map((group) => (
               <View key={group.id} style={styles.categoryGroup}>
                 {/* Group Header */}
@@ -243,7 +249,7 @@ export function Step4Categories({
                 </Text>
               </View>
             )}
-          </ScrollView>
+          </View>
         </>
       )}
     </View>
@@ -330,8 +336,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Medium',
   },
-  categoriesScroll: {
-    flex: 1,
+  groupsContainer: {
     width: '100%',
   },
   categoryGroup: {
@@ -357,11 +362,10 @@ const styles = StyleSheet.create({
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between',
   },
   categoryCard: {
-    flex: 1,
-    minWidth: '30%',
+    width: '48%',
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderRadius: 12,
@@ -369,6 +373,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    marginBottom: 12,
   },
   checkBadge: {
     position: 'absolute',

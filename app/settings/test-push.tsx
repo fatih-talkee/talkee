@@ -619,6 +619,42 @@ export default function TestPushScreen() {
               {
                 backgroundColor: theme.colors.surface,
                 borderColor: theme.colors.border,
+                marginTop: 12,
+              },
+            ]}
+            onPress={async () => {
+              try {
+                await notificationsService.sendLocalNotification(
+                  '🔔 Local Test',
+                  'Bu bir yerel bildirim testidir. Ön planda görünmelidir.',
+                  { type: 'local_test' }
+                );
+                toast.success({
+                  title: 'Local Notification Sent',
+                  message: 'Cihazınızın yerel bildirim sistemini kontrol edin.',
+                });
+              } catch (error: any) {
+                toast.error({ title: 'Local Test Failed', message: error.message });
+              }
+            }}
+          >
+            <AlertCircle size={20} color={theme.colors.primary} />
+            <Text
+              style={[
+                styles.refreshButtonText,
+                { color: theme.colors.primary },
+              ]}
+            >
+              Send Local Notification Test
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.refreshButton,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
                 opacity: refreshingToken ? 0.6 : 1,
               },
             ]}

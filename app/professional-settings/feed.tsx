@@ -745,7 +745,7 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '100%',
     maxWidth: 500,
-    maxHeight: '90%',
+    height: '90%',
     borderRadius: 16,
     overflow: 'hidden',
     flexDirection: 'column',

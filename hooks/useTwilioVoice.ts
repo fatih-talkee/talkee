@@ -35,6 +35,7 @@ export interface UseTwilioVoiceOptions {
 export interface UseTwilioVoiceReturn {
   // State
   callState: CallState;
+  isInitialized: boolean;
   isConnected: boolean;
   isConnecting: boolean;
   isIdle: boolean;
@@ -43,8 +44,13 @@ export interface UseTwilioVoiceReturn {
   // Actions
   makeCall: (
     professionalId: string,
-    callType?: 'voice' | 'video'
+    professionalUserId: string,
+    callType?: 'voice' | 'video',
+    urgent?: boolean,
+    debugId?: string
   ) => Promise<void>;
+  acceptIncomingCall: (callId?: string, debugId?: string) => Promise<void>;
+  rejectIncomingCall: (callId?: string, debugId?: string) => Promise<void>;
   disconnect: () => Promise<void>;
   toggleMute: () => Promise<void>;
   toggleHold: () => Promise<void>;
@@ -206,7 +212,13 @@ export function useTwilioVoice(
    * Make an outgoing call
    */
   const makeCall = useCallback(
-    async (professionalId: string, callType: 'voice' | 'video' = 'voice') => {
+    async (
+      professionalId: string,
+      professionalUserId: string,
+      callType: 'voice' | 'video' = 'voice',
+      urgent: boolean = false,
+      debugId?: string
+    ) => {
       if (!user) {
         const error = new Error('User not authenticated');
         setError(error);
@@ -228,14 +240,20 @@ export function useTwilioVoice(
       try {
         setError(null);
         logger.info('[useTwilioVoice] Making call...', {
+          debugId,
           professionalId,
+          professionalUserId,
           callType,
+          urgent,
         });
 
         await twilioVoiceService.makeCall({
           professionalId,
+          professionalUserId,
           callerId: user.id,
           type: callType,
+          urgent,
+          debugId,
         });
 
         logger.info('[useTwilioVoice] Call initiated successfully');
@@ -247,6 +265,50 @@ export function useTwilioVoice(
       }
     },
     [user, callState.status]
+  );
+
+  /**
+   * Accept incoming call invite
+   */
+  const acceptIncomingCall = useCallback(
+    async (callId?: string, debugId?: string) => {
+      try {
+        setError(null);
+        logger.info('[useTwilioVoice] Accepting incoming call...', {
+          debugId,
+          callId,
+        });
+        await twilioVoiceService.acceptIncomingCall({ callId, debugId });
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        setError(error);
+        logger.error('[useTwilioVoice] Accept incoming call error:', error);
+        throw error;
+      }
+    },
+    []
+  );
+
+  /**
+   * Reject incoming call invite
+   */
+  const rejectIncomingCall = useCallback(
+    async (callId?: string, debugId?: string) => {
+      try {
+        setError(null);
+        logger.info('[useTwilioVoice] Rejecting incoming call...', {
+          debugId,
+          callId,
+        });
+        await twilioVoiceService.rejectIncomingCall({ callId, debugId });
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        setError(error);
+        logger.error('[useTwilioVoice] Reject incoming call error:', error);
+        throw error;
+      }
+    },
+    []
   );
 
   /**
@@ -344,6 +406,7 @@ export function useTwilioVoice(
   }, [options.autoConnect, user, callState.status]);
 
   // Computed states
+  const isInitialized = twilioVoiceService.isSdkInitialized();
   const isConnected = callState.status === 'connected';
   const isConnecting =
     callState.status === 'connecting' || callState.status === 'ringing';
@@ -353,6 +416,7 @@ export function useTwilioVoice(
   return {
     // State
     callState,
+    isInitialized,
     isConnected,
     isConnecting,
     isIdle,
@@ -360,6 +424,8 @@ export function useTwilioVoice(
 
     // Actions
     makeCall,
+    acceptIncomingCall,
+    rejectIncomingCall,
     disconnect,
     toggleMute,
     toggleHold,

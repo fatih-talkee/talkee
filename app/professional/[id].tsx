@@ -9,11 +9,9 @@ import {
   Platform,
   Modal,
   Pressable,
-} from 'react-native';
-import {
   SafeAreaView,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Href, router, useLocalSearchParams } from 'expo-router';
 import { logger } from '@/lib/logger';
 import {

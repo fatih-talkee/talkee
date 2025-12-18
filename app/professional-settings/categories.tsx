@@ -466,11 +466,10 @@ const styles = StyleSheet.create({
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between',
   },
   categoryCard: {
-    flex: 1,
-    minWidth: '30%',
+    width: '48%',
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderRadius: 12,
@@ -478,6 +477,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    marginBottom: 12,
   },
   checkBadge: {
     position: 'absolute',
