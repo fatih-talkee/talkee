@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
@@ -41,10 +41,17 @@ export class AvatarService {
         const { data: buckets, error: bucketError } =
           await supabase.storage.listBuckets();
         if (bucketError) {
-          console.warn('⚠️ Could not list buckets (might be permission issue):', bucketError.message);
-          console.log('ℹ️ Continuing with upload - will fail with better error if bucket missing');
+          console.warn(
+            '⚠️ Could not list buckets (might be permission issue):',
+            bucketError.message
+          );
+          console.log(
+            'ℹ️ Continuing with upload - will fail with better error if bucket missing'
+          );
         } else {
-          const avatarsBucket = buckets?.find((b) => b.name === this.BUCKET_NAME);
+          const avatarsBucket = buckets?.find(
+            (b) => b.name === this.BUCKET_NAME
+          );
           if (avatarsBucket) {
             console.log('✅ Bucket found:', {
               name: avatarsBucket.name,
@@ -52,11 +59,16 @@ export class AvatarService {
               id: avatarsBucket.id,
             });
           } else {
-            console.warn(`⚠️ Bucket '${this.BUCKET_NAME}' not found in list, but continuing anyway (might be permission issue)`);
+            console.warn(
+              `⚠️ Bucket '${this.BUCKET_NAME}' not found in list, but continuing anyway (might be permission issue)`
+            );
           }
         }
       } catch (checkError) {
-        console.warn('⚠️ Bucket check failed, continuing with upload:', checkError);
+        console.warn(
+          '⚠️ Bucket check failed, continuing with upload:',
+          checkError
+        );
         // Don't throw - let upload attempt reveal the real error
       }
 
@@ -64,7 +76,7 @@ export class AvatarService {
       console.log('📥 Reading image from URI...');
       let imageData: Uint8Array;
       let contentType: string;
-      
+
       if (Platform.OS === 'web') {
         // Web: Use fetch
         const response = await fetch(imageUri);
@@ -75,20 +87,24 @@ export class AvatarService {
         const arrayBuffer = await blob.arrayBuffer();
         imageData = new Uint8Array(arrayBuffer);
         contentType = blob.type || 'image/jpeg';
-        console.log('✅ Image blob created (web), size:', imageData.length, 'bytes');
+        console.log(
+          '✅ Image blob created (web), size:',
+          imageData.length,
+          'bytes'
+        );
       } else {
         // Mobile: Use FileSystem
         const base64 = await FileSystem.readAsStringAsync(imageUri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-        
+
         // Convert base64 to Uint8Array
         const binaryString = atob(base64);
         imageData = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
           imageData[i] = binaryString.charCodeAt(i);
         }
-        
+
         // Determine content type from file extension
         const fileExt = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
         const mimeTypes: { [key: string]: string } = {
@@ -98,7 +114,7 @@ export class AvatarService {
           webp: 'image/webp',
         };
         contentType = mimeTypes[fileExt] || 'image/jpeg';
-        
+
         console.log('✅ Image read (mobile), size:', imageData.length, 'bytes');
       }
 
@@ -114,7 +130,7 @@ export class AvatarService {
       const fileName = `avatar-${timestamp}.${ext}`;
       // Use auth.uid() instead of userId for RLS policy compatibility
       const filePath = `${authUser.id}/${fileName}`;
-      
+
       console.log('📁 File path:', {
         filePath,
         userId,
@@ -177,13 +193,13 @@ export class AvatarService {
         process.env.EXPO_PUBLIC_SUPABASE_URL ||
         Constants.expoConfig?.extra?.supabaseUrl ||
         '';
-      
+
       if (!supabaseUrl) {
         throw new Error('Supabase URL not configured');
       }
-      
+
       const uploadUrl = `${supabaseUrl}/storage/v1/object/${this.BUCKET_NAME}/${filePath}`;
-      
+
       const uploadResponse = await fetch(uploadUrl, {
         method: 'POST',
         headers: {
@@ -203,7 +219,7 @@ export class AvatarService {
         } catch {
           errorMessage = errorText || errorMessage;
         }
-        
+
         console.error('❌ Upload error details:', {
           status: uploadResponse.status,
           statusText: uploadResponse.statusText,
@@ -215,7 +231,10 @@ export class AvatarService {
         });
 
         // Provide more helpful error message based on error type
-        if (errorMessage.includes('Bucket not found') || errorMessage.includes('does not exist')) {
+        if (
+          errorMessage.includes('Bucket not found') ||
+          errorMessage.includes('does not exist')
+        ) {
           throw new Error(
             `Storage bucket '${this.BUCKET_NAME}' not found. Please verify the bucket exists in Supabase Dashboard → Storage → Buckets`
           );
@@ -229,12 +248,16 @@ export class AvatarService {
           throw new Error(
             `Permission denied (RLS). User ID: ${userId}, Auth UID: ${authUser.id}, File Path: ${filePath}.\n\nPlease check:\n1. RLS policies exist for 'avatars' bucket\n2. Policy allows INSERT for authenticated users\n3. Policy checks: (storage.foldername(name))[1] = auth.uid()::text\n4. File path format: ${authUser.id}/avatar-*.${ext}`
           );
-        } else if (errorMessage.includes('JWT') || errorMessage.includes('token') || errorMessage.includes('unauthorized')) {
+        } else if (
+          errorMessage.includes('JWT') ||
+          errorMessage.includes('token') ||
+          errorMessage.includes('unauthorized')
+        ) {
           throw new Error(
             'Authentication token expired or invalid. Please log out and log in again.'
           );
         }
-        
+
         throw new Error(
           `Upload failed: ${errorMessage}. Status: ${uploadResponse.status}`
         );
@@ -263,9 +286,7 @@ export class AvatarService {
           userId,
           publicUrl,
         });
-        throw new Error(
-          `Failed to update user record: ${updateError.message}`
-        );
+        throw new Error(`Failed to update user record: ${updateError.message}`);
       }
 
       console.log('✅ Avatar upload completed successfully:', publicUrl);

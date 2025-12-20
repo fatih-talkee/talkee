@@ -188,8 +188,14 @@ export default function RootLayout() {
   const [i18nReady, setI18nReady] = useState(false);
   const [initError, setInitError] = useState<Error | null>(null);
 
+  // Debug: Log when app starts
+  useEffect(() => {
+    console.log('🚀 [_layout] App started, JavaScript loaded!');
+  }, []);
+
   // Initialize logger and error handlers
   useEffect(() => {
+    console.log('🔧 [_layout] Initializing app...');
     // Configure logger for production
     const forceConsoleLogs = process.env.EXPO_PUBLIC_DEBUG_LOGS === '1';
     logger.configure({
@@ -237,6 +243,15 @@ export default function RootLayout() {
     'Inter-Bold': Inter_700Bold,
   });
 
+  // Debug: Log font and i18n status
+  useEffect(() => {
+    console.log('📊 [_layout] Status:', {
+      fontsLoaded,
+      fontError: !!fontError,
+      i18nReady,
+    });
+  }, [fontsLoaded, fontError, i18nReady]);
+
   // Add timeout to prevent infinite hang
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -273,21 +288,27 @@ export default function RootLayout() {
     }
 
     if ((fontsLoaded || fontError) && i18nReady) {
+      console.log('✅ [_layout] Hiding splash screen...');
       SplashScreen.hideAsync().catch((error) => {
         logger.error('[App] Error hiding splash screen', error);
       });
+    } else {
+      console.log('⏳ [_layout] Waiting for fonts and i18n...');
     }
   }, [fontsLoaded, fontError, i18nReady]);
 
   // Show loading screen while fonts and i18n are loading
   // This prevents white screen on startup
   if ((!fontsLoaded && !fontError) || !i18nReady) {
+    console.log('⏸️ [_layout] Showing loading screen...');
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3B82F6" />
       </View>
     );
   }
+
+  console.log('🎉 [_layout] Rendering main app!');
 
   // Stripe publishable key from environment
   const stripePublishableKey =
