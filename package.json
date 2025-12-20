@@ -93,6 +93,8 @@
     "@types/stripe": "^8.0.416",
     "babel-plugin-module-resolver": "^5.0.2",
     "dotenv": "^17.2.3",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~10.0.0",
     "expo-dev-client": "~6.0.20",
     "metro": "^0.83.1",
     "metro-config": "^0.82.0",

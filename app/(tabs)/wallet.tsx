@@ -26,30 +26,29 @@ import {
   useWalletTransactions,
   useMonthlyTransactions,
 } from '@/hooks/useUser';
+import { useProfile } from '@/hooks/useProfile';
 import { logger } from '@/lib/logger';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { SectionLoading } from '@/components/ui/SectionLoading';
 import { InlineLoading } from '@/components/ui/InlineLoading';
 
-interface CreditPackage {
+interface FundPackage {
   id: string;
   amount: number;
-  price: number;
-  bonus?: number;
   popular?: boolean;
 }
 
-const creditPackages: CreditPackage[] = [
-  { id: '1', amount: 50, price: 49.99 },
-  { id: '2', amount: 100, price: 89.99, bonus: 10 },
-  { id: '3', amount: 250, price: 199.99, bonus: 50, popular: true },
-  { id: '4', amount: 500, price: 349.99, bonus: 150 },
+const fundPackages: FundPackage[] = [
+  { id: '1', amount: 50 },
+  { id: '2', amount: 100 },
+  { id: '3', amount: 250, popular: true },
+  { id: '4', amount: 500 },
 ];
 
 export default function WalletScreen() {
   const { theme } = useTheme();
   const segments = useSegments();
-  const [selectedPackage, setSelectedPackage] = useState<string>('3'); // Default: 250 credits (popular)
+  const [selectedPackage, setSelectedPackage] = useState<string>('3'); // Default: $250 (popular)
   const [refreshing, setRefreshing] = useState(false);
 
   // Fetch wallet balance
@@ -73,6 +72,44 @@ export default function WalletScreen() {
     data: monthlyTransactions = [],
     refetch: refetchMonthlyTransactions,
   } = useMonthlyTransactions();
+
+  // Fetch all transactions for income/expense calculation (only if professional)
+  const { data: allTransactions = [], isLoading: allTransactionsLoading } =
+    useWalletTransactions(1000, 0); // Fetch up to 1000 transactions for totals
+
+  // Check if user is professional
+  const { data: profileData } = useProfile();
+  const isProfessional = profileData?.is_professional || false;
+
+  // Calculate total income and expenses
+  const { totalIncome, totalExpenses } = useMemo(() => {
+    if (!isProfessional || allTransactions.length === 0) {
+      return { totalIncome: 0, totalExpenses: 0 };
+    }
+
+    const income = allTransactions.reduce((sum, tx) => {
+      if (
+        tx.type === 'call_earning' ||
+        tx.type === 'credit_purchase' ||
+        tx.type === 'income'
+      ) {
+        return sum + (tx.amount || 0);
+      }
+      return sum;
+    }, 0);
+
+    const expenses = allTransactions.reduce((sum, tx) => {
+      if (tx.type === 'call_expense' || tx.type === 'expenses') {
+        return sum + (tx.amount || 0);
+      }
+      return sum;
+    }, 0);
+
+    return {
+      totalIncome: income,
+      totalExpenses: expenses,
+    };
+  }, [isProfessional, allTransactions]);
 
   // Refetch when screen comes into focus (after navigation from credit-selection)
   useEffect(() => {
@@ -116,7 +153,7 @@ export default function WalletScreen() {
   const handlePurchase = (packageId: string, amount: number) => {
     setSelectedPackage(packageId);
     try {
-      router.push(`/credit-selection?credits=${amount}`);
+      router.push(`/credit-selection?amount=${amount}`);
     } catch (error) {
       console.error('Navigation error:', error);
     }
@@ -270,6 +307,72 @@ export default function WalletScreen() {
           )}
         </Card>
 
+        {/* Income & Expenses (only for professionals) */}
+        {isProfessional && !allTransactionsLoading && (
+          <Card
+            style={[
+              styles.incomeExpenseCard,
+              {
+                backgroundColor: theme.colors.card,
+                borderColor: theme.colors.border,
+              },
+            ]}
+          >
+            <View style={styles.incomeExpenseRow}>
+              <View style={styles.incomeExpenseItem}>
+                <View style={styles.incomeExpenseHeader}>
+                  <TrendingUp size={16} color={theme.colors.success} />
+                  <Text
+                    style={[
+                      styles.incomeExpenseLabel,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Total Income
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.incomeExpenseAmount,
+                    { color: theme.colors.success },
+                  ]}
+                >
+                  {'$' + totalIncome.toFixed(2)}
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.incomeExpenseDivider,
+                  { backgroundColor: theme.colors.border },
+                ]}
+              />
+
+              <View style={styles.incomeExpenseItem}>
+                <View style={styles.incomeExpenseHeader}>
+                  <TrendingDown size={16} color={theme.colors.error} />
+                  <Text
+                    style={[
+                      styles.incomeExpenseLabel,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Total Expenses
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.incomeExpenseAmount,
+                    { color: theme.colors.error },
+                  ]}
+                >
+                  {'$' + totalExpenses.toFixed(2)}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        )}
+
         {/* Quick Actions */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
@@ -319,7 +422,7 @@ export default function WalletScreen() {
                   { color: theme.colors.textSecondary },
                 ]}
               >
-                Add Credits
+                Add Funds
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -371,20 +474,20 @@ export default function WalletScreen() {
           </View>
         </View>
 
-        {/* Credit Packages */}
+        {/* Fund Packages */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            Buy Credits
+            Add Funds
           </Text>
           <Text
             style={[styles.sectionSubtitle, { color: theme.colors.textMuted }]}
           >
-            Purchase credits to connect with professionals. Unused credits never
-            expire.
+            Add funds to your wallet to connect with professionals. Unused funds
+            never expire.
           </Text>
 
           <View style={styles.packagesGrid}>
-            {creditPackages.map((pkg) => {
+            {fundPackages.map((pkg) => {
               const isSelected = selectedPackage === pkg.id;
               const isPopular = pkg.popular; // Only 250 has popular: true
 
@@ -450,35 +553,7 @@ export default function WalletScreen() {
                     >
                       {'$' + pkg.amount}
                     </Text>
-                    <Text
-                      style={[
-                        styles.packageCredits,
-                        {
-                          color:
-                            theme.name === 'dark'
-                              ? '#333333'
-                              : theme.colors.textMuted,
-                        },
-                      ]}
-                    >
-                      credits
-                    </Text>
                   </View>
-
-                  {pkg.bonus && (
-                    <View style={styles.bonusSection}>
-                      <Text
-                        style={[
-                          styles.bonusText,
-                          {
-                            color: theme.colors.success,
-                          },
-                        ]}
-                      >
-                        {'+ $' + pkg.bonus + ' bonus'}
-                      </Text>
-                    </View>
-                  )}
 
                   <View style={styles.packageFooter}>
                     <Text
@@ -489,24 +564,7 @@ export default function WalletScreen() {
                         },
                       ]}
                     >
-                      {'$' + pkg.price}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.packageValue,
-                        {
-                          color:
-                            theme.name === 'dark'
-                              ? '#666666'
-                              : theme.colors.textMuted,
-                        },
-                      ]}
-                    >
-                      {'$' +
-                        (pkg.price / (pkg.amount + (pkg.bonus || 0))).toFixed(
-                          2
-                        )}
-                      /credit
+                      {'$' + pkg.amount.toFixed(2)}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -658,8 +716,46 @@ const styles = StyleSheet.create({
   balanceCard: {
     // theme.colors.card → card background
     // theme.colors.border → card border
+    marginBottom: 16,
+    borderRadius: 16,
+  },
+  incomeExpenseCard: {
+    // theme.colors.card → card background
+    // theme.colors.border → card border
     marginBottom: 24,
     borderRadius: 16,
+    paddingVertical: 16,
+  },
+  incomeExpenseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  incomeExpenseItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  incomeExpenseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 6,
+  },
+  incomeExpenseLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    // theme.colors.textSecondary → label text
+  },
+  incomeExpenseAmount: {
+    fontSize: 20,
+    fontFamily: 'Inter-Bold',
+    // theme.colors.success (income) / theme.colors.error (expenses)
+  },
+  incomeExpenseDivider: {
+    width: 1,
+    height: 40,
+    // theme.colors.border → divider color
+    marginHorizontal: 16,
   },
   balanceHeader: {
     flexDirection: 'row',
@@ -770,33 +866,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Bold',
     // theme.colors.text → package amount
   },
-  packageCredits: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    // theme.colors.textMuted → credits label
-  },
-  bonusSection: {
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  bonusText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Bold',
-    // theme.colors.success → bonus text
-  },
   packageFooter: {
     alignItems: 'center',
+    marginTop: 8,
   },
   packagePrice: {
     fontSize: 16,
     fontFamily: 'Inter-Bold',
     // theme.colors.warning → price
-    marginBottom: 2,
-  },
-  packageValue: {
-    fontSize: 10,
-    fontFamily: 'Inter-Regular',
-    // theme.colors.textMuted → per-credit value
   },
   transactionCard: {
     padding: 0,

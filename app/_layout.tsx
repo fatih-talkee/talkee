@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '../hooks/useFrameworkReady';
@@ -26,7 +26,7 @@ import { SentryAdapter } from '../lib/sentryAdapter';
 import { notificationsService } from '../services';
 import { twilioVoiceService } from '../services/twilioVoice.service';
 import { IncomingCallHandler } from '../components/call/Incomingcallhandler';
-import { Platform } from 'react-native';
+import { Platform, View, ActivityIndicator, StyleSheet } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { OfflineBanner } from '../components/ui/OfflineBanner';
 import { StripeProvider } from '@stripe/stripe-react-native';
@@ -128,10 +128,12 @@ function AutoAvailabilityWrapper({ children }: { children: React.ReactNode }) {
 function TwilioVoiceInitializer({ children }: { children: React.ReactNode }) {
   const { user } = useProfile();
   const [twilioReady, setTwilioReady] = useState(false);
+  const twilioReadyRef = useRef(false);
 
   useEffect(() => {
     // Only initialize Twilio if user is authenticated
     if (!user) {
+      twilioReadyRef.current = false;
       setTwilioReady(false);
       return;
     }
@@ -146,6 +148,7 @@ function TwilioVoiceInitializer({ children }: { children: React.ReactNode }) {
         await twilioVoiceService.register();
 
         if (mounted) {
+          twilioReadyRef.current = true;
           setTwilioReady(true);
           logger.info(
             '[Twilio] Voice SDK initialized and registered successfully'
@@ -155,6 +158,7 @@ function TwilioVoiceInitializer({ children }: { children: React.ReactNode }) {
         logger.error('[Twilio] Initialization error:', error);
         // Don't block app if Twilio fails
         if (mounted) {
+          twilioReadyRef.current = false;
           setTwilioReady(false);
         }
       }
@@ -165,7 +169,10 @@ function TwilioVoiceInitializer({ children }: { children: React.ReactNode }) {
     // Cleanup on unmount or user logout
     return () => {
       mounted = false;
-      if (twilioReady) {
+      // Always attempt cleanup when leaving an authenticated session.
+      // Use a ref to avoid stale-closure issues (twilioReady state can be outdated in cleanup).
+      if (twilioReadyRef.current || twilioVoiceService.isSdkInitialized()) {
+        twilioReadyRef.current = false;
         twilioVoiceService.cleanup().catch((error) => {
           logger.error('[Twilio] Cleanup error:', error);
         });
@@ -272,8 +279,14 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError, i18nReady]);
 
+  // Show loading screen while fonts and i18n are loading
+  // This prevents white screen on startup
   if ((!fontsLoaded && !fontError) || !i18nReady) {
-    return null;
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+      </View>
+    );
   }
 
   // Stripe publishable key from environment
@@ -335,3 +348,12 @@ export default function RootLayout() {
     </PersistQueryClientProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1f2937',
+  },
+});

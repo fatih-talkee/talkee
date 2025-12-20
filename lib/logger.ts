@@ -335,18 +335,49 @@ class Logger {
     const { level, message, context, error } = entry;
     const prefix = `[${level.toUpperCase()}]`;
 
+    // Always log to console in development, regardless of log level
+    // This ensures logs are visible in Metro bundler and React Native debugger
+    // Format: [LEVEL] Message { context }
     switch (level) {
       case 'debug':
-        console.log(prefix, message, context || '');
+        if (context && Object.keys(context).length > 0) {
+          console.log(prefix, message, JSON.stringify(context, null, 2));
+        } else {
+          console.log(prefix, message);
+        }
         break;
       case 'info':
-        console.log(prefix, message, context || '');
+        if (context && Object.keys(context).length > 0) {
+          console.log(prefix, message, JSON.stringify(context, null, 2));
+        } else {
+          console.log(prefix, message);
+        }
         break;
       case 'warn':
-        console.warn(prefix, message, context || '');
+        if (context && Object.keys(context).length > 0) {
+          console.warn(prefix, message, JSON.stringify(context, null, 2));
+        } else {
+          console.warn(prefix, message);
+        }
         break;
       case 'error':
-        console.error(prefix, message, error || '', context || '');
+        if (error) {
+          // Handle error object properly
+          if (error instanceof Error) {
+            console.error(prefix, message, error.message, error.stack);
+          } else {
+            console.error(prefix, message, error);
+          }
+        } else {
+          console.error(prefix, message);
+        }
+        if (context && Object.keys(context).length > 0) {
+          try {
+            console.error('Context:', JSON.stringify(context, null, 2));
+          } catch (e) {
+            console.error('Context:', context);
+          }
+        }
         break;
     }
   }
@@ -437,6 +468,17 @@ class Logger {
    * Log debug message (development only)
    */
   debug(message: string, context?: LogContext): void {
+    // In development, always log to console regardless of log level
+    // This ensures visibility during debugging
+    if (__DEV__) {
+      const entry = this.createLogEntry('debug', message, undefined, context);
+      this.logToConsole(entry);
+      if (this.shouldLog('debug')) {
+        this.queueLog(entry);
+      }
+      return;
+    }
+
     if (!this.shouldLog('debug')) return;
 
     const entry = this.createLogEntry('debug', message, undefined, context);
@@ -448,6 +490,17 @@ class Logger {
    * Log info message
    */
   info(message: string, context?: LogContext): void {
+    // In development, always log to console regardless of log level
+    // This ensures visibility during debugging
+    if (__DEV__) {
+      const entry = this.createLogEntry('info', message, undefined, context);
+      this.logToConsole(entry);
+      if (this.shouldLog('info')) {
+        this.queueLog(entry);
+      }
+      return;
+    }
+
     if (!this.shouldLog('info')) return;
 
     const entry = this.createLogEntry('info', message, undefined, context);
@@ -459,6 +512,17 @@ class Logger {
    * Log warning message
    */
   warn(message: string, context?: LogContext): void {
+    // In development, always log to console regardless of log level
+    // This ensures visibility during debugging
+    if (__DEV__) {
+      const entry = this.createLogEntry('warn', message, undefined, context);
+      this.logToConsole(entry);
+      if (this.shouldLog('warn')) {
+        this.queueLog(entry);
+      }
+      return;
+    }
+
     if (!this.shouldLog('warn')) return;
 
     const entry = this.createLogEntry('warn', message, undefined, context);
@@ -470,6 +534,17 @@ class Logger {
    * Log error message
    */
   error(message: string, error?: Error | unknown, context?: LogContext): void {
+    // In development, always log to console regardless of log level
+    // This ensures visibility during debugging
+    if (__DEV__) {
+      const entry = this.createLogEntry('error', message, error, context);
+      this.logToConsole(entry);
+      if (this.shouldLog('error')) {
+        this.queueLog(entry);
+      }
+      return;
+    }
+
     if (!this.shouldLog('error')) return;
 
     const entry = this.createLogEntry('error', message, error, context);

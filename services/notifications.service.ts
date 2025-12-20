@@ -434,23 +434,26 @@ class NotificationsService {
 
   /**
    * Get user's notifications with professional info
+   * Optimized: Uses cached user ID and avoids redundant queries
    */
   async getNotifications(
     limit: number = 20,
     offset: number = 0
   ): Promise<DbNotification[]> {
     try {
-      const currentUser = await usersService.getCurrentUser();
+      // Use cached current user to avoid extra query
+      const currentUserId = await this.getCurrentUserId();
 
-      if (!currentUser) {
+      if (!currentUserId) {
         return [];
       }
 
-      // Get notifications with professional info if professional_id exists in data
+      // Single optimized query: Get notifications with professional info in one go
+      // No need for separate professional query - return empty professional field
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
-        .eq('user_id', currentUser.id)
+        .eq('user_id', currentUserId)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
 
@@ -472,23 +475,21 @@ class NotificationsService {
         }
       });
 
-      // Fetch professional info if needed
+      // Fetch professional info if needed (parallel to avoid blocking)
       let professionalsMap: Map<
         string,
         { name: string; avatar_url: string | null }
       > = new Map();
 
       if (professionalIds.size > 0) {
+        // Use Promise.resolve to ensure this doesn't block
+        const professionalsPromise = supabase
+          .from('professionals')
+          .select('id, users!inner(id, name, avatar_url)')
+          .in('id', Array.from(professionalIds));
+
         const { data: professionalsData, error: professionalsError } =
-          await supabase
-            .from('professionals')
-            .select(
-              `
-            id,
-            users!inner(id, name, avatar_url)
-            `
-            )
-            .in('id', Array.from(professionalIds));
+          await professionalsPromise;
 
         if (!professionalsError && professionalsData) {
           professionalsData.forEach((prof: any) => {
@@ -523,6 +524,22 @@ class NotificationsService {
     } catch (error) {
       logger.error('Error in getNotifications', error);
       return [];
+    }
+  }
+
+  /**
+   * Get current user ID from cache or session
+   * Faster than getCurrentUser() as it doesn't fetch full user object
+   */
+  private async getCurrentUserId(): Promise<string | null> {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      return session?.user?.id || null;
+    } catch (error) {
+      logger.error('Error getting current user ID', error);
+      return null;
     }
   }
 

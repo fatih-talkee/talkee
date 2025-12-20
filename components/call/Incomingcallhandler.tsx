@@ -361,7 +361,11 @@ export function IncomingCallHandler() {
           {/* Caller Info */}
           <View style={styles.infoContainer}>
             <Text style={styles.callerName}>{incomingCall.caller_name}</Text>
-            <Text style={styles.callStatus}>Incoming voice call...</Text>
+            <Text style={styles.callStatus}>
+              {incomingCall.call_type === 'video'
+                ? 'Incoming video call...'
+                : 'Incoming voice call...'}
+            </Text>
           </View>
 
           {/* Call Actions */}

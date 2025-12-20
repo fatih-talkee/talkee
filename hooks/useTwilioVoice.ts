@@ -1,4 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useSyncExternalStore,
+} from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { twilioVoiceService, CallState } from '@/services/twilioVoice.service';
 import { logger } from '@/lib/logger';
@@ -91,43 +97,55 @@ export function useTwilioVoice(
   options: UseTwilioVoiceOptions = {}
 ): UseTwilioVoiceReturn {
   const { user } = useProfile();
-  const [callState, setCallState] = useState<CallState>(
-    twilioVoiceService.getState()
+
+  // Use useSyncExternalStore to sync external state with React
+  // This is the React 18 way to handle external state and avoids "Rendered fewer hooks" error
+  const callState = useSyncExternalStore(
+    // Subscribe function
+    (callback) => {
+      return twilioVoiceService.subscribe(callback);
+    },
+    // Get snapshot function
+    () => twilioVoiceService.getState(),
+    // Get server snapshot function (for SSR)
+    () => twilioVoiceService.getState()
   );
+
   const [callDuration, setCallDuration] = useState(0);
   const [error, setError] = useState<Error | null>(null);
 
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const callStartTimeRef = useRef<number | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const isMountedRef = useRef(true);
 
-  // Subscribe to call state changes
+  // Handle callbacks when state changes
   useEffect(() => {
-    const unsubscribe = twilioVoiceService.subscribe((newState) => {
-      setCallState(newState);
+    isMountedRef.current = true;
 
-      // Trigger callbacks
-      if (newState.status === 'connected' && options.onCallConnected) {
-        options.onCallConnected();
-      }
+    if (callState.status === 'connected' && options.onCallConnected) {
+      options.onCallConnected();
+    }
 
-      if (newState.status === 'disconnected' && options.onCallDisconnected) {
-        options.onCallDisconnected(newState.error || undefined);
-      }
+    if (callState.status === 'disconnected' && options.onCallDisconnected) {
+      options.onCallDisconnected(callState.error || undefined);
+    }
 
-      if (options.onStatusChange) {
-        options.onStatusChange(newState.status);
-      }
+    if (options.onStatusChange) {
+      options.onStatusChange(callState.status);
+    }
 
-      if (newState.callInvite && options.onIncomingCall) {
-        options.onIncomingCall(newState.callInvite);
-      }
-    });
+    if (callState.callInvite && options.onIncomingCall) {
+      options.onIncomingCall(callState.callInvite);
+    }
 
     return () => {
-      unsubscribe();
+      isMountedRef.current = false;
     };
   }, [
+    callState.status,
+    callState.error,
+    callState.callInvite,
     options.onCallConnected,
     options.onCallDisconnected,
     options.onStatusChange,
@@ -217,13 +235,22 @@ export function useTwilioVoice(
       professionalUserId: string,
       callType: 'voice' | 'video' = 'voice',
       urgent: boolean = false,
-      debugId?: string
+      debugId?: string,
+      overrideUser?: NonNullable<typeof user> // Allow passing user from parent component
     ) => {
-      if (!user) {
+      // Use overrideUser if provided, otherwise fall back to hook's user
+      const effectiveUser = overrideUser || user;
+
+      if (!effectiveUser) {
         const error = new Error('User not authenticated');
         setError(error);
         logger.error(
-          '[useTwilioVoice] Cannot make call - user not authenticated'
+          '[useTwilioVoice] Cannot make call - user not authenticated',
+          undefined,
+          {
+            hasOverrideUser: !!overrideUser,
+            hasHookUser: !!user,
+          }
         );
         throw error;
       }
@@ -257,7 +284,7 @@ export function useTwilioVoice(
         await twilioVoiceService.makeCall({
           professionalId,
           professionalUserId,
-          callerId: user.id,
+          callerId: effectiveUser.id,
           type: callType,
           urgent,
           debugId,

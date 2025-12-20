@@ -51,13 +51,13 @@ export default function NotificationsScreen() {
     Set<string>
   >(new Set());
 
-  // Fetch notifications from API
+  // Fetch notifications from API with pagination (load 20 at a time for speed)
   const {
     data: notifications = [],
     isLoading,
     error,
     refetch,
-  } = useNotifications(100, 0);
+  } = useNotifications(20, 0);
 
   const markAsReadMutation = useMarkAsRead();
   const markAllAsReadMutation = useMarkAllAsRead();
@@ -235,9 +235,7 @@ export default function NotificationsScreen() {
           { backgroundColor: theme.colors.card },
         ]}
       >
-        <View
-          style={styles.notificationItem}
-        >
+        <View style={styles.notificationItem}>
           {/* Icon */}
           <View
             style={[

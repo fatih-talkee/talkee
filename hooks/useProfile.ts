@@ -8,50 +8,99 @@ import { clearUserCache, invalidateUserQueries } from '@/lib/cacheUtils';
 export function useProfile() {
   const queryClient = useQueryClient();
   const [userId, setUserId] = useState<string | null>(null);
+  const [isSessionLoading, setIsSessionLoading] = useState(true);
   const previousUserIdRef = useRef<string | null>(null);
+  const isMountedRef = useRef(true);
 
   // Get current user from Supabase session
   useEffect(() => {
+    isMountedRef.current = true;
+    let subscription: { unsubscribe: () => void } | null = null;
+
     const getCurrentUser = async () => {
+      if (!isMountedRef.current) return;
+      setIsSessionLoading(true);
       const {
         data: { session },
       } = await supabase.auth.getSession();
+      if (!isMountedRef.current) return;
       const newUserId = session?.user?.id || null;
       setUserId(newUserId);
       previousUserIdRef.current = newUserId;
+      setIsSessionLoading(false);
     };
 
     getCurrentUser();
 
     // Listen for auth changes
     const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      data: { subscription: authSubscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      // Immediately check mount status - if unmounted, don't proceed
+      if (!isMountedRef.current) return;
+
       const newUserId = session?.user?.id || null;
       const previousUserId = previousUserIdRef.current;
 
-      // If user changed (logout or login with different user), clear cache
-      if (previousUserId !== newUserId) {
-        if (previousUserId && !newUserId) {
-          // Logout: Clear all cache
-          console.log('🔄 User logged out, clearing cache...');
-          await clearUserCache(queryClient);
-        } else if (previousUserId && newUserId && previousUserId !== newUserId) {
-          // User switched: Clear cache for previous user
-          console.log('🔄 User switched, clearing previous user cache...');
-          await clearUserCache(queryClient);
-        } else if (!previousUserId && newUserId) {
-          // New login: Invalidate to ensure fresh data
-          console.log('🔄 New user logged in, invalidating cache...');
-          invalidateUserQueries(queryClient, newUserId);
-        }
-      }
+      // Update state synchronously - React will batch these updates
+      // Use functional updaters to ensure we have latest mount status
+      setUserId((prevUserId) => {
+        if (!isMountedRef.current) return prevUserId;
+        previousUserIdRef.current = newUserId;
+        return newUserId;
+      });
 
-      setUserId(newUserId);
-      previousUserIdRef.current = newUserId;
+      setIsSessionLoading((prev) => {
+        if (!isMountedRef.current) return prev;
+        return false;
+      });
+
+      // Handle cache operations asynchronously (non-blocking)
+      // Use setTimeout(0) to defer cache operations to next event loop tick
+      // This ensures state updates complete before cache operations
+      setTimeout(() => {
+        if (!isMountedRef.current) return;
+
+        if (previousUserId !== newUserId) {
+          if (previousUserId && !newUserId) {
+            // Logout: Clear all cache
+            console.log('🔄 User logged out, clearing cache...');
+            clearUserCache(queryClient).catch((err) => {
+              console.error(
+                '[useProfile] Error clearing cache on logout:',
+                err
+              );
+            });
+          } else if (
+            previousUserId &&
+            newUserId &&
+            previousUserId !== newUserId
+          ) {
+            // User switched: Clear cache for previous user
+            console.log('🔄 User switched, clearing previous user cache...');
+            clearUserCache(queryClient).catch((err) => {
+              console.error(
+                '[useProfile] Error clearing cache on user switch:',
+                err
+              );
+            });
+          } else if (!previousUserId && newUserId) {
+            // New login: Invalidate to ensure fresh data
+            console.log('🔄 New user logged in, invalidating cache...');
+            invalidateUserQueries(queryClient, newUserId);
+          }
+        }
+      }, 0);
     });
 
-    return () => subscription.unsubscribe();
+    subscription = authSubscription;
+
+    return () => {
+      isMountedRef.current = false;
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
   }, [queryClient]);
 
   const {
@@ -110,13 +159,16 @@ export function useProfile() {
     return success;
   };
 
+  // Combined loading state: session loading OR profile loading
+  const combinedIsLoading = isSessionLoading || (userId && isLoading);
+
   return {
     profileData,
     user: profileData?.user,
     stats: profileData?.stats,
     isProfessional: profileData?.is_professional || false,
     professional: profileData?.professional,
-    isLoading,
+    isLoading: combinedIsLoading,
     error,
     refetch,
     updatePreferences,

@@ -36,47 +36,46 @@ export default function CreditSelectionScreen() {
   const { refetch: refetchBalance } = useWalletBalance();
   const params = useLocalSearchParams();
 
-  // Get initial credits from URL params or default to 50
-  const initialCredits = params.credits
-    ? parseInt(params.credits as string, 10)
+  // Get initial amount from URL params or default to 50
+  const initialAmount = params.amount
+    ? parseFloat(params.amount as string)
     : 50;
 
-  const [credits, setCredits] = useState(initialCredits);
-  const [inputValue, setInputValue] = useState(initialCredits.toString());
+  const [amount, setAmount] = useState(initialAmount);
+  const [inputValue, setInputValue] = useState(initialAmount.toString());
   const [loading, setLoading] = useState(false);
 
-  const MIN_CREDITS = 1;
-  const MAX_CREDITS = 2000;
-  const PRICE_PER_CREDIT = 1.0; // $1 per credit
+  const MIN_AMOUNT = 1;
+  const MAX_AMOUNT = 2000;
 
-  // Update credits when params change
+  // Update amount when params change
   useEffect(() => {
-    if (params.credits) {
-      const newCredits = parseInt(params.credits as string, 10);
+    if (params.amount) {
+      const newAmount = parseFloat(params.amount as string);
       if (
-        !isNaN(newCredits) &&
-        newCredits >= MIN_CREDITS &&
-        newCredits <= MAX_CREDITS
+        !isNaN(newAmount) &&
+        newAmount >= MIN_AMOUNT &&
+        newAmount <= MAX_AMOUNT
       ) {
-        setCredits(newCredits);
-        setInputValue(newCredits.toString());
+        setAmount(newAmount);
+        setInputValue(newAmount.toString());
       }
     }
-  }, [params.credits]);
+  }, [params.amount]);
 
   const handleDecrease = () => {
-    if (credits > MIN_CREDITS) {
-      const newValue = credits - 1;
-      setCredits(newValue);
-      setInputValue(newValue.toString());
+    if (amount > MIN_AMOUNT) {
+      const newValue = Math.max(MIN_AMOUNT, amount - 1);
+      setAmount(newValue);
+      setInputValue(newValue.toFixed(2));
     }
   };
 
   const handleIncrease = () => {
-    if (credits < MAX_CREDITS) {
-      const newValue = credits + 1;
-      setCredits(newValue);
-      setInputValue(newValue.toString());
+    if (amount < MAX_AMOUNT) {
+      const newValue = Math.min(MAX_AMOUNT, amount + 1);
+      setAmount(newValue);
+      setInputValue(newValue.toFixed(2));
     }
   };
 
@@ -84,31 +83,31 @@ export default function CreditSelectionScreen() {
     setInputValue(text);
 
     // Parse the input and validate
-    const numericValue = parseInt(text, 10);
+    const numericValue = parseFloat(text);
     if (!isNaN(numericValue)) {
-      if (numericValue >= MIN_CREDITS && numericValue <= MAX_CREDITS) {
-        setCredits(numericValue);
-      } else if (numericValue < MIN_CREDITS) {
-        setCredits(MIN_CREDITS);
-      } else if (numericValue > MAX_CREDITS) {
-        setCredits(MAX_CREDITS);
+      if (numericValue >= MIN_AMOUNT && numericValue <= MAX_AMOUNT) {
+        setAmount(numericValue);
+      } else if (numericValue < MIN_AMOUNT) {
+        setAmount(MIN_AMOUNT);
+      } else if (numericValue > MAX_AMOUNT) {
+        setAmount(MAX_AMOUNT);
       }
     }
   };
 
   const handleInputBlur = () => {
     // Ensure input field shows the validated value
-    // If input is empty or invalid, reset to current credits value
-    const numericValue = parseInt(inputValue, 10);
-    if (isNaN(numericValue) || numericValue < MIN_CREDITS) {
-      setCredits(50); // Default to 50 if invalid
-      setInputValue('50');
+    // If input is empty or invalid, reset to current amount value
+    const numericValue = parseFloat(inputValue);
+    if (isNaN(numericValue) || numericValue < MIN_AMOUNT) {
+      setAmount(50); // Default to 50 if invalid
+      setInputValue('50.00');
     } else {
-      setInputValue(credits.toString());
+      setInputValue(amount.toFixed(2));
     }
   };
 
-  const totalPrice = credits * PRICE_PER_CREDIT;
+  const totalPrice = amount;
 
   const handleContinue = async () => {
     if (!user) {
@@ -181,7 +180,9 @@ export default function CreditSelectionScreen() {
         }
 
         // If it's a named color or other format we don't recognize, use fallback
-        console.warn(`Unable to convert color to hex: ${color}, using fallback: ${fallback}`);
+        console.warn(
+          `Unable to convert color to hex: ${color}, using fallback: ${fallback}`
+        );
         return fallback;
       };
 
@@ -229,9 +230,9 @@ export default function CreditSelectionScreen() {
         // Payment successful
         toast.success({
           title: 'Payment Successful! 💰',
-          message: `You've successfully purchased ${credits.toLocaleString()} credits for $${totalPrice.toFixed(
+          message: `You've successfully added $${totalPrice.toFixed(
             2
-          )}.`,
+          )} to your wallet.`,
         });
 
         // Invalidate and refetch wallet balance and transactions
@@ -299,7 +300,7 @@ export default function CreditSelectionScreen() {
             <Text
               style={[styles.instructionText, { color: theme.colors.text }]}
             >
-              Choose how many credits you want to buy.
+              Choose how much money you want to add to your wallet.
             </Text>
           </View>
 
@@ -310,7 +311,7 @@ export default function CreditSelectionScreen() {
             ]}
           >
             <Text style={[styles.selectorLabel, { color: theme.colors.text }]}>
-              Credit Amount
+              Amount
             </Text>
 
             <View style={styles.stepperContainer}>
@@ -320,18 +321,18 @@ export default function CreditSelectionScreen() {
                   {
                     backgroundColor: theme.colors.surface,
                     borderColor: theme.colors.border,
-                    opacity: credits <= MIN_CREDITS ? 0.5 : 1,
+                    opacity: amount <= MIN_AMOUNT ? 0.5 : 1,
                   },
                 ]}
                 onPress={handleDecrease}
-                disabled={credits <= MIN_CREDITS}
+                disabled={amount <= MIN_AMOUNT}
               >
                 <Minus size={24} color={theme.colors.text} />
               </TouchableOpacity>
 
               <TextInput
                 style={[
-                  styles.creditInput,
+                  styles.amountInput,
                   {
                     borderColor: theme.colors.border,
                     color: theme.colors.text,
@@ -349,7 +350,7 @@ export default function CreditSelectionScreen() {
                 value={inputValue}
                 onChangeText={handleInputChange}
                 onBlur={handleInputBlur}
-                keyboardType="numeric"
+                keyboardType="decimal-pad"
                 textAlign="center"
                 selectTextOnFocus
               />
@@ -360,11 +361,11 @@ export default function CreditSelectionScreen() {
                   {
                     backgroundColor: theme.colors.surface,
                     borderColor: theme.colors.border,
-                    opacity: credits >= MAX_CREDITS ? 0.5 : 1,
+                    opacity: amount >= MAX_AMOUNT ? 0.5 : 1,
                   },
                 ]}
                 onPress={handleIncrease}
-                disabled={credits >= MAX_CREDITS}
+                disabled={amount >= MAX_AMOUNT}
               >
                 <Plus size={24} color={theme.colors.text} />
               </TouchableOpacity>
@@ -374,7 +375,7 @@ export default function CreditSelectionScreen() {
               <Text
                 style={[styles.rangeText, { color: theme.colors.textMuted }]}
               >
-                Min: {MIN_CREDITS} • Max: {MAX_CREDITS.toLocaleString()}
+                Min: ${MIN_AMOUNT} • Max: ${MAX_AMOUNT.toLocaleString()}
               </Text>
             </View>
           </Card>
@@ -386,34 +387,6 @@ export default function CreditSelectionScreen() {
               Purchase Summary
             </Text>
 
-            <View style={styles.summaryRow}>
-              <Text
-                style={[
-                  styles.summaryLabel,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                You selected:
-              </Text>
-              <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
-                {credits.toLocaleString()} credits
-              </Text>
-            </View>
-
-            <View style={styles.summaryRow}>
-              <Text
-                style={[
-                  styles.summaryLabel,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                Price per credit:
-              </Text>
-              <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
-                {'$' + PRICE_PER_CREDIT.toFixed(2)}
-              </Text>
-            </View>
-
             <View
               style={[
                 styles.summaryRow,
@@ -422,7 +395,7 @@ export default function CreditSelectionScreen() {
               ]}
             >
               <Text style={[styles.totalLabel, { color: theme.colors.text }]}>
-                Total Price:
+                Amount to Add:
               </Text>
               <Text
                 style={[styles.totalValue, { color: theme.colors.pinkTwo }]}
@@ -496,7 +469,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  creditInput: {
+  amountInput: {
     width: 140,
     minHeight: 70,
     borderRadius: 12,

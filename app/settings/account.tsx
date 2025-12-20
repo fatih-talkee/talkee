@@ -21,6 +21,8 @@ import {
   ChevronRight,
   AlertTriangle,
   ShieldCheck,
+  Plus,
+  Check,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
@@ -33,6 +35,7 @@ import { useToast } from '@/lib/toastService';
 import { format } from 'date-fns';
 import MaskInput from 'react-native-mask-input';
 import { PageLoading } from '@/components/ui/PageLoading';
+import { signInWithGoogle } from '@/utils/GoogleAuth';
 
 // Turkish phone mask: +90 XXX XXX XX XX
 const PHONE_MASK = [
@@ -80,6 +83,97 @@ export default function AccountSettingsScreen() {
   // Check if user has password (email provider means they registered with password)
   const hasPassword = user?.oauth_providers?.includes('email') ?? true;
 
+  // All available providers
+  const allProviders = [
+    { id: 'email', name: 'Email & Password', icon: '🔑' },
+    { id: 'google', name: 'Google', icon: '🔵' },
+    { id: 'facebook', name: 'Facebook', icon: '🔵' },
+    { id: 'linkedin', name: 'LinkedIn', icon: '🔵' },
+  ] as const;
+
+  // Handle linking a provider
+  const handleLinkProvider = async (
+    provider: 'google' | 'facebook' | 'linkedin'
+  ) => {
+    try {
+      const redirectUrl =
+        Platform.OS === 'web' && typeof window !== 'undefined'
+          ? `${window.location.origin}/auth/callback`
+          : 'talkee://auth/callback';
+
+      if (provider === 'google') {
+        // Use Google-specific auth flow
+        try {
+          const result = await signInWithGoogle();
+
+          if (result.success && result.session) {
+            // Session is established, callback handler will link the provider
+            toast.show({
+              type: 'info',
+              title: 'Connecting...',
+              message: 'Google account is being linked',
+            });
+          } else if (result.cancelled) {
+            toast.info({
+              title: 'Cancelled',
+              message: 'Google sign-in was cancelled',
+            });
+          } else if (result.error) {
+            toast.error({
+              title: 'Connection Failed',
+              message: result.error,
+            });
+          } else {
+            // Browser flow - callback handler will process
+            toast.show({
+              type: 'info',
+              title: 'Connecting...',
+              message: 'Please complete the Google authentication',
+            });
+          }
+        } catch (googleError: any) {
+          console.error('Google link error:', googleError);
+          toast.error({
+            title: 'Connection Failed',
+            message: googleError?.message || 'Failed to connect Google account',
+          });
+        }
+      } else {
+        // Facebook & LinkedIn - use standard OAuth flow
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: redirectUrl,
+            // This will link the provider to the current account
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
+          },
+        });
+
+        if (error) {
+          toast.error({
+            title: 'Connection Failed',
+            message: error.message || 'Failed to connect account',
+          });
+        } else {
+          toast.show({
+            type: 'info',
+            title: 'Connecting...',
+            message: `Please complete the ${provider} authentication`,
+          });
+        }
+      }
+    } catch (error: any) {
+      console.error('Link provider error:', error);
+      toast.error({
+        title: 'Error',
+        message: 'An unexpected error occurred',
+      });
+    }
+  };
+
   // Load user data
   useEffect(() => {
     if (user) {
@@ -91,6 +185,22 @@ export default function AccountSettingsScreen() {
       loadUserStats();
     }
   }, [user]);
+
+  // Listen for auth state changes (e.g., when provider is linked)
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session) {
+        // Refresh profile data when auth state changes (e.g., after linking provider)
+        await refetch();
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [refetch]);
 
   const loadUserStats = async () => {
     try {
@@ -521,48 +631,121 @@ export default function AccountSettingsScreen() {
         </View>
 
         {/* Connected Accounts */}
-        {user.oauth_providers && user.oauth_providers.length > 0 && (
-          <View
-            style={[
-              styles.section,
-              {
-                backgroundColor: theme.colors.card,
-                borderColor: theme.colors.border,
-              },
-            ]}
-          >
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Connected Accounts
-            </Text>
-            <View style={styles.connectedAccountsList}>
-              {user.oauth_providers.map((provider) => (
-                <View key={provider} style={styles.connectedAccountItem}>
-                  <Text
-                    style={[styles.providerText, { color: theme.colors.text }]}
-                  >
-                    {provider === 'email'
-                      ? '🔑 Email & Password'
-                      : provider === 'google'
-                      ? '🔵 Google'
-                      : provider === 'facebook'
-                      ? '🔵 Facebook'
-                      : provider === 'linkedin'
-                      ? '🔵 LinkedIn'
-                      : provider}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.providerEmail,
-                      { color: theme.colors.textMuted },
-                    ]}
-                  >
-                    {user.oauth_emails?.[provider] || 'Connected'}
-                  </Text>
+        <View
+          style={[
+            styles.section,
+            {
+              backgroundColor: theme.colors.card,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+            Connected Accounts
+          </Text>
+          <View style={styles.connectedAccountsList}>
+            {allProviders.map((providerInfo) => {
+              const isConnected = user.oauth_providers?.includes(
+                providerInfo.id
+              );
+              const providerEmail = user.oauth_emails?.[providerInfo.id];
+
+              return (
+                <View
+                  key={providerInfo.id}
+                  style={[
+                    styles.accountItem,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                >
+                  <View style={styles.accountItemLeft}>
+                    <Text style={styles.providerIcon}>{providerInfo.icon}</Text>
+                    <View style={styles.accountItemInfo}>
+                      <Text
+                        style={[
+                          styles.providerText,
+                          { color: theme.colors.text },
+                        ]}
+                      >
+                        {providerInfo.name}
+                      </Text>
+                      {isConnected && providerEmail && (
+                        <Text
+                          style={[
+                            styles.providerEmail,
+                            { color: theme.colors.textMuted },
+                          ]}
+                        >
+                          {providerEmail}
+                        </Text>
+                      )}
+                      {isConnected && !providerEmail && (
+                        <Text
+                          style={[
+                            styles.providerEmail,
+                            { color: theme.colors.textMuted },
+                          ]}
+                        >
+                          Connected
+                        </Text>
+                      )}
+                      {!isConnected && providerInfo.id !== 'email' && (
+                        <Text
+                          style={[
+                            styles.providerEmail,
+                            { color: theme.colors.textMuted },
+                          ]}
+                        >
+                          Not connected
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  {isConnected ? (
+                    <View
+                      style={[
+                        styles.connectedBadge,
+                        { backgroundColor: theme.colors.success + '20' },
+                      ]}
+                    >
+                      <Check
+                        size={16}
+                        color={theme.colors.success || '#10b981'}
+                      />
+                      <Text
+                        style={[
+                          styles.connectedBadgeText,
+                          { color: theme.colors.success || '#10b981' },
+                        ]}
+                      >
+                        Connected
+                      </Text>
+                    </View>
+                  ) : providerInfo.id !== 'email' ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.linkButton,
+                        { backgroundColor: theme.colors.primary },
+                      ]}
+                      onPress={() =>
+                        handleLinkProvider(
+                          providerInfo.id as 'google' | 'facebook' | 'linkedin'
+                        )
+                      }
+                      activeOpacity={0.7}
+                    >
+                      <Plus size={14} color="#FFFFFF" />
+                      <Text style={styles.linkButtonText}>Connect</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
-              ))}
-            </View>
+              );
+            })}
           </View>
-        )}
+        </View>
 
         {/* Account Actions */}
         <View
@@ -870,8 +1053,25 @@ const styles = StyleSheet.create({
   connectedAccountsList: {
     gap: 12,
   },
-  connectedAccountItem: {
-    paddingVertical: 8,
+  accountItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  accountItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  providerIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  accountItemInfo: {
+    flex: 1,
   },
   providerText: {
     fontSize: 15,
@@ -881,6 +1081,31 @@ const styles = StyleSheet.create({
   providerEmail: {
     fontSize: 13,
     fontFamily: 'Inter-Regular',
+  },
+  connectedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 6,
+  },
+  connectedBadgeText: {
+    fontSize: 13,
+    fontFamily: 'Inter-Medium',
+  },
+  linkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 6,
+  },
+  linkButtonText: {
+    fontSize: 13,
+    fontFamily: 'Inter-Medium',
+    color: '#FFFFFF',
   },
   infoGrid: {
     gap: 12,

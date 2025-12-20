@@ -66,7 +66,8 @@ export function adaptProfessional(
     totalCalls: dbProfessional.total_calls || 0,
     totalMinutes: dbProfessional.total_minutes || 0,
     responseTime,
-    isOnline: dbProfessional.is_available || false,
+    isOnline:
+      Boolean(dbProfessional.is_active) && Boolean(dbProfessional.is_available),
     isVerified: dbProfessional.is_verified || false,
     isFeatured: dbProfessional.is_featured || false, // ✅ Featured flag
     categoryId,

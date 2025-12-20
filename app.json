@@ -8,8 +8,8 @@
     "scheme": "talkee",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/icon.png",
-      "resizeMode": "contain",
+      "image": "./assets/images/splash.png",
+      "resizeMode": "cover",
       "backgroundColor": "#000000"
     },
     "newArchEnabled": false,
@@ -60,8 +60,8 @@
         "monochromeImage": "./assets/images/icon.png"
       },
       "splash": {
-        "image": "./assets/images/icon.png",
-        "resizeMode": "contain",
+        "image": "./assets/images/splash.png",
+        "resizeMode": "cover",
         "backgroundColor": "#000000"
       }
     },

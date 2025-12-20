@@ -36,7 +36,7 @@ export default function CallCriteriaSettings() {
     {
       id: 'payment',
       title: 'Payment Required Upfront',
-      description: 'Users must have sufficient credits before calling',
+      description: 'Users must have sufficient balance before calling',
       icon: CreditCard,
       enabled: true,
     },
@@ -76,7 +76,7 @@ export default function CallCriteriaSettings() {
     <View
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <Header showLogo showBack  />
+      <Header showLogo showBack />
 
       <ScrollView
         style={styles.scrollView}
@@ -212,7 +212,10 @@ export default function CallCriteriaSettings() {
           title={loading ? 'Saving...' : 'Save Settings'}
           onPress={handleSave}
           disabled={loading}
-          style={{ backgroundColor: (theme.colors as any).pinkTwo || theme.colors.primary }}
+          style={{
+            backgroundColor:
+              (theme.colors as any).pinkTwo || theme.colors.primary,
+          }}
         />
       </View>
     </View>

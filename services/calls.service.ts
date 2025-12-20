@@ -111,7 +111,8 @@ class CallsService {
    */
   async initiateCall(
     professionalId: string,
-    callType: CallType = 'voice' as CallType
+    callType: CallType = 'voice' as CallType,
+    urgent: boolean = false
   ): Promise<CallWithRelations | null> {
     try {
       const currentUser = await usersService.getCurrentUser();
@@ -136,8 +137,75 @@ class CallsService {
         throw new Error('Professional is not available');
       }
 
-      // Check if user has sufficient balance
-      const estimatedCost = professional.rate_per_minute * 5; // Estimate 5 min minimum
+      // Determine the rate to charge for this call.
+      //
+      // Business rules (mirrors UI intent):
+      // - Urgent calls can be placed when the professional is online (is_available=true).
+      //   If an 'urgent' availability exists, we charge its price_per_minute; otherwise fallback to professional.rate_per_minute.
+      // - Scheduled calls require an active availability window (every/specific) and charge that window's price_per_minute.
+      let ratePerMinuteToCharge: number = Number(
+        professional.rate_per_minute || 0
+      );
+
+      const now = new Date();
+      const currentDay = now.toLocaleDateString('en-US', { weekday: 'long' });
+      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now
+        .getMinutes()
+        .toString()
+        .padStart(2, '0')}`;
+      const currentDate = now.toISOString().split('T')[0];
+
+      const { data: availabilities, error: availError } = await supabase
+        .from('availabilities')
+        .select(
+          'available_at, days, date, start_hour, end_hour, price_per_minute'
+        )
+        .eq('professional_id', professionalId);
+
+      const list: any[] = Array.isArray(availabilities) ? availabilities : [];
+
+      if (urgent) {
+        // Best-effort; if we can't load availabilities, we still allow urgent using default rate.
+        if (!availError) {
+          const urgentAvail = list.find((a) => a?.available_at === 'urgent');
+          if (urgentAvail?.price_per_minute != null) {
+            ratePerMinuteToCharge = Number(urgentAvail.price_per_minute || 0);
+          }
+        }
+      } else {
+        if (availError) {
+          throw new Error('Failed to load availability');
+        }
+
+        const isInWindow = (a: any): boolean => {
+          if (!a) return false;
+          if (a.available_at === 'every') {
+            if (!Array.isArray(a.days) || !a.start_hour || !a.end_hour)
+              return false;
+            const dayMatch = a.days.some(
+              (d: string) =>
+                String(d).toLowerCase() === currentDay.toLowerCase()
+            );
+            if (!dayMatch) return false;
+            return currentTime >= a.start_hour && currentTime < a.end_hour;
+          }
+          if (a.available_at === 'specific') {
+            if (!a.date || !a.start_hour || !a.end_hour) return false;
+            if (a.date !== currentDate) return false;
+            return currentTime >= a.start_hour && currentTime < a.end_hour;
+          }
+          return false;
+        };
+
+        const activeAvail = list.find(isInWindow);
+        if (!activeAvail) {
+          throw new Error('No active availability for this call');
+        }
+        ratePerMinuteToCharge = Number(activeAvail.price_per_minute || 0);
+      }
+
+      // Check if user has sufficient balance (minimum 5 minutes)
+      const estimatedCost = ratePerMinuteToCharge * 5;
       if (currentUser.wallet_balance < estimatedCost) {
         throw new Error('Insufficient balance');
       }
@@ -148,7 +216,7 @@ class CallsService {
         professional_id: professionalId,
         status: CallStatus.PENDING as CallStatus,
         call_type: callType,
-        rate_per_minute: professional.rate_per_minute,
+        rate_per_minute: ratePerMinuteToCharge,
         start_time: null,
         end_time: null,
         duration_minutes: 0,
@@ -197,6 +265,7 @@ class CallsService {
               caller_id: currentUser.id,
               caller_name: currentUser.name,
               call_type: callType,
+              rate_per_minute: ratePerMinuteToCharge,
               // Helps deep-link routing when the notification is tapped (background/killed app).
               action_url: `talkee://call/${data.id}?incoming=true&type=${callType}`,
             }

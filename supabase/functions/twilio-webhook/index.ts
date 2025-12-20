@@ -7,6 +7,29 @@ const corsHeaders = {
     'authorization, x-client-info, apikey, content-type',
 };
 
+function base64Encode(bytes: Uint8Array): string {
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
+async function hmacSha1Base64(
+  secret: string,
+  message: string
+): Promise<string> {
+  const keyData = new TextEncoder().encode(secret);
+  const msgData = new TextEncoder().encode(message);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-1' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, msgData);
+  return base64Encode(new Uint8Array(sig));
+}
+
 function extractUserIdFromTwilioAddress(value?: string | null): string | null {
   if (!value) return null;
   const s = value.trim();
@@ -33,6 +56,93 @@ function resolveCalleeUserIdFromWebhookPayload(
     extractUserIdFromTwilioAddress((data as any).CalledVia) ||
     null
   );
+}
+
+async function resolveCallIdFromParticipants(params: {
+  supabase: any;
+  callSid?: string;
+  callerUserId?: string | null;
+  calleeUserId?: string | null;
+}): Promise<string | null> {
+  const { supabase, callSid, callerUserId, calleeUserId } = params;
+  const sinceIso = new Date(Date.now() - 30 * 60_000).toISOString();
+
+  // Best match: caller + callee identities.
+  if (callerUserId && calleeUserId) {
+    const { data: row, error } = await supabase
+      .from('calls')
+      .select('id, professional:professionals!professional_id(user_id)')
+      .eq('caller_id', callerUserId)
+      .eq('professional.user_id', calleeUserId)
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && row?.id) {
+      console.log(
+        'ℹ️ [twilio-webhook] Resolved CallId from participants (caller+callee)',
+        {
+          CallSid: callSid,
+          CallId: row.id,
+          callerUserId,
+          calleeUserId,
+        }
+      );
+      return row.id;
+    }
+  }
+
+  // Next best: callee identity only.
+  if (calleeUserId) {
+    const { data: row, error } = await supabase
+      .from('calls')
+      .select('id, professional:professionals!professional_id(user_id)')
+      .eq('professional.user_id', calleeUserId)
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && row?.id) {
+      console.log(
+        'ℹ️ [twilio-webhook] Resolved CallId from callee (fallback)',
+        {
+          CallSid: callSid,
+          CallId: row.id,
+          calleeUserId,
+        }
+      );
+      return row.id;
+    }
+  }
+
+  // Next best: caller identity only (existing behavior).
+  if (callerUserId) {
+    const { data: row, error } = await supabase
+      .from('calls')
+      .select('id')
+      .eq('caller_id', callerUserId)
+      .in('status', ['pending', 'active'])
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && row?.id) {
+      console.log(
+        'ℹ️ [twilio-webhook] Resolved CallId from caller (fallback)',
+        {
+          CallSid: callSid,
+          CallId: row.id,
+          callerUserId,
+        }
+      );
+      return row.id;
+    }
+  }
+
+  return null;
 }
 
 async function sendPush(
@@ -101,6 +211,58 @@ serve(async (req: Request) => {
       data[key] = value.toString();
     }
 
+    // Optional (but strongly recommended): verify Twilio signature to prevent spoofed callbacks.
+    // If TWILIO_AUTH_TOKEN is not set, verification is disabled (we accept the request, but log).
+    // If it is set, we validate against TWILIO_WEBHOOK_URL (preferred) and req.url as fallback.
+    const twilioAuthToken = (Deno.env.get('TWILIO_AUTH_TOKEN') ?? '').trim();
+    const twilioSignature =
+      req.headers.get('x-twilio-signature') ||
+      req.headers.get('X-Twilio-Signature') ||
+      '';
+
+    if (!twilioAuthToken) {
+      console.warn(
+        '⚠️ [twilio-webhook] TWILIO_AUTH_TOKEN missing; signature verification disabled'
+      );
+    } else if (!twilioSignature) {
+      console.warn(
+        '⚠️ [twilio-webhook] Missing X-Twilio-Signature header; cannot verify'
+      );
+    } else {
+      const sorted = Object.entries(data).sort(([a], [b]) =>
+        a.localeCompare(b)
+      );
+      const paramsString = sorted.map(([k, v]) => `${k}${v}`).join('');
+
+      const configuredUrl = (Deno.env.get('TWILIO_WEBHOOK_URL') ?? '').trim();
+      const candidates = [configuredUrl, req.url].filter((u) =>
+        Boolean((u ?? '').trim())
+      );
+
+      let verified = false;
+      for (const url of candidates) {
+        const toSign = `${url}${paramsString}`;
+        const expected = await hmacSha1Base64(twilioAuthToken, toSign);
+        if (expected === twilioSignature) {
+          verified = true;
+          break;
+        }
+      }
+
+      if (!verified) {
+        console.error('❌ [twilio-webhook] Invalid Twilio signature', {
+          urlCandidates: candidates,
+        });
+        return new Response(
+          '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+          {
+            headers: { 'Content-Type': 'text/xml' },
+            status: 403,
+          }
+        );
+      }
+    }
+
     console.log('📊 [twilio-webhook] Call data:', {
       CallSid: data.CallSid,
       CallStatus: data.CallStatus,
@@ -108,6 +270,9 @@ serve(async (req: Request) => {
       To: data.To,
       Called: (data as any).Called,
       CalledVia: (data as any).CalledVia,
+      Caller: (data as any).Caller,
+      Direction: (data as any).Direction,
+      ParentCallSid: (data as any).ParentCallSid,
       Duration: data.CallDuration,
     });
 
@@ -125,6 +290,14 @@ serve(async (req: Request) => {
     // If the Twilio callback doesn't include our internal CallId, try to resolve it.
     // Some configurations don't forward custom params to status callbacks.
     if (!callId) {
+      const callerUserId =
+        extractUserIdFromTwilioAddress(data.From) ||
+        extractUserIdFromTwilioAddress((data as any).Caller) ||
+        extractUserIdFromTwilioAddress((data as any).FromFormatted) ||
+        null;
+
+      const calleeUserId = resolveCalleeUserIdFromWebhookPayload(data);
+
       // First, try to resolve via call_sid (CallSid is always provided by Twilio).
       // Our mobile app persists call_sid on the calls row after connect/accept.
       if (callSid) {
@@ -156,48 +329,15 @@ serve(async (req: Request) => {
         }
       }
 
-      if (callId) {
-        // resolved already
-      } else {
-        const callerUserId =
-          extractUserIdFromTwilioAddress(data.From) ||
-          extractUserIdFromTwilioAddress((data as any).Caller) ||
-          extractUserIdFromTwilioAddress((data as any).FromFormatted) ||
-          null;
-
-        if (callerUserId) {
-          const sinceIso = new Date(Date.now() - 30 * 60_000).toISOString();
-          const { data: recentCall, error: recentErr } = await supabase
-            .from('calls')
-            .select('id')
-            .eq('caller_id', callerUserId)
-            .in('status', ['pending', 'active'])
-            .gte('created_at', sinceIso)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (recentErr) {
-            console.warn(
-              '⚠️ [twilio-webhook] Failed resolving CallId from caller',
-              {
-                CallSid: callSid,
-                callerUserId,
-                message: recentErr.message,
-              }
-            );
-          } else if (recentCall?.id) {
-            callId = recentCall.id;
-            console.log(
-              'ℹ️ [twilio-webhook] Resolved CallId from caller (fallback)',
-              {
-                CallSid: callSid,
-                CallId: callId,
-                callerUserId,
-              }
-            );
-          }
-        }
+      // If still missing, resolve from participants (callee/caller) without relying on custom params.
+      if (!callId) {
+        const resolved = await resolveCallIdFromParticipants({
+          supabase,
+          callSid,
+          callerUserId,
+          calleeUserId,
+        });
+        if (resolved) callId = resolved;
       }
     }
 
@@ -360,51 +500,227 @@ serve(async (req: Request) => {
       );
     }
 
-    // Handle billing for completed calls
+    // Handle billing for completed calls (best-effort + idempotent via transactions table)
     if (status === 'completed' && duration > 0 && callId) {
       try {
-        const { data: call } = await supabase
+        const nowIso = new Date().toISOString();
+        const durationMinutes = Math.max(1, Math.ceil(duration / 60));
+
+        const { data: callRow, error: callErr } = await supabase
           .from('calls')
-          .select('caller_id, professional_id, total_cost, rate_per_minute')
+          .select(
+            `
+            id,
+            caller_id,
+            professional_id,
+            rate_per_minute,
+            total_cost,
+            caller:users!caller_id(name),
+            professional:professionals!professional_id(
+              user_id,
+              users!inner(name)
+            )
+          `
+          )
           .eq('id', callId)
           .single();
 
-        if (call && call.total_cost > 0) {
-          // Deduct credits from caller
-          const { error: creditError } = await supabase.rpc('deduct_credits', {
-            p_user_id: call.caller_id,
-            p_amount: call.total_cost,
+        if (callErr || !callRow) {
+          console.error('❌ [twilio-webhook] Billing: call row not found', {
+            CallId: callId,
+            message: callErr?.message,
           });
+        } else {
+          const ratePerMinute = Number((callRow as any).rate_per_minute || 0);
+          const computedTotalCost = Number(
+            (durationMinutes * ratePerMinute).toFixed(2)
+          );
 
-          if (creditError) {
-            console.error(
-              '❌ [twilio-webhook] Credit deduction error:',
-              creditError
-            );
-          } else {
-            console.log(
-              '💰 [twilio-webhook] Credits deducted:',
-              call.total_cost
+          // Persist duration + total_cost for user stats/history.
+          // (We do this even if we end up skipping billing due to missing users, etc.)
+          const { error: callUpdateErr } = await supabase
+            .from('calls')
+            .update({
+              status: 'completed',
+              end_time: nowIso,
+              duration_minutes: durationMinutes,
+              total_cost: computedTotalCost,
+              updated_at: nowIso,
+            })
+            .eq('id', callId);
+
+          if (callUpdateErr) {
+            console.warn(
+              '⚠️ [twilio-webhook] Billing: failed updating call cost',
+              {
+                CallId: callId,
+                message: callUpdateErr.message,
+              }
             );
           }
 
-          // Add earnings to professional (80% commission)
-          const professionalEarnings = call.total_cost * 0.8;
-          const { error: earningsError } = await supabase.rpc('add_earnings', {
-            p_user_id: call.professional_id,
-            p_amount: professionalEarnings,
-          });
+          if (computedTotalCost > 0) {
+            const callerId = (callRow as any).caller_id as string;
+            const professionalId = (callRow as any).professional_id as string;
+            const professionalUserId =
+              (callRow as any)?.professional?.user_id ?? null;
+            const callerName = (callRow as any)?.caller?.name ?? null;
+            const professionalName =
+              (callRow as any)?.professional?.users?.name ?? null;
 
-          if (earningsError) {
-            console.error('❌ [twilio-webhook] Earnings error:', earningsError);
-          } else {
-            console.log(
-              '💰 [twilio-webhook] Earnings added:',
-              professionalEarnings
-            );
+            if (!professionalUserId) {
+              console.error(
+                '❌ [twilio-webhook] Billing: could not resolve professional user_id',
+                {
+                  CallId: callId,
+                  professionalId,
+                }
+              );
+            } else {
+              // Idempotency: if transactions exist for this call, do not double-charge.
+              const { data: existingTx, error: txErr } = await supabase
+                .from('transactions')
+                .select('id, user_id, type')
+                .eq('call_id', callId)
+                .in('type', ['call_expense', 'call_earning']);
+
+              if (txErr) {
+                console.warn(
+                  '⚠️ [twilio-webhook] Billing: failed loading existing transactions (continuing)',
+                  {
+                    CallId: callId,
+                    message: txErr.message,
+                  }
+                );
+              }
+
+              const txList: any[] = Array.isArray(existingTx) ? existingTx : [];
+              const hasCallerExpense = txList.some(
+                (t) => t?.type === 'call_expense' && t?.user_id === callerId
+              );
+              const hasProfessionalEarning = txList.some(
+                (t) =>
+                  t?.type === 'call_earning' &&
+                  t?.user_id === professionalUserId
+              );
+
+              // 80% goes to professional, 20% platform commission.
+              const professionalEarnings = Number(
+                (computedTotalCost * 0.8).toFixed(2)
+              );
+
+              if (!hasCallerExpense) {
+                const { error: debitErr } = await supabase.rpc(
+                  'add_user_credits',
+                  {
+                    p_user_id: callerId,
+                    p_amount: -computedTotalCost,
+                    p_type: 'call_expense',
+                    p_description: `Call expense (${durationMinutes} min)`,
+                    p_stripe_payment_intent_id: null,
+                  }
+                );
+
+                if (debitErr) {
+                  console.error(
+                    '❌ [twilio-webhook] Billing: caller debit failed',
+                    {
+                      CallId: callId,
+                      callerId,
+                      amount: computedTotalCost,
+                      message: debitErr.message,
+                    }
+                  );
+                } else {
+                  const { error: txInsertErr } = await supabase
+                    .from('transactions')
+                    .insert({
+                      user_id: callerId,
+                      type: 'call_expense',
+                      amount: computedTotalCost,
+                      description: `Call with ${
+                        professionalName || 'professional'
+                      }`,
+                      call_id: callId,
+                      status: 'completed',
+                    });
+
+                  if (txInsertErr) {
+                    console.warn(
+                      '⚠️ [twilio-webhook] Billing: failed inserting caller transaction',
+                      {
+                        CallId: callId,
+                        callerId,
+                        message: txInsertErr.message,
+                      }
+                    );
+                  }
+                }
+              }
+
+              if (!hasProfessionalEarning && professionalEarnings > 0) {
+                const { error: earnErr } = await supabase.rpc(
+                  'add_user_credits',
+                  {
+                    p_user_id: professionalUserId,
+                    p_amount: professionalEarnings,
+                    p_type: 'call_earning',
+                    p_description: `Call earning (${durationMinutes} min)`,
+                    p_stripe_payment_intent_id: null,
+                  }
+                );
+
+                if (earnErr) {
+                  console.error(
+                    '❌ [twilio-webhook] Billing: professional credit failed',
+                    {
+                      CallId: callId,
+                      professionalUserId,
+                      amount: professionalEarnings,
+                      message: earnErr.message,
+                    }
+                  );
+                } else {
+                  const { error: txInsertErr } = await supabase
+                    .from('transactions')
+                    .insert({
+                      user_id: professionalUserId,
+                      type: 'call_earning',
+                      amount: professionalEarnings,
+                      description: `Earnings from call with ${
+                        callerName || 'caller'
+                      }`,
+                      call_id: callId,
+                      status: 'completed',
+                    });
+
+                  if (txInsertErr) {
+                    console.warn(
+                      '⚠️ [twilio-webhook] Billing: failed inserting professional transaction',
+                      {
+                        CallId: callId,
+                        professionalUserId,
+                        message: txInsertErr.message,
+                      }
+                    );
+                  }
+                }
+              }
+
+              console.log(
+                '✅ [twilio-webhook] Billing processed (best-effort)',
+                {
+                  CallId: callId,
+                  durationMinutes,
+                  ratePerMinute,
+                  computedTotalCost,
+                  professionalEarnings,
+                  skippedCaller: hasCallerExpense,
+                  skippedProfessional: hasProfessionalEarning,
+                }
+              );
+            }
           }
-
-          console.log('✅ [twilio-webhook] Billing completed');
         }
       } catch (billingError) {
         console.error('❌ [twilio-webhook] Billing error:', billingError);

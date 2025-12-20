@@ -10,6 +10,7 @@ import {
   Modal,
   Pressable,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Href, router, useLocalSearchParams } from 'expo-router';
@@ -33,12 +34,14 @@ import {
   Pin,
   AlertCircle,
   Wallet,
+  QrCode,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { TabButtons } from '@/components/ui/TabButtons';
 import { Card } from '@/components/ui/Card';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ShareProfileModal } from '@/components/profile/ShareProfileModal';
+import { QRCodeScanner } from '@/components/qr/QRCodeScanner';
 import { PageLoading } from '@/components/ui/PageLoading';
 import { SectionLoading } from '@/components/ui/SectionLoading';
 import { useIsOnline } from '@/hooks/useNetworkStatus';
@@ -70,6 +73,7 @@ export default function ProfessionalProfileScreen() {
   const isNetworkOnline = useIsOnline();
   const insets = useSafeAreaInsets();
   const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [qrScannerVisible, setQrScannerVisible] = useState(false);
   const [insufficientBalanceModalVisible, setInsufficientBalanceModalVisible] =
     useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('about'); // Start with 'about' since feed is not implemented yet
@@ -408,12 +412,17 @@ export default function ProfessionalProfileScreen() {
         professionalId: id,
       });
 
+      const effectiveRatePerMinute = currentAvailability
+        ? currentAvailability.availability.price_per_minute
+        : professional?.rate_per_minute || 0;
+
       // Navigate to call screen first
       router.push({
         pathname: '/call/[id]',
         params: {
           id: id as string,
           type: 'voice',
+          rate_per_minute: String(effectiveRatePerMinute),
         },
       });
     } catch (error) {
@@ -433,12 +442,17 @@ export default function ProfessionalProfileScreen() {
         professionalId: id,
       });
 
+      const effectiveRatePerMinute = currentAvailability
+        ? currentAvailability.availability.price_per_minute
+        : professional?.rate_per_minute || 0;
+
       // Navigate to call screen first
       router.push({
         pathname: '/call/[id]',
         params: {
           id: id as string,
           type: 'video',
+          rate_per_minute: String(effectiveRatePerMinute),
         },
       });
     } catch (error) {
@@ -458,6 +472,28 @@ export default function ProfessionalProfileScreen() {
         professionalId: id,
       });
 
+      // Safely get rate per minute
+      let effectiveRatePerMinute = 0;
+
+      if (currentAvailability?.availability?.price_per_minute) {
+        effectiveRatePerMinute =
+          currentAvailability.availability.price_per_minute;
+      } else if (professional?.rate_per_minute) {
+        effectiveRatePerMinute = Number(professional.rate_per_minute) || 0;
+      }
+
+      // Validate professional data before navigation
+      if (!professional || !id) {
+        logger.error(
+          '[ProfessionalProfile] Missing professional data for urgent call',
+          {
+            professionalId: id,
+            hasProfessional: !!professional,
+          }
+        );
+        return;
+      }
+
       // Navigate to call screen first
       router.push({
         pathname: '/call/[id]',
@@ -465,16 +501,26 @@ export default function ProfessionalProfileScreen() {
           id: id as string,
           type: 'voice',
           urgent: 'true',
+          rate_per_minute: String(effectiveRatePerMinute),
         },
       });
     } catch (error) {
       logger.error('[ProfessionalProfile] Urgent call error:', error);
+      // Show error to user
+      if (error instanceof Error) {
+        Alert.alert(
+          'Call Failed',
+          error.message || 'Could not start the call. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
     }
   };
 
   // Determine button states
   const isAvailable = currentAvailability !== null;
-  const isOnline = professional?.is_available || false;
+  const isOnline =
+    Boolean(professional?.is_active) && Boolean(professional?.is_available);
   const isUrgentCallAvailability =
     currentAvailability?.availability.available_at === 'urgent';
 
@@ -1533,6 +1579,23 @@ export default function ProfessionalProfileScreen() {
                       : 'transparent',
                 },
               ]}
+              onPress={() => setQrScannerVisible(true)}
+            >
+              <QrCode size={20} color={theme.colors.text} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.headerActionButton,
+                {
+                  backgroundColor:
+                    theme.name === 'dark' ? '#000000' : theme.colors.surface,
+                  borderWidth: theme.name === 'dark' ? 1 : 0,
+                  borderColor:
+                    theme.name === 'dark'
+                      ? 'rgba(255, 255, 255, 0.3)'
+                      : 'transparent',
+                },
+              ]}
               onPress={() => setShareModalVisible(true)}
             >
               <Share2 size={20} color={theme.colors.text} />
@@ -2217,6 +2280,11 @@ export default function ProfessionalProfileScreen() {
               }
             : undefined
         }
+      />
+
+      <QRCodeScanner
+        visible={qrScannerVisible}
+        onClose={() => setQrScannerVisible(false)}
       />
 
       {/* Insufficient Balance Modal */}

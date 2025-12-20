@@ -193,10 +193,14 @@ export default function AuthCallbackScreen() {
             });
           }
 
-          // Navigate to main app (home page) - force navigation
-          // Use setTimeout to ensure navigation happens after state updates
+          // Navigate based on context
+          // If user was linking a provider from settings, go back to settings
+          // Otherwise, go to main app
           setTimeout(() => {
             try {
+              // Check if we came from account settings (via deep link or referrer)
+              // For now, always go to tabs, but invalidate profile cache to refresh
+              invalidateUserQueries(queryClient, existingUser.id);
               router.replace('/(tabs)');
             } catch (error) {
               console.error('Navigation error:', error);
@@ -328,7 +332,7 @@ export default function AuthCallbackScreen() {
             const {
               data: { session: finalSession },
             } = await supabase.auth.getSession();
-            
+
             if (finalSession) {
               router.replace('/(tabs)');
             } else {
