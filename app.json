@@ -98,6 +98,14 @@
           "cameraPermission": "Allow Talkee to use your camera to take profile pictures.",
           "mediaLibraryPermission": "Allow Talkee to access your media library to upload photos and videos."
         }
+      ],
+      "@react-native-community/datetimepicker",
+      "@sentry/react-native",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.net.talkee.app"
+        }
       ]
     ],
     "web": {
