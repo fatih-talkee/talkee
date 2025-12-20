@@ -11,11 +11,4 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
-# Sentry
--keep class io.sentry.** { *; }
--dontwarn io.sentry.**
--keepattributes SourceFile,LineNumberTable
--keepattributes *Annotation*
--keep class com.facebook.react.bridge.** { *; }
-
 # Add any project specific keep options here:

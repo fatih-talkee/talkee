@@ -96,8 +96,6 @@ android {
         versionName "1.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
-        // Stripe publishable key - add your key to gradle.properties as STRIPE_PUBLISHABLE_KEY
-        buildConfigField "String", "STRIPE_PUBLISHABLE_KEY", "\"${findProperty('STRIPE_PUBLISHABLE_KEY') ?: ''}\""
     }
     signingConfigs {
         debug {
@@ -157,14 +155,6 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
-    
-    // Stripe Android SDK for PaymentConfiguration
-    // Using the same version as @stripe/stripe-react-native
-    implementation("com.stripe:stripe-android:21.22.+")
-
-    // Needed at the app module level because expo-notifications depends on it via `implementation`
-    // (not exposed to consumers) but our app code defines a FirebaseMessagingService.
-    implementation("com.google.firebase:firebase-messaging:24.0.1")
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
