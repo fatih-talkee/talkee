@@ -90,7 +90,7 @@ export default function SetupAccountScreen() {
 
   const handleSkip = async () => {
     await sendWelcomeNotification();
-    router.replace('/(tabs)');
+    router.replace('/(tabs)/');
   };
 
   const handleComplete = async () => {
@@ -99,7 +99,7 @@ export default function SetupAccountScreen() {
       if (!currentUser) {
         console.error('No user found');
         await sendWelcomeNotification();
-        router.replace('/(tabs)');
+        router.replace('/(tabs)/');
         return;
       }
 
@@ -130,12 +130,12 @@ export default function SetupAccountScreen() {
       }
 
       await sendWelcomeNotification();
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/');
     } catch (error) {
       console.error('Error saving profile data:', error);
       // Still send notification and navigate even if save fails
       await sendWelcomeNotification();
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/');
     }
   };
 

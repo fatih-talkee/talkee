@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { notificationsService } from '@/services';
 import type { Notification } from '@/types/database.types';
 import { CACHE_CONFIG } from '@/lib/cacheConfig';
+import { useProfile } from '@/hooks/useProfile';
 
 // Query Keys Factory Pattern
 export const notificationsKeys = {
@@ -20,30 +21,44 @@ export const notificationsKeys = {
 
 /**
  * Get notifications for current user
+ * Only fetches when auth state is ready (prevents race condition during login)
  */
 export function useNotifications(limit: number = 50, offset: number = 0) {
+  // Wait for auth state to be ready before fetching
+  const { isLoading: isAuthLoading, profileData } = useProfile();
+  const isAuthReady = !isAuthLoading && !!profileData?.user?.id;
+
   return useQuery({
     queryKey: notificationsKeys.list(limit, offset),
     queryFn: async (): Promise<Notification[]> => {
       try {
+        // No timeout needed - auth is already ready when this runs
         const notifications = await notificationsService.getNotifications(
           limit,
           offset
         );
         return notifications;
       } catch (error) {
-        handleError(error, { title: 'Failed to fetch notifications' });
-        throw error;
+        logger.error('Failed to fetch notifications', error);
+        // Return empty array on error to prevent loading spinner
+        return [];
       }
     },
     ...CACHE_CONFIG.NOTIFICATIONS,
+    retry: false, // Don't retry on timeout - fail fast
+    enabled: isAuthReady, // Only fetch when auth is ready
   });
 }
 
 /**
  * Get unread notification count
+ * Only fetches when auth state is ready (prevents race condition during login)
  */
 export function useUnreadCount() {
+  // Wait for auth state to be ready before fetching
+  const { isLoading: isAuthLoading, profileData } = useProfile();
+  const isAuthReady = !isAuthLoading && !!profileData?.user?.id;
+
   return useQuery({
     queryKey: notificationsKeys.unreadCount(),
     queryFn: async (): Promise<number> => {
@@ -57,6 +72,7 @@ export function useUnreadCount() {
     },
     ...CACHE_CONFIG.NOTIFICATIONS_UNREAD_COUNT,
     refetchInterval: 30 * 1000, // Refetch every 30 seconds
+    enabled: isAuthReady, // Only fetch when auth is ready
   });
 }
 

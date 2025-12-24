@@ -77,27 +77,24 @@ export default function WalletScreen() {
   const { data: allTransactions = [], isLoading: allTransactionsLoading } =
     useWalletTransactions(1000, 0); // Fetch up to 1000 transactions for totals
 
-  // Check if user is professional
-  const { data: profileData } = useProfile();
-  const isProfessional = profileData?.is_professional || false;
+  // Check if user is professional (use hook's isProfessional directly)
+  const { isProfessional, profileData } = useProfile();
 
-  // Calculate total income and expenses
+  // Calculate total income and expenses for professionals
   const { totalIncome, totalExpenses } = useMemo(() => {
     if (!isProfessional || allTransactions.length === 0) {
       return { totalIncome: 0, totalExpenses: 0 };
     }
 
+    // Income: Only earnings from calls (money received from clients)
     const income = allTransactions.reduce((sum, tx) => {
-      if (
-        tx.type === 'call_earning' ||
-        tx.type === 'credit_purchase' ||
-        tx.type === 'income'
-      ) {
+      if (tx.type === 'call_earning' || tx.type === 'income') {
         return sum + (tx.amount || 0);
       }
       return sum;
     }, 0);
 
+    // Expenses: Only money spent on calls (calling other professionals)
     const expenses = allTransactions.reduce((sum, tx) => {
       if (tx.type === 'call_expense' || tx.type === 'expenses') {
         return sum + (tx.amount || 0);
@@ -114,7 +111,10 @@ export default function WalletScreen() {
   // Refetch when screen comes into focus (after navigation from credit-selection)
   useEffect(() => {
     // Check if we're on the wallet tab
-    const isOnWalletTab = segments[0] === '(tabs)' && segments[1] === 'wallet';
+    const isOnWalletTab =
+      segments.length >= 2 &&
+      segments[0] === '(tabs)' &&
+      segments[1] === 'wallet';
     if (isOnWalletTab) {
       // Small delay to ensure navigation is complete
       const timer = setTimeout(() => {
@@ -303,75 +303,94 @@ export default function WalletScreen() {
                   </View>
                 )}
               </View>
+
+              {/* Income & Expenses (only for professionals) */}
+              {isProfessional && (
+                <>
+                  <View
+                    style={[
+                      styles.balanceDivider,
+                      { backgroundColor: theme.colors.border },
+                    ]}
+                  />
+                  <View style={styles.incomeExpenseContainer}>
+                    <View style={styles.incomeExpenseItem}>
+                      <View style={styles.incomeExpenseIconWrapper}>
+                        <View
+                          style={[
+                            styles.incomeExpenseIconBg,
+                            {
+                              backgroundColor:
+                                theme.name === 'light'
+                                  ? '#dcfce7'
+                                  : 'rgba(48, 209, 88, 0.15)',
+                            },
+                          ]}
+                        >
+                          <TrendingUp size={20} color={theme.colors.success} />
+                        </View>
+                        <View style={styles.incomeExpenseTextContainer}>
+                          <Text
+                            style={[
+                              styles.incomeExpenseLabel,
+                              { color: theme.colors.textSecondary },
+                            ]}
+                          >
+                            Call Earnings
+                          </Text>
+                          <Text
+                            style={[
+                              styles.incomeExpenseValue,
+                              { color: theme.colors.success },
+                            ]}
+                          >
+                            {'$' + totalIncome.toFixed(2)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.incomeExpenseItem}>
+                      <View style={styles.incomeExpenseIconWrapper}>
+                        <View
+                          style={[
+                            styles.incomeExpenseIconBg,
+                            {
+                              backgroundColor:
+                                theme.name === 'light'
+                                  ? '#fee2e2'
+                                  : 'rgba(255, 69, 58, 0.15)',
+                            },
+                          ]}
+                        >
+                          <TrendingDown size={20} color={theme.colors.error} />
+                        </View>
+                        <View style={styles.incomeExpenseTextContainer}>
+                          <Text
+                            style={[
+                              styles.incomeExpenseLabel,
+                              { color: theme.colors.textSecondary },
+                            ]}
+                          >
+                            Call Expenses
+                          </Text>
+                          <Text
+                            style={[
+                              styles.incomeExpenseValue,
+                              { color: theme.colors.error },
+                            ]}
+                          >
+                            {'$' + totalExpenses.toFixed(2)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+              </View>
+                </>
+              )}
             </>
           )}
         </Card>
-
-        {/* Income & Expenses (only for professionals) */}
-        {isProfessional && !allTransactionsLoading && (
-          <Card
-            style={[
-              styles.incomeExpenseCard,
-              {
-                backgroundColor: theme.colors.card,
-                borderColor: theme.colors.border,
-              },
-            ]}
-          >
-            <View style={styles.incomeExpenseRow}>
-              <View style={styles.incomeExpenseItem}>
-                <View style={styles.incomeExpenseHeader}>
-                  <TrendingUp size={16} color={theme.colors.success} />
-                  <Text
-                    style={[
-                      styles.incomeExpenseLabel,
-                      { color: theme.colors.textSecondary },
-                    ]}
-                  >
-                    Total Income
-                  </Text>
-                </View>
-                <Text
-                  style={[
-                    styles.incomeExpenseAmount,
-                    { color: theme.colors.success },
-                  ]}
-                >
-                  {'$' + totalIncome.toFixed(2)}
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.incomeExpenseDivider,
-                  { backgroundColor: theme.colors.border },
-                ]}
-              />
-
-              <View style={styles.incomeExpenseItem}>
-                <View style={styles.incomeExpenseHeader}>
-                  <TrendingDown size={16} color={theme.colors.error} />
-                  <Text
-                    style={[
-                      styles.incomeExpenseLabel,
-                      { color: theme.colors.textSecondary },
-                    ]}
-                  >
-                    Total Expenses
-                  </Text>
-                </View>
-                <Text
-                  style={[
-                    styles.incomeExpenseAmount,
-                    { color: theme.colors.error },
-                  ]}
-                >
-                  {'$' + totalExpenses.toFixed(2)}
-                </Text>
-              </View>
-            </View>
-          </Card>
-        )}
 
         {/* Quick Actions */}
         <View style={styles.section}>
@@ -554,19 +573,6 @@ export default function WalletScreen() {
                       {'$' + pkg.amount}
                     </Text>
                   </View>
-
-                  <View style={styles.packageFooter}>
-                    <Text
-                      style={[
-                        styles.packagePrice,
-                        {
-                          color: theme.colors.warning,
-                        },
-                      ]}
-                    >
-                      {'$' + pkg.amount.toFixed(2)}
-                    </Text>
-                  </View>
                 </TouchableOpacity>
               );
             })}
@@ -716,46 +722,45 @@ const styles = StyleSheet.create({
   balanceCard: {
     // theme.colors.card → card background
     // theme.colors.border → card border
-    marginBottom: 16,
-    borderRadius: 16,
-  },
-  incomeExpenseCard: {
-    // theme.colors.card → card background
-    // theme.colors.border → card border
     marginBottom: 24,
     borderRadius: 16,
-    paddingVertical: 16,
   },
-  incomeExpenseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
+  balanceDivider: {
+    height: 1,
+    // theme.colors.border → divider color
+    marginVertical: 20,
+  },
+  incomeExpenseContainer: {
+    gap: 16,
   },
   incomeExpenseItem: {
-    flex: 1,
-    alignItems: 'center',
+    // No flex needed, stack vertically
   },
-  incomeExpenseHeader: {
+  incomeExpenseIconWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
-    gap: 6,
+    gap: 12,
+  },
+  incomeExpenseIconBg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  incomeExpenseTextContainer: {
+    flex: 1,
   },
   incomeExpenseLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: 'Inter-Regular',
     // theme.colors.textSecondary → label text
+    marginBottom: 4,
   },
-  incomeExpenseAmount: {
+  incomeExpenseValue: {
     fontSize: 20,
     fontFamily: 'Inter-Bold',
     // theme.colors.success (income) / theme.colors.error (expenses)
-  },
-  incomeExpenseDivider: {
-    width: 1,
-    height: 40,
-    // theme.colors.border → divider color
-    marginHorizontal: 16,
   },
   balanceHeader: {
     flexDirection: 'row',
@@ -862,18 +867,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   packageAmount: {
-    fontSize: 24,
+    fontSize: 28,
     fontFamily: 'Inter-Bold',
     // theme.colors.text → package amount
-  },
-  packageFooter: {
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  packagePrice: {
-    fontSize: 16,
-    fontFamily: 'Inter-Bold',
-    // theme.colors.warning → price
   },
   transactionCard: {
     padding: 0,

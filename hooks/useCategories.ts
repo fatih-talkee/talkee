@@ -7,6 +7,7 @@ import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { categoriesService } from '@/services/supabase/categories.service';
 import { Category } from '@/types/database.types';
 import { CACHE_CONFIG } from '@/lib/cacheConfig';
+import { logger } from '@/lib/logger';
 
 // Query Keys
 export const categoriesKeys = {
@@ -29,12 +30,35 @@ export function useCategories(): UseQueryResult<Category[]> {
 /**
  * Hook: Get popular categories (most professionals, fallback to sort_order)
  */
-export function usePopularCategories(limit: number = 8): UseQueryResult<Category[]> {
+export function usePopularCategories(
+  limit: number = 8
+): UseQueryResult<Category[]> {
   return useQuery({
     queryKey: [...categoriesKeys.lists(), 'popular', limit],
-    queryFn: () => {
-      console.log('🔄 [usePopularCategories] Fetching popular categories...', { limit });
-      return categoriesService.getPopularCategories(limit);
+    queryFn: async () => {
+      logger.info('[usePopularCategories] 🔍 Starting fetch', {
+        limit,
+        timestamp: new Date().toISOString(),
+      });
+      const startTime = Date.now();
+      try {
+        const result = await categoriesService.getPopularCategories(limit);
+        const duration = Date.now() - startTime;
+        logger.info('[usePopularCategories] ✅ Fetch completed', {
+          duration: `${duration}ms`,
+          count: result.length,
+          limit,
+        });
+        return result;
+      } catch (error: any) {
+        const duration = Date.now() - startTime;
+        logger.error('[usePopularCategories] ❌ Fetch failed', {
+          error: error?.message || String(error),
+          duration: `${duration}ms`,
+          limit,
+        });
+        throw error;
+      }
     },
     ...CACHE_CONFIG.CATEGORIES,
     // Force refetch on mount to ensure fresh data

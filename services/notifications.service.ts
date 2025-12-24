@@ -109,6 +109,9 @@ class NotificationsService {
       data?: Record<string, any>;
     }) => void
   >();
+  // Initialize to a time far in the past so taps before SIGNED_IN are ignored
+  // This prevents notification taps during login from redirecting to notifications page
+  private lastAuthChangeTime: number = Date.now() - 10000;
 
   /**
    * Remove previously-delivered call_request notifications from the OS tray.
@@ -270,9 +273,24 @@ class NotificationsService {
         if (!session?.user) return;
         if (!this.expoPushToken) return;
 
-        logger.info('[NotificationService] Auth changed; syncing push token', {
-          event,
-        });
+        logger.info(
+          '[NotificationService] 🔐 Auth changed; syncing push token',
+          {
+            event,
+            userId: session.user.id,
+            timestamp: new Date().toISOString(),
+          }
+        );
+
+        // Track SIGNED_IN event to ignore notification taps during login transition
+        if (event === 'SIGNED_IN') {
+          this.lastAuthChangeTime = Date.now();
+          logger.info('[NotificationService] ✅ SIGNED_IN event tracked', {
+            lastAuthChangeTime: new Date(this.lastAuthChangeTime).toISOString(),
+            willIgnoreTapsFor: '2000ms',
+          });
+        }
+
         await this.savePushToken(this.expoPushToken);
       });
 
@@ -441,21 +459,38 @@ class NotificationsService {
     offset: number = 0
   ): Promise<DbNotification[]> {
     try {
+      const startTotal = Date.now();
+      logger.info('📬 [NotificationService] Starting fetch...', {
+        limit,
+        offset,
+      });
+
       // Use cached current user to avoid extra query
+      const userStart = Date.now();
       const currentUserId = await this.getCurrentUserId();
+      logger.info('📬 User ID fetched', {
+        duration: `${Date.now() - userStart}ms`,
+      });
 
       if (!currentUserId) {
+        logger.warn('📬 No user ID, returning empty');
         return [];
       }
 
       // Single optimized query: Get notifications with professional info in one go
       // No need for separate professional query - return empty professional field
+      const queryStart = Date.now();
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
         .eq('user_id', currentUserId)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
+
+      logger.info('📬 Main query completed', {
+        duration: `${Date.now() - queryStart}ms`,
+        count: data?.length || 0,
+      });
 
       if (error) {
         logger.error('Error fetching notifications', error);
@@ -482,24 +517,50 @@ class NotificationsService {
       > = new Map();
 
       if (professionalIds.size > 0) {
-        // Use Promise.resolve to ensure this doesn't block
-        const professionalsPromise = supabase
-          .from('professionals')
-          .select('id, users!inner(id, name, avatar_url)')
-          .in('id', Array.from(professionalIds));
-
-        const { data: professionalsData, error: professionalsError } =
-          await professionalsPromise;
-
-        if (!professionalsError && professionalsData) {
-          professionalsData.forEach((prof: any) => {
-            if (prof.users) {
-              professionalsMap.set(prof.id, {
-                name: prof.users.name || 'Professional',
-                avatar_url: prof.users.avatar_url,
-              });
-            }
+        try {
+          const profStart = Date.now();
+          logger.info('📬 Fetching professional data...', {
+            count: professionalIds.size,
           });
+
+          // Add timeout for professional data fetch
+          const professionalsPromise = Promise.race([
+            supabase
+              .from('professionals')
+              .select('id, users!inner(id, name, avatar_url)')
+              .in('id', Array.from(professionalIds)),
+            new Promise((_, reject) =>
+              setTimeout(
+                () => reject(new Error('Professional fetch timeout')),
+                5000
+              )
+            ),
+          ]) as Promise<any>;
+
+          const { data: professionalsData, error: professionalsError } =
+            await professionalsPromise;
+
+          logger.info('📬 Professional data fetched', {
+            duration: `${Date.now() - profStart}ms`,
+            success: !professionalsError,
+          });
+
+          if (!professionalsError && professionalsData) {
+            professionalsData.forEach((prof: any) => {
+              if (prof.users) {
+                professionalsMap.set(prof.id, {
+                  name: prof.users.name || 'Professional',
+                  avatar_url: prof.users.avatar_url,
+                });
+              }
+            });
+          }
+        } catch (error) {
+          // Silently fail professional fetch - notifications will still load
+          logger.warn(
+            'Failed to fetch professional data for notifications',
+            error
+          );
         }
       }
 
@@ -520,6 +581,11 @@ class NotificationsService {
         return notification;
       });
 
+      logger.info('✅ [NotificationService] Fetch completed', {
+        totalDuration: `${Date.now() - startTotal}ms`,
+        count: enrichedNotifications.length,
+      });
+
       return enrichedNotifications as DbNotification[];
     } catch (error) {
       logger.error('Error in getNotifications', error);
@@ -530,6 +596,7 @@ class NotificationsService {
   /**
    * Get current user ID from cache or session
    * Faster than getCurrentUser() as it doesn't fetch full user object
+   * Note: This is now only called when auth is ready (via useNotifications enabled flag)
    */
   private async getCurrentUserId(): Promise<string | null> {
     try {
@@ -826,6 +893,57 @@ class NotificationsService {
     this.notificationResponseSubscription =
       Notifications.addNotificationResponseReceivedListener((response) => {
         const data = response.notification.request.content.data;
+        const timestamp = Date.now();
+
+        logger.info('[NotificationService] 🔔 Notification tap received', {
+          notificationId: data?.notification_id,
+          type: data?.type,
+          professional_id: data?.professional_id,
+          action_url: data?.action_url,
+          call_id: data?.call_id,
+          timestamp: new Date(timestamp).toISOString(),
+          dataKeys: Object.keys(data || {}),
+        });
+
+        // Ignore browser referrer taps (these are not real notifications, just browser metadata)
+        const isBrowserReferrerTap =
+          data &&
+          Object.keys(data).every(
+            (key) =>
+              key.startsWith('org.chromium.chrome.browser.') ||
+              key.startsWith('com.android.browser.') ||
+              key === 'android.intent.extra.REFERRER'
+          );
+
+        if (isBrowserReferrerTap) {
+          logger.info(
+            '[NotificationService] ⛔ Ignoring browser referrer tap (not a real notification)',
+            {
+              dataKeys: Object.keys(data || {}),
+            }
+          );
+          return;
+        }
+
+        // Ignore notification taps within 5 seconds of login to prevent redirect during auth transition
+        const timeSinceAuthChange = timestamp - this.lastAuthChangeTime;
+        logger.info('[NotificationService] ⏱️ Auth timing check', {
+          timeSinceAuthChange: `${timeSinceAuthChange}ms`,
+          lastAuthChangeTime: this.lastAuthChangeTime
+            ? new Date(this.lastAuthChangeTime).toISOString()
+            : 'never',
+          willIgnore: timeSinceAuthChange < 5000,
+        });
+
+        if (timeSinceAuthChange < 5000) {
+          logger.info(
+            '[NotificationService] ⛔ Ignoring notification tap during login transition',
+            {
+              timeSinceAuthChange: `${timeSinceAuthChange}ms`,
+            }
+          );
+          return;
+        }
 
         // Log notification tap
         logger.userAction('notification_tapped', {
@@ -836,13 +954,19 @@ class NotificationsService {
         // Handle navigation based on notification data
         if (data?.professional_id) {
           const { Linking } = require('react-native');
-          Linking.openURL(
-            `talkee://professional/${data.professional_id}`
-          ).catch((err: Error) => {
+          const url = `talkee://professional/${data.professional_id}`;
+          logger.info('[NotificationService] 🧭 Navigating to professional', {
+            url,
+            professional_id: data.professional_id,
+          });
+          Linking.openURL(url).catch((err: Error) => {
             logger.error('Failed to open professional link', err);
           });
         } else if (data?.action_url) {
           const { Linking } = require('react-native');
+          logger.info('[NotificationService] 🧭 Navigating to action_url', {
+            action_url: data.action_url,
+          });
           Linking.openURL(data.action_url).catch((err: Error) => {
             logger.error('Failed to open action URL', err);
           });
@@ -852,16 +976,28 @@ class NotificationsService {
         ) {
           if (data?.call_id) {
             const { Linking } = require('react-native');
+            const url = `talkee://call/${data.call_id}?incoming=true`;
+            logger.info('[NotificationService] 🧭 Navigating to call', {
+              url,
+              call_id: data.call_id,
+            });
             // call_id is the DB call record id; open CallScreen in "incoming" mode
-            Linking.openURL(
-              `talkee://call/${data.call_id}?incoming=true`
-            ).catch((err: Error) => {
+            Linking.openURL(url).catch((err: Error) => {
               logger.error('Failed to open call link', err);
             });
           }
         } else {
           const { Linking } = require('react-native');
-          Linking.openURL('talkee://notifications').catch((err: Error) => {
+          const url = 'talkee://notifications';
+          logger.info(
+            '[NotificationService] 🧭 Navigating to notifications (default)',
+            {
+              url,
+              reason: 'No professional_id, action_url, or call_id found',
+              dataKeys: Object.keys(data || {}),
+            }
+          );
+          Linking.openURL(url).catch((err: Error) => {
             logger.error('Failed to open notifications link', err);
           });
         }

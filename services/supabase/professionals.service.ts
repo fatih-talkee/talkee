@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { logger } from '@/lib/logger';
 import type {
   Professional,
   ProfessionalWithRelations,
@@ -236,7 +237,7 @@ class ProfessionalsService {
             nameError
           );
           throw nameError;
-      }
+        }
 
         nameResults = nameData || [];
       }
@@ -282,6 +283,13 @@ class ProfessionalsService {
     limit: number = 10,
     categoryId?: string
   ): Promise<ProfessionalWithRelations[]> {
+    const startTime = Date.now();
+    logger.info('[ProfessionalsService] 🔍 getFeaturedProfessionals started', {
+      limit,
+      categoryId,
+      timestamp: new Date().toISOString(),
+    });
+
     try {
       let query = supabase
         .from('professionals')
@@ -302,16 +310,48 @@ class ProfessionalsService {
         query = query.eq('category_id', categoryId);
       }
 
+      logger.info(
+        '[ProfessionalsService] 📊 Executing featured professionals query...'
+      );
       const { data, error } = await query;
+      const duration = Date.now() - startTime;
 
       if (error) {
-        console.error('Error fetching featured professionals:', error);
+        logger.error(
+          '[ProfessionalsService] ❌ Error fetching featured professionals',
+          {
+            error: error.message,
+            code: error.code,
+            duration: `${duration}ms`,
+            limit,
+            categoryId,
+          }
+        );
         throw error;
       }
 
+      logger.info(
+        '[ProfessionalsService] ✅ getFeaturedProfessionals completed',
+        {
+          duration: `${duration}ms`,
+          count: data?.length || 0,
+          limit,
+          categoryId,
+        }
+      );
+
       return (data || []) as ProfessionalWithRelations[];
-    } catch (error) {
-      console.error('Error in getFeaturedProfessionals:', error);
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
+      logger.error(
+        '[ProfessionalsService] ❌ Error in getFeaturedProfessionals',
+        {
+          error: error?.message || String(error),
+          duration: `${duration}ms`,
+          limit,
+          categoryId,
+        }
+      );
       throw error;
     }
   }

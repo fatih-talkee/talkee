@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase';
+import { logger } from '../../lib/logger';
 import type { Category } from '../../types/database.types';
 
 class CategoriesService {
@@ -165,27 +166,90 @@ class CategoriesService {
    * Note: For true popularity ranking, consider creating a database view or RPC function
    */
   async getPopularCategories(limit: number = 8): Promise<Category[]> {
+    const startTime = Date.now();
+    logger.info('[CategoriesService] 🔍 getPopularCategories started', {
+      limit,
+      timestamp: new Date().toISOString(),
+    });
+
     try {
       // Get all categories with their professional counts
+      const countsStart = Date.now();
+      logger.info('[CategoriesService] 📊 Calling getCategoriesWithCounts...');
       const categoriesWithCounts = await this.getCategoriesWithCounts();
+      const countsDuration = Date.now() - countsStart;
+      logger.info('[CategoriesService] ✅ Professional counts fetched', {
+        duration: `${countsDuration}ms`,
+        categoryCount: categoriesWithCounts.length,
+      });
+
+      // Process Promise.allSettled results
+      const processStart = Date.now();
+      logger.info(
+        '[CategoriesService] 📊 Processing Promise.allSettled results...'
+      );
+
       // Sort by professional count (descending), then by sort_order as tie-breaker
       const sorted = categoriesWithCounts.sort((a, b) => {
+        // Ensure professionalCount exists, default to 0
+        const aCount = a.professionalCount ?? 0;
+        const bCount = b.professionalCount ?? 0;
+
         // First sort by professional count (descending)
-        if (b.professionalCount !== a.professionalCount) {
-          return b.professionalCount - a.professionalCount;
+        if (bCount !== aCount) {
+          return bCount - aCount;
         }
         // If counts are equal, use sort_order as tie-breaker
-        return a.sort_order - b.sort_order;
+        const aOrder = a.sort_order ?? 0;
+        const bOrder = b.sort_order ?? 0;
+        return aOrder - bOrder;
       });
 
       // Take top N and return as Category[] (without professionalCount)
-      const result = sorted
-        .slice(0, limit)
-        .map(({ professionalCount, ...category }) => category);
+      const result = sorted.slice(0, limit).map((item) => {
+        // Safely extract category without professionalCount
+        const { professionalCount, ...category } = item;
+        return category as Category;
+      });
+
+      const totalDuration = Date.now() - startTime;
+      logger.info('[CategoriesService] ✅ getPopularCategories completed', {
+        totalDuration: `${totalDuration}ms`,
+        resultCount: result.length,
+        limit,
+        breakdown: {
+          getCategoriesWithCounts: `${countsDuration}ms`,
+        },
+      });
 
       return result;
-    } catch (error) {
-      console.error('❌ [getPopularCategories] Error:', error);
+    } catch (error: any) {
+      const totalDuration = Date.now() - startTime;
+      let errorMessage = 'Unknown error';
+      try {
+        if (error?.message) {
+          errorMessage = error.message;
+        } else if (typeof error === 'string') {
+          errorMessage = error;
+        } else if (error?.toString && error.toString() !== '[object Object]') {
+          errorMessage = error.toString();
+        } else {
+          errorMessage = JSON.stringify(
+            error,
+            Object.getOwnPropertyNames(error)
+          );
+        }
+      } catch {
+        errorMessage = String(error);
+      }
+
+      logger.error('[CategoriesService] ❌ Error in getPopularCategories', {
+        error: errorMessage,
+        errorType: error?.constructor?.name || typeof error,
+        duration: `${totalDuration}ms`,
+        limit,
+        stack: error?.stack?.substring(0, 500) || 'No stack trace',
+      });
       return [];
     }
   }
@@ -280,12 +344,31 @@ class CategoriesService {
   async getCategoriesWithCounts(): Promise<
     Array<Category & { professionalCount: number }>
   > {
+    const startTime = Date.now();
+    logger.info('[CategoriesService] 🔍 getCategoriesWithCounts started', {
+      timestamp: new Date().toISOString(),
+    });
+
     try {
+      const categoriesStart = Date.now();
+      logger.info('[CategoriesService] 📊 Fetching base categories...');
       const categories = await this.getCategories();
+      const categoriesDuration = Date.now() - categoriesStart;
+      logger.info('[CategoriesService] ✅ Base categories fetched', {
+        duration: `${categoriesDuration}ms`,
+        count: categories.length,
+      });
 
       // Get professional counts for each category
       // Use Promise.allSettled to handle individual failures gracefully
-      const categoriesWithCounts = await Promise.allSettled(
+      const countsStart = Date.now();
+      logger.info(
+        '[CategoriesService] 📊 Fetching professional counts for categories...',
+        {
+          categoryCount: categories.length,
+        }
+      );
+      const categoriesWithCountsPromise = Promise.allSettled(
         categories.map(async (category) => {
           try {
             // Get professional IDs from category_id field
@@ -399,12 +482,33 @@ class CategoriesService {
         })
       );
 
+      const categoriesWithCounts = await categoriesWithCountsPromise;
+      const countsDuration = Date.now() - countsStart;
+      logger.info('[CategoriesService] ✅ Professional counts fetched', {
+        duration: `${countsDuration}ms`,
+        categoryCount: categories.length,
+      });
+
       // Process Promise.allSettled results
+      const processStart = Date.now();
+      logger.info(
+        '[CategoriesService] 📊 Processing Promise.allSettled results...',
+        {
+          total: categoriesWithCounts.length,
+        }
+      );
       const results = categoriesWithCounts.map((result, index) => {
         if (result.status === 'fulfilled') {
           return result.value;
         } else {
           // If a promise was rejected, log and return a default value
+          logger.warn(
+            '[CategoriesService] ⚠️ Category count promise rejected',
+            {
+              index,
+              reason: result.reason?.message || String(result.reason),
+            }
+          );
           console.error(
             `❌ [getCategoriesWithCounts] Promise rejected for category at index ${index}:`,
             result.reason
@@ -417,8 +521,45 @@ class CategoriesService {
         }
       });
 
+      const processDuration = Date.now() - processStart;
+      const totalDuration = Date.now() - startTime;
+      logger.info('[CategoriesService] ✅ getCategoriesWithCounts completed', {
+        totalDuration: `${totalDuration}ms`,
+        resultCount: results.length,
+        breakdown: {
+          getCategories: `${categoriesDuration}ms`,
+          professionalCounts: `${countsDuration}ms`,
+          processing: `${processDuration}ms`,
+        },
+      });
+
       return results;
-    } catch (error) {
+    } catch (error: any) {
+      const totalDuration = Date.now() - startTime;
+      let errorMessage = 'Unknown error';
+      try {
+        if (error?.message) {
+          errorMessage = error.message;
+        } else if (typeof error === 'string') {
+          errorMessage = error;
+        } else if (error?.toString && error.toString() !== '[object Object]') {
+          errorMessage = error.toString();
+        } else {
+          errorMessage = JSON.stringify(
+            error,
+            Object.getOwnPropertyNames(error)
+          );
+        }
+      } catch {
+        errorMessage = String(error);
+      }
+
+      logger.error('[CategoriesService] ❌ Error in getCategoriesWithCounts', {
+        error: errorMessage,
+        errorType: error?.constructor?.name || typeof error,
+        totalDuration: `${totalDuration}ms`,
+        stack: error?.stack?.substring(0, 500) || 'No stack trace',
+      });
       console.error('Error in getCategoriesWithCounts:', error);
       return [];
     }

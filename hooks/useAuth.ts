@@ -1,79 +1,98 @@
 // hooks/useAuth.ts
-// Authentication hook for AuthContext
+// Simplified Authentication hook
 
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Href, router } from 'expo-router';
+import { Href, router, useSegments } from 'expo-router';
+import { logger } from '@/lib/logger';
 
 export function useAuth() {
-  const [loading, setLoading] = useState(true); // ✅ Start with true
+  const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const segments = useSegments();
 
   // Check authentication status
   useEffect(() => {
     let isMounted = true;
-    let navigationTimeout: NodeJS.Timeout | null = null;
 
     const checkAuth = async () => {
       try {
-        // Use getSession which is faster and uses cached session
         const {
           data: { session },
           error,
         } = await supabase.auth.getSession();
 
         if (error) {
-          console.error('❌ Auth check error:', error);
+          logger.error('[useAuth] Session check error:', error);
           if (isMounted) {
             setIsAuthenticated(false);
           }
         } else if (isMounted) {
           setIsAuthenticated(!!session);
+
+          // Log auth state for debugging
+          logger.info('[useAuth] Auth state:', {
+            authenticated: !!session,
+            userId: session?.user?.id,
+            phoneConfirmed: !!session?.user?.phone_confirmed_at,
+          });
         }
       } catch (error) {
-        console.error('❌ Auth check error:', error);
+        logger.error('[useAuth] Auth check error:', error);
         if (isMounted) {
           setIsAuthenticated(false);
         }
       } finally {
         if (isMounted) {
-          setLoading(false); // ✅ Stop loading after initial check
+          setLoading(false);
         }
       }
     };
 
     checkAuth();
 
-    // ✅ Listen for auth state changes
+    // Listen for auth state changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
+
+      logger.info('[useAuth] Auth state changed:', {
+        event,
+        authenticated: !!session,
+      });
 
       setIsAuthenticated(!!session);
 
-      // ✅ Auto-redirect on sign out - defer navigation to prevent render loops
+      // Handle sign out
       if (event === 'SIGNED_OUT') {
-        // Clear any pending navigation
-        if (navigationTimeout) {
-          clearTimeout(navigationTimeout);
-        }
-        // Defer navigation to next tick to avoid render loop
-        navigationTimeout = setTimeout(() => {
-          // Check if we're not already on the login page
-          const currentPath = router.pathname || '';
+        // Defer navigation to prevent render loops
+        setTimeout(() => {
+          const currentPath = '/' + segments.join('/');
           if (!currentPath.includes('/auth/login')) {
-            router.replace('/auth/login' as Href<'/auth/login'>);
+            router.replace('/auth/login');
           }
         }, 0);
+      }
+
+      // Handle sign in (only for phone auth, OAuth handled by callback)
+      if (event === 'SIGNED_IN' && session?.user) {
+        // Check if phone is confirmed
+        if (session.user.phone && !session.user.phone_confirmed_at) {
+          // Phone not confirmed → redirect to OTP
+          setTimeout(() => {
+            router.replace(
+              `/auth/otp?phone=${encodeURIComponent(
+                session.user.phone || ''
+              )}&context=pending`
+            );
+          }, 0);
+        }
       }
     });
 
     return () => {
       isMounted = false;
-      if (navigationTimeout) {
-        clearTimeout(navigationTimeout);
-      }
       subscription.unsubscribe();
     };
   }, []);
@@ -85,11 +104,12 @@ export function useAuth() {
         email,
         password,
       });
+
       if (error) throw error;
 
       return { data, error: null };
     } catch (error) {
-      console.error('❌ Sign in error:', error);
+      logger.error('[useAuth] Sign in error:', error);
       return { data: null, error };
     } finally {
       setLoading(false);
@@ -117,11 +137,12 @@ export function useAuth() {
             },
           },
         });
+
         if (error) throw error;
 
         return { data, error: null };
       } catch (error) {
-        console.error('❌ Sign up error:', error);
+        logger.error('[useAuth] Sign up error:', error);
         return { data: null, error };
       } finally {
         setLoading(false);
@@ -134,18 +155,21 @@ export function useAuth() {
     try {
       setLoading(true);
       const { error } = await supabase.auth.signOut();
+
       if (error) throw error;
 
       // onAuthStateChange will handle redirect automatically
     } catch (error) {
-      console.error('❌ Sign out error:', error);
-      // Still redirect even if error - defer to prevent render loop
+      logger.error('[useAuth] Sign out error:', error);
+
+      // Still redirect even if error
       setTimeout(() => {
-        const currentPath = router.pathname || '';
+        const currentPath = '/' + segments.join('/');
         if (!currentPath.includes('/auth/login')) {
-          router.replace('/auth/login' as Href<'/(auth)/login'>);
+          router.replace('/auth/login');
         }
       }, 0);
+
       throw error;
     } finally {
       setLoading(false);
@@ -160,11 +184,12 @@ export function useAuth() {
           process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8081'
         }/reset-password`,
       });
+
       if (error) throw error;
 
       return { error: null };
     } catch (error) {
-      console.error('❌ Reset password error:', error);
+      logger.error('[useAuth] Reset password error:', error);
       return { error };
     } finally {
       setLoading(false);

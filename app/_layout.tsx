@@ -30,6 +30,8 @@ import { Platform, View, ActivityIndicator, StyleSheet } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { OfflineBanner } from '../components/ui/OfflineBanner';
 import { StripeProvider } from '@stripe/stripe-react-native';
+// ✅ ADD THIS IMPORT!
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Initialize Sentry (make it idempotent; Fast Refresh / re-evaluation can re-run this module)
 try {
@@ -187,6 +189,7 @@ export default function RootLayout() {
   useFrameworkReady();
   const [i18nReady, setI18nReady] = useState(false);
   const [initError, setInitError] = useState<Error | null>(null);
+  const [fontForcedReady, setFontForcedReady] = useState(false);
 
   // Debug: Log when app starts
   useEffect(() => {
@@ -252,55 +255,112 @@ export default function RootLayout() {
     });
   }, [fontsLoaded, fontError, i18nReady]);
 
-  // Add timeout to prevent infinite hang
+  // Best Practice: Progressive loading with graceful degradation
+  // Don't block app startup - fonts and i18n can load in background
+  // Maximum wait time: 2 seconds (reasonable UX threshold)
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (!i18nReady) {
-        console.warn('Initialization timeout - forcing ready state');
-        setI18nReady(true);
-      }
-    }, 10000);
+    const MAX_WAIT_TIME = 2000; // 2 seconds max wait
+    const startTime = Date.now();
 
-    return () => clearTimeout(timeout);
-  }, [i18nReady]);
+    const checkAndHide = () => {
+      const elapsed = Date.now() - startTime;
+      const fontsReady = fontsLoaded || fontError || fontForcedReady;
+
+      // Hide splash screen when both are ready OR max wait time reached
+      if ((fontsReady && i18nReady) || elapsed >= MAX_WAIT_TIME) {
+        if (elapsed >= MAX_WAIT_TIME && (!fontsReady || !i18nReady)) {
+          logger.warn('[App] Max wait time reached, hiding splash screen', {
+            fontsReady,
+            i18nReady,
+            elapsed: `${elapsed}ms`,
+          });
+          // Force ready states if timeout reached
+          if (!fontsReady) setFontForcedReady(true);
+          if (!i18nReady) setI18nReady(true);
+        }
+
+        // Small delay for smooth transition
+        setTimeout(() => {
+          SplashScreen.hideAsync().catch((error) => {
+            logger.error('[App] Error hiding splash screen', error);
+          });
+        }, 100);
+      }
+    };
+
+    // Check immediately and on state changes
+    checkAndHide();
+    const interval = setInterval(checkAndHide, 100); // Check every 100ms
+
+    // Force hide after max wait time (safety net)
+    const forceHideTimeout = setTimeout(() => {
+      clearInterval(interval);
+      logger.warn('[App] Force hiding splash screen after max wait time');
+      SplashScreen.hideAsync().catch((error) => {
+        logger.error('[App] Error force hiding splash screen', error);
+      });
+    }, MAX_WAIT_TIME + 500); // Extra 500ms buffer
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(forceHideTimeout);
+    };
+  }, [fontsLoaded, fontError, fontForcedReady, i18nReady]);
 
   useEffect(() => {
     let mounted = true;
+    let timeoutId: number | null = null;
+
     (async () => {
       try {
-        await initI18n();
-        if (mounted) setI18nReady(true);
+        // Add timeout to i18n initialization to prevent infinite hang
+        const initPromise = initI18n();
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(new Error('i18n initialization timeout after 3 seconds'));
+          }, 3000);
+        });
+
+        await Promise.race([initPromise, timeoutPromise]);
+        if (mounted) {
+          if (timeoutId) clearTimeout(timeoutId);
+          setI18nReady(true);
+          logger.info('[App] i18n initialized successfully');
+        }
       } catch (error) {
+        if (timeoutId) clearTimeout(timeoutId);
         logger.error('[App] Failed to initialize i18n', error);
+        logger.warn('[App] Continuing without i18n initialization');
         setInitError(error instanceof Error ? error : new Error(String(error)));
-        if (mounted) setI18nReady(true);
+        if (mounted) setI18nReady(true); // Set ready even on error to prevent hang
       }
     })();
+
     return () => {
       mounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, []);
 
+  // Log font errors (but don't block app - graceful degradation)
   useEffect(() => {
     if (fontError) {
       logger.error('[App] Font loading error', fontError);
-      logger.warn('[App] App will continue with system fonts');
+      logger.warn(
+        '[App] App will continue with system fonts (graceful degradation)'
+      );
     }
-
-    if ((fontsLoaded || fontError) && i18nReady) {
-      console.log('✅ [_layout] Hiding splash screen...');
-      SplashScreen.hideAsync().catch((error) => {
-        logger.error('[App] Error hiding splash screen', error);
-      });
-    } else {
-      console.log('⏳ [_layout] Waiting for fonts and i18n...');
-    }
-  }, [fontsLoaded, fontError, i18nReady]);
+  }, [fontError]);
 
   // Show loading screen while fonts and i18n are loading
   // This prevents white screen on startup
-  if ((!fontsLoaded && !fontError) || !i18nReady) {
-    console.log('⏸️ [_layout] Showing loading screen...');
+  // Consider fonts ready if loaded, error, or forced ready
+  const fontsReady = fontsLoaded || fontError || fontForcedReady;
+  if (!fontsReady || !i18nReady) {
+    console.log('⏸️ [_layout] Showing loading screen...', {
+      fontsReady,
+      i18nReady,
+    });
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3B82F6" />
@@ -315,58 +375,60 @@ export default function RootLayout() {
     process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
 
   return (
-    <PersistQueryClientProvider
-      client={queryClient}
-      persistOptions={{
-        persister: asyncStoragePersister,
-        maxAge: 1000 * 60 * 60 * 24,
-        buster: '',
-      }}
-    >
-      <StripeProvider
-        publishableKey={stripePublishableKey}
-        merchantIdentifier="merchant.net.talkee.app"
-        urlScheme="talkee"
+    <SafeAreaProvider>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{
+          persister: asyncStoragePersister,
+          maxAge: 1000 * 60 * 60 * 24,
+          buster: '',
+        }}
       >
-        <ThemeProvider>
-          <TwilioVoiceInitializer>
-            <AutoAvailabilityWrapper>
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="auth" />
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen name="become-professional/index" />
-                <Stack.Screen name="credit-selection" />
-                <Stack.Screen name="purchase" />
-                <Stack.Screen name="notifications/index" />
-                <Stack.Screen name="wallet-history" />
-                <Stack.Screen name="blocked-users" />
-                <Stack.Screen name="how-it-works" />
-                <Stack.Screen name="help" />
-                <Stack.Screen name="settings/theme" />
-                <Stack.Screen name="settings/language" />
-                <Stack.Screen name="settings/notifications" />
-                <Stack.Screen name="settings/test-push" />
-                <Stack.Screen name="settings/change-password" />
-                <Stack.Screen name="+not-found" />
-                <Stack.Screen name="profile/professional-settings" />
-                <Stack.Screen name="profile/privacy-policy" />
-                <Stack.Screen name="profile/devices" />
-              </Stack>
-              <StatusBar style="auto" translucent={false} />
-              <OfflineBanner />
-              <ToastStack />
-              {/* Incoming Call Handler - Shows modal when receiving calls */}
-              <IncomingCallHandler />
-            </AutoAvailabilityWrapper>
-          </TwilioVoiceInitializer>
-        </ThemeProvider>
-        {__DEV__ && Platform.OS === 'web' && __DEV__ ? (
-          <ReactQueryDevtools initialIsOpen={false} />
-        ) : (
-          <></>
-        )}
-      </StripeProvider>
-    </PersistQueryClientProvider>
+        <StripeProvider
+          publishableKey={stripePublishableKey}
+          merchantIdentifier="merchant.net.talkee.app"
+          urlScheme="talkee"
+        >
+          <ThemeProvider>
+            <TwilioVoiceInitializer>
+              <AutoAvailabilityWrapper>
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="auth" />
+                  <Stack.Screen name="(tabs)" />
+                  <Stack.Screen name="become-professional/index" />
+                  <Stack.Screen name="credit-selection" />
+                  <Stack.Screen name="purchase" />
+                  <Stack.Screen name="notifications/index" />
+                  <Stack.Screen name="wallet-history" />
+                  <Stack.Screen name="blocked-users" />
+                  <Stack.Screen name="how-it-works" />
+                  <Stack.Screen name="help" />
+                  <Stack.Screen name="settings/theme" />
+                  <Stack.Screen name="settings/language" />
+                  <Stack.Screen name="settings/notifications" />
+                  <Stack.Screen name="settings/test-push" />
+                  <Stack.Screen name="settings/change-password" />
+                  <Stack.Screen name="+not-found" />
+                  <Stack.Screen name="profile/professional-settings" />
+                  <Stack.Screen name="profile/privacy-policy" />
+                  <Stack.Screen name="profile/devices" />
+                </Stack>
+                <StatusBar style="auto" translucent={false} />
+                <OfflineBanner />
+                <ToastStack />
+                {/* Incoming Call Handler - Shows modal when receiving calls */}
+                <IncomingCallHandler />
+              </AutoAvailabilityWrapper>
+            </TwilioVoiceInitializer>
+          </ThemeProvider>
+          {__DEV__ && Platform.OS === 'web' && __DEV__ ? (
+            <ReactQueryDevtools initialIsOpen={false} />
+          ) : (
+            <></>
+          )}
+        </StripeProvider>
+      </PersistQueryClientProvider>
+    </SafeAreaProvider>
   );
 }
 

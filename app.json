@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "talkee",
+    "scheme": "net.talkee.app",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash.png",
@@ -40,6 +40,18 @@
       "versionCode": 1,
       "versionName": "1.0.0",
       "googleServicesFile": "./firebase/android/google-services.json",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "net.talkee.app"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "permissions": [
         "RECORD_AUDIO",
         "CAMERA",
@@ -131,6 +143,11 @@
       "supabaseUrl": "https://hmimorflmdhcgjhlxbwn.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtaW1vcmZsbWRoY2dqaGx4YnduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyMzgzMTcsImV4cCI6MjA3NjgxNDMxN30.SJSxGs4GiCH7iySrMu1gLeXM_L5YxQMl0VNBMpzz6Cg",
       "stripePublishableKey": "pk_test_51SdKSj9FgtmyYQNj7UvOTKS0mDkCkPozEl0EIRQfVoZBQRqmha82sNUr83d2kgtzunEQF54ugTAqXulPNLXfjATK00fsasIefq"
+    },
+    "updates": {
+      "enabled": false,
+      "checkAutomatically": "NEVER",
+      "fallbackToCacheTimeout": 0
     }
   }
 }

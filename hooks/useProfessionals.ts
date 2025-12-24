@@ -7,6 +7,7 @@ import {
 import { professionalsService } from '@/services/supabase/professionals.service';
 import { ProfessionalWithRelations } from '@/types/database.types';
 import { CACHE_CONFIG } from '@/lib/cacheConfig';
+import { logger } from '@/lib/logger';
 
 // Query Keys Factory Pattern
 export const professionalsKeys = {
@@ -65,8 +66,37 @@ export function useFeaturedProfessionals(
 ) {
   return useQuery<ProfessionalWithRelations[]>({
     queryKey: professionalsKeys.featured(limit, categoryId),
-    queryFn: () =>
-      professionalsService.getFeaturedProfessionals(limit, categoryId),
+    queryFn: async () => {
+      logger.info('[useFeaturedProfessionals] 🔍 Starting fetch', {
+        limit,
+        categoryId,
+        timestamp: new Date().toISOString(),
+      });
+      const startTime = Date.now();
+      try {
+        const result = await professionalsService.getFeaturedProfessionals(
+          limit,
+          categoryId
+        );
+        const duration = Date.now() - startTime;
+        logger.info('[useFeaturedProfessionals] ✅ Fetch completed', {
+          duration: `${duration}ms`,
+          count: result.length,
+          limit,
+          categoryId,
+        });
+        return result;
+      } catch (error: any) {
+        const duration = Date.now() - startTime;
+        logger.error('[useFeaturedProfessionals] ❌ Fetch failed', {
+          error: error?.message || String(error),
+          duration: `${duration}ms`,
+          limit,
+          categoryId,
+        });
+        throw error;
+      }
+    },
     ...CACHE_CONFIG.PROFESSIONAL_FEATURED,
   });
 }

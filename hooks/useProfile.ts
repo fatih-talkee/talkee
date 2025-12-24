@@ -1,9 +1,13 @@
+// hooks/useProfile.ts
+// Simplified Profile hook
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ProfileService } from '@/services/supabase/profile.service';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState, useRef } from 'react';
 import { CACHE_CONFIG } from '@/lib/cacheConfig';
 import { clearUserCache, invalidateUserQueries } from '@/lib/cacheUtils';
+import { logger } from '@/lib/logger';
 
 export function useProfile() {
   const queryClient = useQueryClient();
@@ -19,15 +23,31 @@ export function useProfile() {
 
     const getCurrentUser = async () => {
       if (!isMountedRef.current) return;
+
       setIsSessionLoading(true);
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!isMountedRef.current) return;
-      const newUserId = session?.user?.id || null;
-      setUserId(newUserId);
-      previousUserIdRef.current = newUserId;
-      setIsSessionLoading(false);
+
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!isMountedRef.current) return;
+
+        const newUserId = session?.user?.id || null;
+        setUserId(newUserId);
+        previousUserIdRef.current = newUserId;
+
+        logger.info('[useProfile] Session loaded:', {
+          authenticated: !!newUserId,
+          userId: newUserId?.substring(0, 8),
+        });
+      } catch (error) {
+        logger.error('[useProfile] Session error:', error);
+      } finally {
+        if (isMountedRef.current) {
+          setIsSessionLoading(false);
+        }
+      }
     };
 
     getCurrentUser();
@@ -36,57 +56,49 @@ export function useProfile() {
     const {
       data: { subscription: authSubscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      // Immediately check mount status - if unmounted, don't proceed
       if (!isMountedRef.current) return;
 
       const newUserId = session?.user?.id || null;
       const previousUserId = previousUserIdRef.current;
 
-      // Update state synchronously - React will batch these updates
-      // Use functional updaters to ensure we have latest mount status
+      logger.info('[useProfile] Auth changed:', {
+        event,
+        authenticated: !!newUserId,
+      });
+
+      // Update state
       setUserId((prevUserId) => {
         if (!isMountedRef.current) return prevUserId;
         previousUserIdRef.current = newUserId;
         return newUserId;
       });
 
-      setIsSessionLoading((prev) => {
-        if (!isMountedRef.current) return prev;
-        return false;
-      });
+      setIsSessionLoading(false);
 
-      // Handle cache operations asynchronously (non-blocking)
-      // Use setTimeout(0) to defer cache operations to next event loop tick
-      // This ensures state updates complete before cache operations
+      // Handle cache operations
       setTimeout(() => {
         if (!isMountedRef.current) return;
 
         if (previousUserId !== newUserId) {
           if (previousUserId && !newUserId) {
             // Logout: Clear all cache
-            console.log('🔄 User logged out, clearing cache...');
+            logger.info('[useProfile] User logged out, clearing cache');
             clearUserCache(queryClient).catch((err) => {
-              console.error(
-                '[useProfile] Error clearing cache on logout:',
-                err
-              );
+              logger.error('[useProfile] Cache clear error:', err);
             });
           } else if (
             previousUserId &&
             newUserId &&
             previousUserId !== newUserId
           ) {
-            // User switched: Clear cache for previous user
-            console.log('🔄 User switched, clearing previous user cache...');
+            // User switched: Clear cache
+            logger.info('[useProfile] User switched, clearing cache');
             clearUserCache(queryClient).catch((err) => {
-              console.error(
-                '[useProfile] Error clearing cache on user switch:',
-                err
-              );
+              logger.error('[useProfile] Cache clear error:', err);
             });
           } else if (!previousUserId && newUserId) {
             // New login: Invalidate to ensure fresh data
-            console.log('🔄 New user logged in, invalidating cache...');
+            logger.info('[useProfile] New user logged in, invalidating cache');
             invalidateUserQueries(queryClient, newUserId);
           }
         }
@@ -110,12 +122,38 @@ export function useProfile() {
     refetch,
   } = useQuery({
     queryKey: ['profile', userId],
-    queryFn: () => {
+    queryFn: async () => {
       if (!userId) {
-        console.warn('⚠️ [useProfile] userId is null, skipping profile fetch');
+        logger.warn('[useProfile] ⚠️ userId is null, skipping profile fetch');
         return null;
       }
-      return ProfileService.getProfileData(userId);
+
+      logger.info('[useProfile] 🔍 Fetching profile', {
+        userId: userId.substring(0, 8) + '...',
+      });
+
+      const startTime = Date.now();
+
+      try {
+        const result = await ProfileService.getProfileData(userId);
+        const duration = Date.now() - startTime;
+
+        logger.info('[useProfile] ✅ Profile fetch completed', {
+          duration: `${duration}ms`,
+          hasData: !!result,
+        });
+
+        return result;
+      } catch (error: any) {
+        const duration = Date.now() - startTime;
+
+        logger.error('[useProfile] ❌ Profile fetch failed', {
+          error: error?.message || String(error),
+          duration: `${duration}ms`,
+        });
+
+        throw error;
+      }
     },
     enabled: !!userId && userId !== 'null' && userId !== 'undefined',
     ...CACHE_CONFIG.USER_PROFILE,
@@ -130,7 +168,6 @@ export function useProfile() {
     const success = await ProfileService.updatePreferences(userId, preferences);
 
     if (success) {
-      // Invalidate and refetch
       queryClient.invalidateQueries({ queryKey: ['profile', userId] });
     }
 
@@ -151,15 +188,16 @@ export function useProfile() {
 
   const signOut = async () => {
     const success = await ProfileService.signOut();
+
     if (success) {
-      // Clear all cache (memory + persisted)
       await clearUserCache(queryClient);
-      console.log('✅ Logout successful, cache cleared');
+      logger.info('[useProfile] ✅ Logout successful, cache cleared');
     }
+
     return success;
   };
 
-  // Combined loading state: session loading OR profile loading
+  // Combined loading state
   const combinedIsLoading = isSessionLoading || (userId && isLoading);
 
   return {

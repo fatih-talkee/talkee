@@ -1,377 +1,174 @@
 /**
- * OAuth Callback Handler - WITH ACCOUNT LINKING (FINAL VERSION)
- * Handles OAuth redirects with multi-provider account linking support
- * + Smart theme and language defaults
+ * Auth Callback Handler - OAuth Sign-In/Sign-Up
+ * Handles Google, Facebook, LinkedIn OAuth callbacks
  */
 
-import { useEffect, useRef } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/lib/toastService';
-import { UserPreferencesService } from '@/services/supabase/userPreferences.service';
-import { PageLoading } from '@/components/ui/PageLoading';
-import { useQueryClient } from '@tanstack/react-query';
-import { invalidateUserQueries } from '@/lib/cacheUtils';
+import { logger } from '@/lib/logger';
 
-export default function AuthCallbackScreen() {
+export default function AuthCallback() {
   const toast = useToast();
-  const queryClient = useQueryClient();
-  const hasRun = useRef(false);
+  const [status, setStatus] = useState('Completing sign in...');
 
   useEffect(() => {
-    // Prevent duplicate calls in React Strict Mode
-    if (hasRun.current) return;
-    hasRun.current = true;
-
-    // Wait a bit for router to be ready
-    const timer = setTimeout(() => {
-      handleCallback();
-    }, 100);
-
-    return () => clearTimeout(timer);
+    handleOAuthCallback();
   }, []);
 
-  const handleCallback = async () => {
+  const handleOAuthCallback = async () => {
     try {
-      // Wait for session to be ready (OAuth redirect can take a moment)
-      let session = null;
-      let retries = 0;
-      const maxRetries = 10;
+      logger.info('[Callback] 🚀 Starting OAuth callback handling');
+      setStatus('Verifying authentication...');
 
-      while (!session && retries < maxRetries) {
-        const {
-          data: { session: currentSession },
-          error,
-        } = await supabase.auth.getSession();
+      // Get current session with timeout
+      const sessionPromise = supabase.auth.getSession();
+      const sessionTimeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Session timeout')), 5000)
+      );
 
-        if (error && retries === 0) {
-          // Only show error on first attempt
-          console.error('Session error:', error);
-        }
+      const {
+        data: { session },
+        error: sessionError,
+      } = (await Promise.race([sessionPromise, sessionTimeout])) as any;
 
-        if (currentSession) {
-          session = currentSession;
-          break;
-        }
-
-        // Wait before retrying (exponential backoff)
-        await new Promise((resolve) =>
-          setTimeout(resolve, 100 * (retries + 1))
-        );
-        retries++;
+      if (sessionError) {
+        throw new Error(`Session error: ${sessionError.message}`);
       }
 
       if (!session) {
-        // Still no session after retries - check auth state change
-        console.log('No session found, waiting for auth state change...');
-
-        // Wait for auth state change (up to 3 seconds)
-        const sessionPromise = new Promise<any>((resolve) => {
-          const timeout = setTimeout(() => {
-            resolve(null);
-          }, 3000);
-
-          const {
-            data: { subscription },
-          } = supabase.auth.onAuthStateChange((_event, newSession) => {
-            if (newSession) {
-              clearTimeout(timeout);
-              subscription.unsubscribe();
-              resolve(newSession);
-            }
-          });
-        });
-
-        session = await sessionPromise;
+        throw new Error('No session found after OAuth');
       }
 
-      if (!session) {
-        toast.error({
-          title: 'Authentication Failed',
-          message: 'Session not found. Please try again.',
-        });
-        router.replace('/auth/login');
-        return;
-      }
+      logger.info('[Callback] ✅ Session found', {
+        userId: session.user.id?.substring(0, 8) + '...',
+        email: session.user.email,
+        provider: session.user.app_metadata?.provider,
+      });
 
-      if (session) {
-        const provider = session.user.app_metadata.provider || 'oauth';
-        const oauthEmail = session.user.email;
-        const oauthPhone = session.user.phone;
+      setStatus('Setting up your account...');
 
-        // Check if user profile exists (including deleted accounts)
-        const { data: existingUser } = await supabase
-          .from('users')
-          .select(
-            'id, oauth_providers, oauth_emails, deleted_at, name, primary_email'
-          )
-          .eq('auth_id', session.user.id)
-          .single();
+      // Check if user profile exists with timeout
+      logger.info('[Callback] 🔍 Checking if user exists in database...');
 
-        if (existingUser) {
-          // ✅ User exists - Check if account was deleted and restore if needed
-          const { accountRestorationService } = await import(
-            '@/services/supabase/accountRestoration.service'
-          );
+      const profileQueryPromise = supabase
+        .from('users')
+        .select(
+          'id, name, avatar_url, oauth_providers, oauth_emails, deleted_at, primary_email'
+        )
+        .eq('auth_id', session.user.id)
+        .single();
 
-          const oauthName =
-            session.user.user_metadata?.name ||
-            session.user.user_metadata?.full_name ||
-            oauthEmail?.split('@')[0] ||
-            'OAuth User';
-          const oauthAvatar =
-            session.user.user_metadata?.avatar_url ||
-            session.user.user_metadata?.picture ||
-            null;
+      const profileTimeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Profile query timeout')), 5000)
+      );
 
-          // Check if account is deleted (deleted_at is not null)
-          if (existingUser.deleted_at) {
-            console.log('🔄 [callback] Found deleted account, restoring...', {
-              userId: existingUser.id,
-              deletedAt: existingUser.deleted_at,
-            });
+      let existingProfile = null;
+      try {
+        const { data, error: profileError } = (await Promise.race([
+          profileQueryPromise,
+          profileTimeout,
+        ])) as any;
 
-            // Account was deleted, restore it
-            const restored =
-              await accountRestorationService.restoreDeletedAccount(
-                session.user.id,
-                oauthEmail || '',
-                oauthName,
-                oauthAvatar || undefined
-              );
-
-            if (restored) {
-              console.log('✅ [callback] Account restored successfully');
-              toast.show({
-                type: 'success',
-                title: 'Welcome Back!',
-                message: 'Your account has been restored',
-              });
-              // Update existingUser reference to restored user
-              existingUser.deleted_at = null;
-              existingUser.name = restored.name;
-              existingUser.primary_email = restored.primary_email;
-            } else {
-              console.error('❌ [callback] Failed to restore account');
-              toast.error({
-                title: 'Restoration Failed',
-                message:
-                  'Failed to restore your account. Please contact support.',
-              });
-              router.replace('/auth/login');
-              return;
-            }
-          }
-
-          // ✅ User exists - Check if provider already linked
-          const providers = existingUser.oauth_providers || [];
-          const emails = existingUser.oauth_emails || {};
-
-          if (!providers.includes(provider)) {
-            // Link new provider
-            const updatedProviders = [...providers, provider];
-            const updatedEmails = { ...emails, [provider]: oauthEmail };
-
-            await supabase
-              .from('users')
-              .update({
-                oauth_providers: updatedProviders,
-                oauth_emails: updatedEmails,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', existingUser.id);
-
-            toast.success({
-              title: `${provider} Linked!`,
-              message: 'Your account has been linked successfully',
-            });
+        if (profileError) {
+          if (profileError.code === 'PGRST116') {
+            // User not found - this is OK
+            logger.info('[Callback] ℹ️ User not found (new user)');
+            existingProfile = null;
           } else {
-            toast.success({
-              title: 'Welcome Back!',
-              message: 'Sign in successful',
-            });
+            // Real error
+            throw new Error(`Profile check error: ${profileError.message}`);
           }
-
-          // Navigate based on context
-          // If user was linking a provider from settings, go back to settings
-          // Otherwise, go to main app
-          setTimeout(() => {
-            try {
-              // Check if we came from account settings (via deep link or referrer)
-              // For now, always go to tabs, but invalidate profile cache to refresh
-              invalidateUserQueries(queryClient, existingUser.id);
-              router.replace('/(tabs)');
-            } catch (error) {
-              console.error('Navigation error:', error);
-              // Fallback: try again
-              setTimeout(() => {
-                try {
-                  router.replace('/(tabs)');
-                } catch (retryError) {
-                  console.error('Retry navigation error:', retryError);
-                }
-              }, 100);
-            }
-          }, 100);
         } else {
-          // ✅ Check if there's a deleted account to restore
-          const { accountRestorationService } = await import(
-            '@/services/supabase/accountRestoration.service'
-          );
-
-          const oauthName =
-            session.user.user_metadata?.name ||
-            session.user.user_metadata?.full_name ||
-            oauthEmail?.split('@')[0] ||
-            'OAuth User';
-          const oauthAvatar =
-            session.user.user_metadata?.avatar_url ||
-            session.user.user_metadata?.picture ||
-            null;
-
-          // Try to restore deleted account first
-          const restoredUser =
-            await accountRestorationService.restoreDeletedAccount(
-              session.user.id,
-              oauthEmail || '',
-              oauthName,
-              oauthAvatar || undefined
-            );
-
-          let newUser;
-          if (restoredUser) {
-            // Account was restored
-            newUser = restoredUser;
-            console.log('✅ [callback] Account restored:', restoredUser.id);
-            toast.show({
-              type: 'success',
-              title: 'Welcome Back!',
-              message: 'Your account has been restored',
-            });
-          } else {
-            // ✅ New OAuth user - Create profile with smart defaults
-            // 🎨 Get smart defaults from device
-            const defaultTheme = UserPreferencesService.getDefaultTheme();
-            const defaultLanguage = UserPreferencesService.getDefaultLanguage();
-
-            const { data: insertedUser, error: profileError } = await supabase
-              .from('users')
-              .insert({
-                auth_id: session.user.id,
-                phone: oauthPhone || null,
-                primary_email: oauthEmail,
-                name: oauthName,
-                avatar_url: oauthAvatar,
-                oauth_providers: [provider],
-                oauth_emails: { [provider]: oauthEmail },
-
-                // 🎨 Smart defaults based on device settings
-                theme_preference: defaultTheme,
-                language_preference: defaultLanguage,
-
-                role: 'user',
-              })
-              .select()
-              .single();
-
-            if (profileError) {
-              // Check for unique constraint violation (might be a deleted account)
-              if (profileError.code === '23505') {
-                // Unique constraint violation - might be a deleted account
-                // Try to restore it
-                const restored =
-                  await accountRestorationService.restoreDeletedAccount(
-                    session.user.id,
-                    oauthEmail || '',
-                    oauthName,
-                    oauthAvatar || undefined
-                  );
-
-                if (restored) {
-                  newUser = restored;
-                  console.log(
-                    '✅ [callback] Account restored after unique constraint error'
-                  );
-                } else {
-                  throw new Error(
-                    'Account already exists. Please try logging in instead of signing up.'
-                  );
-                }
-              } else {
-                // Other errors
-                throw profileError;
-              }
-            } else {
-              newUser = insertedUser;
-            }
-          }
-
-          if (!newUser) {
-            throw new Error('Failed to create or restore user account');
-          }
-
-          toast.success({
-            title: 'Welcome!',
-            message: 'Your account has been created',
+          existingProfile = data;
+          logger.info('[Callback] ✅ User found', {
+            userId: existingProfile.id,
           });
-
-          // Invalidate cache to ensure fresh data for new login
-          if (session?.user?.id) {
-            invalidateUserQueries(queryClient, session.user.id);
-          }
-
-          // Wait a bit to ensure session is fully established and cache is cleared
-          // This prevents the login loop issue
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-
-          // Navigate to main app (home page)
-          // Use a small delay to ensure all state updates are complete
-          try {
-            // Double-check session is still valid before navigation
-            const {
-              data: { session: finalSession },
-            } = await supabase.auth.getSession();
-
-            if (finalSession) {
-              router.replace('/(tabs)');
-            } else {
-              // Session lost, redirect to login
-              router.replace('/auth/login');
-            }
-          } catch (error) {
-            console.error('Navigation error:', error);
-            // Fallback: try again after a short delay
-            setTimeout(() => {
-              try {
-                router.replace('/(tabs)');
-              } catch (retryError) {
-                console.error('Retry navigation error:', retryError);
-                router.replace('/auth/login');
-              }
-            }, 300);
-          }
         }
-      } else {
-        // No session
-        toast.error({
-          title: 'Authentication Failed',
-          message: 'No session found',
+      } catch (error: any) {
+        if (error?.message?.includes('timeout')) {
+          logger.warn(
+            '[Callback] ⚠️ Profile query timeout - will attempt user creation'
+          );
+          existingProfile = null;
+        } else {
+          throw error;
+        }
+      }
+
+      if (existingProfile) {
+        // ✅ Profile exists - Sign-In
+        logger.info('[Callback] Existing user sign-in');
+
+        toast.success({
+          title: 'Welcome Back!',
+          message: `Good to see you, ${existingProfile.name}`,
         });
-        router.replace('/auth/login');
+
+        setStatus('Redirecting...');
+        router.replace('/(tabs)');
+      } else {
+        // ✅ New user - Create profile
+        logger.info('[Callback] New user sign-up, creating profile');
+
+        const { error: createError } = await supabase.from('users').insert({
+          auth_id: session.user.id,
+          email: session.user.email,
+          phone: session.user.phone,
+          primary_email: session.user.email,
+          name:
+            session.user.user_metadata?.full_name ||
+            session.user.user_metadata?.name ||
+            session.user.email?.split('@')[0] ||
+            'User',
+          avatar_url: session.user.user_metadata?.avatar_url,
+          oauth_providers: [session.user.app_metadata?.provider || 'unknown'],
+          oauth_emails: {
+            [session.user.app_metadata?.provider || 'unknown']:
+              session.user.email,
+          },
+          role: 'user',
+        });
+
+        if (createError) {
+          throw new Error(`Profile creation error: ${createError.message}`);
+        }
+
+        logger.info('[Callback] Profile created successfully');
+
+        toast.success({
+          title: 'Welcome to Talkee!',
+          message: 'Your account has been created',
+        });
+
+        setStatus('Redirecting...');
+
+        // Navigate to setup account screen for additional info
+        router.replace('/auth/setup-account');
       }
     } catch (error: any) {
+      logger.error('[Callback] OAuth callback error:', error);
+
+      setStatus('Sign-in failed');
+
       toast.error({
-        title: 'Error',
-        message: 'An unexpected error occurred',
+        title: 'Sign-In Failed',
+        message: error.message || 'Please try again',
       });
-      router.replace('/auth/login');
+
+      // Wait a bit before redirecting to show error
+      setTimeout(() => {
+        router.replace('/auth/login');
+      }, 2000);
     }
   };
 
   return (
     <View style={styles.container}>
-      <PageLoading message="Completing sign in..." size="large" />
+      <ActivityIndicator size="large" color="#007AFF" />
+      <Text style={styles.statusText}>{status}</Text>
     </View>
   );
 }
@@ -379,6 +176,16 @@ export default function AuthCallbackScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
+    padding: 24,
+  },
+  statusText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: '#666',
+    textAlign: 'center',
   },
 });

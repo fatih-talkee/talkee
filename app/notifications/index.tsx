@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -50,6 +50,14 @@ export default function NotificationsScreen() {
   const [expandedNotifications, setExpandedNotifications] = useState<
     Set<string>
   >(new Set());
+
+  // Log when notifications screen mounts
+  useEffect(() => {
+    logger.info('[Notifications] 🔔 Notifications screen mounted', {
+      timestamp: new Date().toISOString(),
+      stackTrace: new Error().stack,
+    });
+  }, []);
 
   // Fetch notifications from API with pagination (load 20 at a time for speed)
   const {
@@ -337,12 +345,20 @@ export default function NotificationsScreen() {
     { key: 'unread', label: 'Unread', count: unreadCount },
   ];
 
+  const handleBackPress = () => {
+    logger.info('[Notifications] ⬅️ Back button pressed, navigating to home', {
+      timestamp: new Date().toISOString(),
+    });
+    // Always navigate to home instead of going back (to avoid callback page)
+    router.replace('/(tabs)/');
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
-        <Header showLogo showBack />
+        <Header showLogo showBack onBackPress={handleBackPress} />
         <PageLoading message="Loading notifications..." />
       </SafeAreaView>
     );
@@ -353,7 +369,7 @@ export default function NotificationsScreen() {
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
-        <Header showLogo showBack />
+        <Header showLogo showBack onBackPress={handleBackPress} />
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: theme.colors.error }]}>
             Failed to load notifications
@@ -377,6 +393,9 @@ export default function NotificationsScreen() {
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <Header
+        showLogo
+        showBack
+        onBackPress={handleBackPress}
         showLogo
         showBack
         rightButton={

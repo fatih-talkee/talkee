@@ -488,7 +488,7 @@ export default function BecomeProfessionalScreen() {
 
         // Navigate to home
         setTimeout(() => {
-          router.replace('/(tabs)');
+          router.replace('/(tabs)/');
         }, 1000);
       } else {
         throw new Error('Failed to create professional profile');
@@ -762,7 +762,6 @@ export default function BecomeProfessionalScreen() {
           />
         )}
       </View>
-
 
       {/* Availability Modal */}
       {showAvailabilityModal && (
@@ -1643,7 +1642,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
 });
-
 
 const availabilityModalStyles = StyleSheet.create({
   modalOverlay: {

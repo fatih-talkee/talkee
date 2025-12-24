@@ -1,9 +1,4 @@
-/**
- * Login Screen - PHONE + PASSWORD (FINAL VERSION)
- * Direct phone authentication without email lookup
- */
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,16 +13,20 @@ import {
 import { Link, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Phone, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react-native';
-import { signInWithGoogle } from '@/utils/GoogleAuth';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskInput from 'react-native-mask-input';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/lib/toastService';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/lib/supabase';
+import { logger } from '@/lib/logger';
 
-// Turkish phone mask: +90 XXX XXX XX XX
+// Complete auth session when returning from browser
+WebBrowser.maybeCompleteAuthSession();
+
 const PHONE_MASK = [
   '+',
   '9',
@@ -62,13 +61,130 @@ export default function LoginScreen() {
   const [pendingVerification, setPendingVerification] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
 
+  // ✅ Listen for deep links
+  useEffect(() => {
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink({ url });
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  const handleDeepLink = async (event: { url: string }) => {
+    logger.info('[OAuth] Deep link received:', { url: event.url });
+
+    try {
+      const url = event.url;
+
+      // Only process auth callback URLs
+      if (!url.includes('auth/callback')) {
+        logger.info('[OAuth] Not an auth callback, ignoring');
+        return;
+      }
+
+      // Extract tokens from URL
+      const fragment = url.includes('#')
+        ? url.split('#')[1]
+        : url.split('?')[1];
+      if (!fragment) {
+        logger.info('[OAuth] No params in URL');
+        return;
+      }
+
+      const params = new URLSearchParams(fragment);
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+
+      logger.info('[OAuth] Parsed tokens:', {
+        hasAccessToken: !!accessToken,
+        hasRefreshToken: !!refreshToken,
+      });
+
+      if (accessToken && refreshToken) {
+        logger.info('[OAuth] Setting session...');
+
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (error) throw error;
+
+        logger.info('[OAuth] Session set successfully!');
+
+        toast.success({
+          title: 'Signed In',
+          message: 'Welcome back!',
+        });
+
+        router.push('/auth/callback');
+      } else {
+        logger.error('[OAuth] Missing tokens in URL');
+      }
+    } catch (error) {
+      logger.error('[OAuth] Deep link error:', error);
+      toast.error({
+        title: 'Authentication Failed',
+        message: 'Please try again',
+      });
+    }
+  };
+
+  const handleSocialLogin = async (
+    provider: 'google' | 'facebook' | 'linkedin'
+  ) => {
+    setSocialLoading(provider);
+
+    try {
+      // ✅ Always use custom scheme for mobile
+      const redirectUri = 'net.talkee.app://auth/callback';
+
+      logger.info(`[OAuth] Starting ${provider} login`, {
+        redirectUri,
+        provider,
+      });
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: redirectUri,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.url) throw new Error('No OAuth URL received');
+
+      logger.info('[OAuth] Opening browser...', { url: data.url });
+
+      // ✅ Open OAuth in browser
+      const result = await WebBrowser.openAuthSessionAsync(
+        data.url,
+        redirectUri
+      );
+
+      logger.info('[OAuth] Browser closed', { type: result.type });
+
+      // Note: Deep link handler will process the callback
+    } catch (error: any) {
+      logger.error(`[OAuth] ${provider} error:`, error);
+      toast.error({
+        title: 'Login Failed',
+        message: error.message || 'An error occurred',
+      });
+    } finally {
+      setSocialLoading(null);
+    }
+  };
+
   const validatePhone = (phone: string) => {
     const cleaned = phone.replace(/\s/g, '');
-    return cleaned.length >= 13; // +90 + 10 digits
+    return cleaned.length >= 13;
   };
 
   const handleLogin = async () => {
-    // Validation
     if (!phone.trim()) {
       toast.error({
         title: 'Phone Required',
@@ -107,14 +223,12 @@ export default function LoginScreen() {
     try {
       const cleanPhone = phone.replace(/\s/g, '');
 
-      // ✅ Direct phone + password login (Supabase handles phone auth)
       const { data, error } = await supabase.auth.signInWithPassword({
         phone: cleanPhone,
         password,
       });
 
       if (error) {
-        // Check if phone not confirmed
         if (
           error.message.includes('not confirmed') ||
           error.message.includes('Phone not confirmed')
@@ -127,18 +241,22 @@ export default function LoginScreen() {
         } else if (error.message.includes('Invalid login credentials')) {
           toast.error({
             title: 'Login Failed',
-            message: 'Invalid phone or password. Please try again.',
+            message: 'Invalid phone or password',
           });
         } else {
           toast.error({
             title: 'Login Failed',
-            message: error.message || 'An error occurred during login',
+            message: error.message,
           });
         }
         return;
       }
 
       if (data.session) {
+        logger.info('[Login] Login successful', {
+          userId: data.session.user.id,
+        });
+
         toast.success({
           title: 'Welcome Back!',
           message: 'Login successful',
@@ -149,7 +267,7 @@ export default function LoginScreen() {
     } catch (error: any) {
       toast.error({
         title: 'Error',
-        message: 'An unexpected error occurred. Please try again.',
+        message: 'An unexpected error occurred',
       });
     } finally {
       setLoading(false);
@@ -170,7 +288,6 @@ export default function LoginScreen() {
     try {
       const cleanPhone = phone.replace(/\s/g, '');
 
-      // Resend OTP
       const { error } = await supabase.auth.signInWithOtp({
         phone: cleanPhone,
       });
@@ -178,15 +295,14 @@ export default function LoginScreen() {
       if (error) {
         toast.error({
           title: 'Resend Failed',
-          message: error.message || 'Failed to resend code',
+          message: error.message,
         });
       } else {
         toast.success({
           title: 'Code Sent',
-          message: 'A new verification code has been sent to your phone',
+          message: 'A new verification code has been sent',
         });
 
-        // Navigate to OTP
         router.push(
           `/auth/otp?phone=${encodeURIComponent(cleanPhone)}&context=resend`
         );
@@ -198,88 +314,6 @@ export default function LoginScreen() {
       });
     } finally {
       setResendLoading(false);
-    }
-  };
-
-  const handleSocialLogin = async (
-    provider: 'google' | 'facebook' | 'linkedin'
-  ) => {
-    setSocialLoading(provider);
-
-    try {
-      if (provider === 'google') {
-        // Use modal presentation
-        try {
-          const result = await signInWithGoogle();
-
-          if (result.success && result.session) {
-            // Session is established, now verify user profile exists
-            // If profile doesn't exist, callback handler will create it
-            // Don't navigate here - let callback handler or auth state change handle navigation
-            // Don't show toast here - callback handler will show appropriate message
-            const { data: userProfile } = await supabase
-              .from('users')
-              .select('id')
-              .eq('auth_id', result.session.user.id)
-              .single();
-
-            if (!userProfile) {
-              // Profile doesn't exist yet - callback handler will create it
-              // Show loading message, callback handler will handle navigation and toast
-              toast.show({
-                type: 'info',
-                title: 'Setting up your account...',
-                message: 'Please wait',
-              });
-            }
-            // If userProfile exists, callback handler will show toast and handle navigation
-          } else if (result.cancelled) {
-            toast.info({
-              title: 'Cancelled',
-              message: 'Google sign-in was cancelled',
-            });
-          } else if (result.error) {
-            toast.error({
-              title: 'Login Failed',
-              message: result.error,
-            });
-          } else if (result.success) {
-            // Success but needs callback handler - browser is opening, don't show error
-            // The callback handler will process the authentication
-            // No toast needed here - browser will show Google's UI
-          }
-        } catch (googleError: any) {
-          // Catch any unhandled errors from signInWithGoogle
-          console.error('Google sign-in error:', googleError);
-          toast.error({
-            title: 'Login Failed',
-            message: googleError?.message || 'An unexpected error occurred',
-          });
-        }
-      } else {
-        // Facebook & LinkedIn - existing flow
-        const redirectUrl =
-          Platform.OS === 'web' && typeof window !== 'undefined'
-            ? `${window.location.origin}/auth/callback`
-            : 'talkee://auth/callback';
-
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider,
-          options: {
-            redirectTo: redirectUrl,
-          },
-        });
-
-        if (error) throw error;
-      }
-    } catch (error: any) {
-      console.error(`${provider} error:`, error);
-      toast.error({
-        title: 'Error',
-        message: 'An unexpected error occurred. Please try again.',
-      });
-    } finally {
-      setSocialLoading(null);
     }
   };
 
@@ -314,7 +348,7 @@ export default function LoginScreen() {
 
             {/* Form */}
             <View style={styles.form}>
-              {/* Phone Number with Mask */}
+              {/* Phone Number */}
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>Phone Number</Text>
                 <View
@@ -326,7 +360,7 @@ export default function LoginScreen() {
                   <Phone size={20} color="#9E9E9E" style={styles.phoneIcon} />
                   <MaskInput
                     value={phone}
-                    onChangeText={(masked, unmasked) => {
+                    onChangeText={(masked) => {
                       setPhone(masked);
                       setPendingVerification(false);
                     }}
@@ -341,7 +375,7 @@ export default function LoginScreen() {
                 </View>
               </View>
 
-              {/* Password Input */}
+              {/* Password */}
               <Input
                 variant="light"
                 label="Password"
@@ -365,7 +399,7 @@ export default function LoginScreen() {
                 }
               />
 
-              {/* Forgot Password Link */}
+              {/* Forgot Password */}
               <View style={styles.forgotPasswordContainer}>
                 <Link href="/auth/forgot-password" asChild>
                   <TouchableOpacity>
@@ -414,8 +448,9 @@ export default function LoginScreen() {
                 <View style={styles.dividerLine} />
               </View>
 
-              {/* Social Login Buttons */}
+              {/* Social Buttons */}
               <View style={styles.socialButtons}>
+                {/* Google */}
                 <TouchableOpacity
                   style={[styles.socialButton, styles.googleButton]}
                   onPress={() => handleSocialLogin('google')}
@@ -433,6 +468,7 @@ export default function LoginScreen() {
                   </View>
                 </TouchableOpacity>
 
+                {/* Facebook */}
                 <TouchableOpacity
                   style={[styles.socialButton, styles.facebookButton]}
                   onPress={() => handleSocialLogin('facebook')}
@@ -450,6 +486,7 @@ export default function LoginScreen() {
                   </View>
                 </TouchableOpacity>
 
+                {/* LinkedIn */}
                 <TouchableOpacity
                   style={[styles.socialButton, styles.linkedinButton]}
                   onPress={() => handleSocialLogin('linkedin')}
@@ -555,8 +592,6 @@ const styles = StyleSheet.create({
     color: '#000000',
     ...(Platform.OS === 'web' && {
       outlineStyle: 'none' as any,
-      outlineWidth: 0,
-      outlineColor: 'transparent',
     }),
   },
   forgotPasswordContainer: {
@@ -715,7 +750,6 @@ const styles = StyleSheet.create({
     color: '#2e2461',
     fontFamily: 'Inter-Bold',
     fontSize: 16,
-    letterSpacing: 0.2,
     fontWeight: 'bold',
   },
 });

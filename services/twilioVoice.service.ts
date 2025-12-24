@@ -950,7 +950,7 @@ class TwilioVoiceService {
     // useSyncExternalStore in useTwilioVoice will handle React updates safely
     this.listeners.get('stateChange')?.forEach((callback) => {
       try {
-        callback(this.state);
+      callback(this.state);
       } catch (error) {
         logger.error('[TwilioVoice] Error in state change callback', error);
       }

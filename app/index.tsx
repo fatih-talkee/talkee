@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Redirect, useSegments } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { View, ActivityIndicator } from 'react-native';
+import { logger } from '@/lib/logger';
 
 export default function Index() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -69,8 +70,12 @@ export default function Index() {
   // Redirect based on authentication state
   // Use replace to clear navigation history and always go to home
   if (isAuthenticated) {
-    return <Redirect href="/(tabs)" />;
+    logger.info('[Index] 🧭 Redirecting authenticated user to home', {
+      timestamp: new Date().toISOString(),
+    });
+    return <Redirect href="/(tabs)/" />;
   } else {
+    logger.info('[Index] 🧭 Redirecting unauthenticated user to login');
     return <Redirect href="/auth/login" />;
   }
 }

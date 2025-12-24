@@ -25,14 +25,34 @@ import { useFeaturedPromotions } from '@/hooks/usePromotions';
 import { useProfile } from '@/hooks/useProfile';
 import { useUnreadCount } from '@/hooks/useNotifications';
 import { ProfessionalWithRelations } from '@/types/database.types';
+import { logger } from '@/lib/logger';
+import { useEffect } from 'react';
 
 // ✅ TYPE ADAPTERS (not needed here, ProfessionalCard uses ProfessionalWithRelations directly)
 
 export default function HomeScreen() {
   const { theme } = useTheme();
 
+  // Log when home screen mounts
+  useEffect(() => {
+    logger.info('[Home] 🏠 Home screen mounted', {
+      timestamp: new Date().toISOString(),
+    });
+  }, []);
+
   // ✅ Get user profile to check if professional
-  const { isProfessional } = useProfile();
+  const {
+    isProfessional,
+    isLoading: profileLoading,
+    error: profileError,
+  } = useProfile();
+
+  logger.info('[Home] 📊 Profile state', {
+    isProfessional,
+    profileLoading,
+    hasProfileError: !!profileError,
+    timestamp: new Date().toISOString(),
+  });
 
   // ✅ Fetch featured professionals (is_featured = true from database)
   const {
@@ -41,9 +61,20 @@ export default function HomeScreen() {
     error: professionalsError,
   } = useFeaturedProfessionals(4);
 
+  logger.info('[Home] 📊 Featured professionals state', {
+    count: professionalsData.length,
+    isLoading: professionalsLoading,
+    hasError: !!professionalsError,
+  });
+
   // ✅ Fetch popular categories (top 8 by professional count, fallback to sort_order)
   const { data: categoriesData = [], isLoading: categoriesLoading } =
     usePopularCategories(8);
+
+  logger.info('[Home] 📊 Categories state', {
+    count: categoriesData.length,
+    isLoading: categoriesLoading,
+  });
 
   // ✅ Fetch promotions
   const { data: promotionsData = [] } = useFeaturedPromotions(5);
