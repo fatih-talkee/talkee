@@ -278,12 +278,16 @@ class ProfessionalsService {
   /**
    * Get featured professionals from database
    * ✅ UPDATED: Uses database is_featured flag
+   * ✅ FIXED: timeoutId scope issue
+   * ✅ FIXED: Increased timeout to 30 seconds
    */
   async getFeaturedProfessionals(
     limit: number = 10,
     categoryId?: string
   ): Promise<ProfessionalWithRelations[]> {
     const startTime = Date.now();
+    let timeoutId: ReturnType<typeof setTimeout> | null = null; // ✅ MOVED TO OUTER SCOPE
+
     logger.info('[ProfessionalsService] 🔍 getFeaturedProfessionals started', {
       limit,
       categoryId,
@@ -313,15 +317,45 @@ class ProfessionalsService {
       logger.info(
         '[ProfessionalsService] 📊 Executing featured professionals query...'
       );
-      const { data, error } = await query;
+
+      // Add timeout to prevent hanging queries
+      const queryTimeout = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          const timeoutElapsed = Date.now() - startTime;
+          const timeoutError = new Error(
+            'Featured professionals query timeout'
+          );
+          logger.error(
+            '[ProfessionalsService] ⏱️ Featured professionals query TIMEOUT',
+            timeoutError,
+            {
+              elapsedTime: `${timeoutElapsed}ms`,
+              timeoutLimit: '30000ms',
+              timestamp: new Date().toISOString(),
+            }
+          );
+          reject(timeoutError);
+        }, 30000); // ✅ INCREASED TO 30 SECONDS
+      });
+
+      const { data, error } = (await Promise.race([
+        query,
+        queryTimeout,
+      ])) as any;
+
+      // Clear timeout if query succeeded
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+
       const duration = Date.now() - startTime;
 
       if (error) {
         logger.error(
           '[ProfessionalsService] ❌ Error fetching featured professionals',
+          error,
           {
-            error: error.message,
-            code: error.code,
             duration: `${duration}ms`,
             limit,
             categoryId,
@@ -342,11 +376,17 @@ class ProfessionalsService {
 
       return (data || []) as ProfessionalWithRelations[];
     } catch (error: any) {
+      // Clear timeout on error
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+
       const duration = Date.now() - startTime;
       logger.error(
         '[ProfessionalsService] ❌ Error in getFeaturedProfessionals',
+        error,
         {
-          error: error?.message || String(error),
           duration: `${duration}ms`,
           limit,
           categoryId,
@@ -957,12 +997,6 @@ class ProfessionalsService {
       return { success: false, error: error.message };
     }
   }
-
-  // ============================================================================
-  // REST OF THE SERVICE METHODS
-  // ============================================================================
-  // Add your other methods here (createProfessional, etc.)
-  // They remain unchanged from your original service
 }
 
 export const professionalsService = new ProfessionalsService();

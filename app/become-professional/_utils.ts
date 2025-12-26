@@ -89,10 +89,7 @@ export const validateAvailability = (
   ) {
     return 'Please select at least one day';
   }
-  if (
-    formData.availableAt === 'specific' &&
-    !formData.date
-  ) {
+  if (formData.availableAt === 'specific' && !formData.date) {
     return 'Please select a date';
   }
 
@@ -110,10 +107,7 @@ export const validateAvailability = (
   }
 
   // Validate start hour is before end hour
-  const timeComparison = compareTimes(
-    formData.startHour,
-    formData.endHour
-  );
+  const timeComparison = compareTimes(formData.startHour, formData.endHour);
 
   if (timeComparison >= 0) {
     return 'Start time must be before end time';
@@ -123,5 +117,3 @@ export const validateAvailability = (
 };
 
 // Default export to prevent Expo Router from treating this as a route
-export default null;
-

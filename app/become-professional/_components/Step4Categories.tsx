@@ -26,7 +26,8 @@ export function Step4Categories({
   onSearchChange,
 }: Step4CategoriesProps) {
   const { theme } = useTheme();
-  const { data: categoriesGrouped, isLoading: categoriesLoading } = useCategoriesGrouped();
+  const { data: categoriesGrouped, isLoading: categoriesLoading } =
+    useCategoriesGrouped();
 
   // Filter categories based on search query
   const filteredGroups = useMemo(() => {
@@ -64,11 +65,7 @@ export function Step4Categories({
             { backgroundColor: theme.colors.primary },
           ]}
         >
-          <Briefcase
-            size={20}
-            color={theme.colors.surface}
-            strokeWidth={2.5}
-          />
+          <Briefcase size={20} color={theme.colors.surface} strokeWidth={2.5} />
         </View>
       </View>
 
@@ -76,10 +73,7 @@ export function Step4Categories({
         Select Categories
       </Text>
       <Text
-        style={[
-          styles.subtitleCompact,
-          { color: theme.colors.textSecondary },
-        ]}
+        style={[styles.subtitleCompact, { color: theme.colors.textSecondary }]}
       >
         Choose one or more categories where you can provide expertise
       </Text>
@@ -178,9 +172,7 @@ export function Step4Categories({
                 {/* Categories Grid */}
                 <View style={styles.categoriesGrid}>
                   {group.categories.map((category) => {
-                    const isSelected = selectedCategories.includes(
-                      category.id
-                    );
+                    const isSelected = selectedCategories.includes(category.id);
                     return (
                       <TouchableOpacity
                         key={category.id}
@@ -232,10 +224,7 @@ export function Step4Categories({
               <View style={styles.emptySearchContainer}>
                 <Search size={48} color={theme.colors.textMuted} />
                 <Text
-                  style={[
-                    styles.emptySearchText,
-                    { color: theme.colors.text },
-                  ]}
+                  style={[styles.emptySearchText, { color: theme.colors.text }]}
                 >
                   No categories found
                 </Text>
@@ -414,4 +403,3 @@ const styles = StyleSheet.create({
 });
 
 // Default export to prevent Expo Router from treating this as a route
-export default null;

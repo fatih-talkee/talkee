@@ -35,7 +35,8 @@ export class ProfileService {
       const { data: users, error: userError } = await supabase
         .from('users')
         .select('*')
-        .eq('auth_id', authId);
+        .eq('auth_id', authId)
+        .is('deleted_at', null); // Only get non-deleted users
 
       const userQueryDuration = Date.now() - userQueryStart;
       logger.info('[ProfileService] ✅ Users query completed', {

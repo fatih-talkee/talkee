@@ -70,12 +70,12 @@ export function Step2AboutMe({
               maxLength={50}
               helperText="Add specific areas where you provide expertise"
             />
-            </View>
+          </View>
 
           {/* Divider */}
           <View
             style={[styles.divider, { backgroundColor: theme.colors.border }]}
-            />
+          />
 
           {/* Languages (Tag Input) */}
           <View style={styles.tagInputWrapper}>
@@ -204,4 +204,3 @@ const styles = StyleSheet.create({
   },
 });
 // Default export to prevent Expo Router from treating this as a route
-export default null;

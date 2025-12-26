@@ -74,10 +74,41 @@ export function useFeaturedProfessionals(
       });
       const startTime = Date.now();
       try {
-        const result = await professionalsService.getFeaturedProfessionals(
+        // Add additional timeout wrapper for React Query
+        const queryPromise = professionalsService.getFeaturedProfessionals(
           limit,
           categoryId
         );
+        let queryTimeoutId: ReturnType<typeof setTimeout> | null = null;
+        const queryTimeout = new Promise((_, reject) => {
+          queryTimeoutId = setTimeout(() => {
+            const timeoutElapsed = Date.now() - startTime;
+            const timeoutError = new Error(
+              'Featured professionals query timeout in hook'
+            );
+            logger.error(
+              '[useFeaturedProfessionals] ⏱️ Query TIMEOUT in React Query hook',
+              timeoutError,
+              {
+                elapsedTime: `${timeoutElapsed}ms`,
+                timeoutLimit: '20000ms',
+                timestamp: new Date().toISOString(),
+              }
+            );
+            reject(timeoutError);
+          }, 20000);
+        });
+
+        const result = (await Promise.race([
+          queryPromise,
+          queryTimeout,
+        ])) as any;
+
+        // Clear timeout if query succeeded
+        if (queryTimeoutId) {
+          clearTimeout(queryTimeoutId);
+        }
+
         const duration = Date.now() - startTime;
         logger.info('[useFeaturedProfessionals] ✅ Fetch completed', {
           duration: `${duration}ms`,
@@ -98,18 +129,27 @@ export function useFeaturedProfessionals(
       }
     },
     ...CACHE_CONFIG.PROFESSIONAL_FEATURED,
+    retry: 1, // Only retry once on failure
+    retryDelay: 1000, // Wait 1 second before retry
   });
 }
 
 /**
  * Get single professional by ID with full details
  * Cache: 5 minutes (individual profiles change infrequently)
+ *
+ * ✅ FIXED: Now accepts optional options parameter to control enabled state
+ * This prevents "Rendered fewer hooks than expected" error when used conditionally
+ *
+ * @param id - Professional ID to fetch
+ * @param options - Query options
+ * @param options.enabled - Override default enabled behavior (default: !!id)
  */
-export function useProfessional(id: string) {
+export function useProfessional(id: string, options?: { enabled?: boolean }) {
   return useQuery<ProfessionalWithRelations | null>({
     queryKey: professionalsKeys.detail(id),
     queryFn: () => professionalsService.getProfessional(id),
-    enabled: !!id,
+    enabled: options?.enabled ?? !!id,
     ...CACHE_CONFIG.PROFESSIONAL_DETAIL,
   });
 }
@@ -142,7 +182,7 @@ export function useInfiniteProfessionals(categoryId?: string) {
       return professionalsService.getProfessionals(
         categoryId,
         PAGE_SIZE,
-        pageParam * PAGE_SIZE
+        (pageParam as number) * PAGE_SIZE
       );
     },
     getNextPageParam: (lastPage, allPages) => {
@@ -171,7 +211,7 @@ export function useInfiniteSearchProfessionals(query: string) {
       return professionalsService.searchProfessionals(
         query,
         PAGE_SIZE,
-        pageParam * PAGE_SIZE
+        (pageParam as number) * PAGE_SIZE
       );
     },
     getNextPageParam: (lastPage, allPages) => {

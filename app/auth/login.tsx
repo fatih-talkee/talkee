@@ -114,12 +114,12 @@ export default function LoginScreen() {
 
         logger.info('[OAuth] Session set successfully!');
 
-        toast.success({
-          title: 'Signed In',
-          message: 'Welcome back!',
-        });
+        // Wait a bit to ensure session is fully propagated
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
-        router.push('/auth/callback');
+        logger.info('[OAuth] Navigating to callback...');
+        // Use replace to ensure callback page remounts and picks up the session
+        router.replace('/auth/callback');
       } else {
         logger.error('[OAuth] Missing tokens in URL');
       }

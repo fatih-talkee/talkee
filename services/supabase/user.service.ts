@@ -31,10 +31,16 @@ class UsersService {
         .from('users')
         .select('*')
         .eq('auth_id', authUser.id)
+        .is('deleted_at', null) // Only get non-deleted users
         .single();
 
       if (error) {
         console.error('Error fetching user:', error);
+        return null;
+      }
+
+      if (!data) {
+        console.warn('No user found for auth_id:', authUser.id);
         return null;
       }
 

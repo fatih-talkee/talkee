@@ -66,14 +66,25 @@ export function useProfile() {
         authenticated: !!newUserId,
       });
 
-      // Update state
-      setUserId((prevUserId) => {
-        if (!isMountedRef.current) return prevUserId;
-        previousUserIdRef.current = newUserId;
-        return newUserId;
-      });
+      // Defer state updates to avoid React hooks violations when called during async operations
+      // Use setTimeout with a small delay to ensure updates happen after React's current render cycle
+      setTimeout(() => {
+        if (!isMountedRef.current) return;
+        
+        try {
+          // Update state
+          setUserId((prevUserId) => {
+            if (!isMountedRef.current) return prevUserId;
+            previousUserIdRef.current = newUserId;
+            return newUserId;
+          });
 
-      setIsSessionLoading(false);
+          setIsSessionLoading(false);
+        } catch (error) {
+          // Log error but don't throw - React will recover on next render
+          logger.error('[useProfile] Error updating state in auth callback', error);
+        }
+      }, 0);
 
       // Handle cache operations
       setTimeout(() => {

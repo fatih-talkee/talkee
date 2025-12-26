@@ -1,396 +1,908 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
+  Modal,
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
+  StyleSheet,
   Image,
-  Modal,
   Platform,
 } from 'react-native';
-import { Phone, PhoneOff } from 'lucide-react-native';
-import { useTheme } from '@/contexts/ThemeContext';
-import { notificationsService } from '@/services';
-import { twilioVoiceService } from '@/services/twilioVoice.service';
 import { router } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 import { logger } from '@/lib/logger';
-import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
+import { useTwilioVoice } from '@/hooks/useTwilioVoice';
 
 interface IncomingCallData {
-  call_sid?: string;
-  caller_id?: string;
+  call_id: string;
   caller_name: string;
   caller_avatar?: string;
-  call_id?: string;
   call_type?: 'voice' | 'video';
+  urgent?: boolean;
 }
 
+// CRITICAL: Global listeners to prevent memory leaks
+let globalForegroundListener: Notifications.Subscription | null = null;
+let globalBackgroundListener: Notifications.Subscription | null = null;
+
 export function IncomingCallHandler() {
-  const { theme } = useTheme();
   const [incomingCall, setIncomingCall] = useState<IncomingCallData | null>(
     null
   );
-  const [isVisible, setIsVisible] = useState(false);
-  const hadTwilioInviteRef = useRef(false);
-  const lastInviteSidRef = useRef<string | undefined>(undefined);
-  const ringTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null
+  );
+  const mountTimeRef = useRef<number>(Date.now());
+  const incomingCallRef = useRef<IncomingCallData | null>(null);
 
+  const twilioVoice = useTwilioVoice();
+
+  // Keep ref in sync with state for use in callbacks
   useEffect(() => {
-    // Listen for incoming call notifications (app-level)
-    const unsubscribe = notificationsService.onNotificationReceived(
+    incomingCallRef.current = incomingCall;
+    logger.debug('[IncomingCallHandler] 🔄 IncomingCall ref updated', {
+      call_id: incomingCall?.call_id,
+      timestamp: new Date().toISOString(),
+    });
+  }, [incomingCall]);
+
+  // 🔥 LOG: Component Mount
+  useEffect(() => {
+    const mountTime = Date.now();
+    mountTimeRef.current = mountTime;
+
+    logger.info('[IncomingCallHandler] 🎬 Component mounted', {
+      timestamp: new Date().toISOString(),
+      platform: Platform.OS,
+      mountTime,
+    });
+
+    return () => {
+      logger.info('[IncomingCallHandler] 🔚 Component unmounting', {
+        timestamp: new Date().toISOString(),
+        lifespan: `${Date.now() - mountTime}ms`,
+      });
+
+      // Clean up global listeners on unmount
+      if (globalForegroundListener) {
+        logger.debug(
+          '[IncomingCallHandler] 🧹 Cleaning up foreground listener on unmount'
+        );
+        globalForegroundListener.remove();
+        globalForegroundListener = null;
+      }
+      if (globalBackgroundListener) {
+        logger.debug(
+          '[IncomingCallHandler] 🧹 Cleaning up background listener on unmount'
+        );
+        globalBackgroundListener.remove();
+        globalBackgroundListener = null;
+      }
+    };
+  }, []);
+
+  // 🔥 LOG: Twilio State Changes
+  useEffect(() => {
+    const callSid = twilioVoice.callState.call
+      ? (twilioVoice.callState.call as any)?.callSid ??
+        (twilioVoice.callState.call as any)?.sid ??
+        (twilioVoice.callState.call as any)?.getSid?.()
+      : null;
+    const inviteSid = twilioVoice.callState.callInvite
+      ? (twilioVoice.callState.callInvite as any)?.getCallSid?.()
+      : null;
+    logger.info('[IncomingCallHandler] 📡 Twilio state changed', {
+      status: twilioVoice.callState.status,
+      hasCall: !!twilioVoice.callState.call,
+      hasCallInvite: !!twilioVoice.callState.callInvite,
+      callSid,
+      inviteSid,
+      timestamp: new Date().toISOString(),
+    });
+  }, [
+    twilioVoice.callState.status,
+    twilioVoice.callState.call,
+    twilioVoice.callState.callInvite,
+  ]);
+
+  // ========================================
+  // 1. FOREGROUND NOTIFICATION LISTENER
+  // ========================================
+  useEffect(() => {
+    logger.info(
+      '[IncomingCallHandler] 📬 Setting up FOREGROUND notification listener',
+      {
+        hasExistingListener: !!globalForegroundListener,
+        timestamp: new Date().toISOString(),
+      }
+    );
+
+    // Clean up existing listener
+    if (globalForegroundListener) {
+      logger.debug(
+        '[IncomingCallHandler] 🧹 Removing existing foreground listener'
+      );
+      globalForegroundListener.remove();
+      globalForegroundListener = null;
+    }
+
+    // Listen for notifications while app is in FOREGROUND
+    globalForegroundListener = Notifications.addNotificationReceivedListener(
       (notification) => {
-        logger.info('[IncomingCall] Notification received', {
-          type: notification.data?.type,
-          call_sid: notification.data?.call_sid,
-          call_id: notification.data?.call_id,
-        });
+        logger.info(
+          '[IncomingCallHandler] 🔔 FOREGROUND notification received',
+          {
+            identifier: notification.request.identifier,
+            trigger: JSON.stringify(notification.request.trigger),
+            contentTitle: notification.request.content.title,
+            contentBody: notification.request.content.body,
+            hasData: !!notification.request.content.data,
+            timestamp: new Date().toISOString(),
+          }
+        );
 
-        // If we receive an "ended/missed" signal, clear the in-app incoming UI.
-        if (
-          notification.data?.type === 'call_missed' ||
-          notification.data?.type === 'call_ended'
-        ) {
-          const endedCallId = notification.data?.call_id;
-          const endedCallSid = notification.data?.call_sid;
+        const data = notification.request.content.data as any;
 
-          setIncomingCall((prev) => {
-            if (!prev) return null;
+        logger.info(
+          '[IncomingCallHandler] 🔍 FOREGROUND notification data parsed',
+          {
+            type: data?.type,
+            hasCallId: !!data?.call_id,
+            callId: data?.call_id,
+            callSid: data?.callSid,
+            callerName: data?.caller_name,
+            from: data?.from,
+            urgent: data?.urgent,
+            allKeys: Object.keys(data || {}),
+            fullData: JSON.stringify(data, null, 2),
+            timestamp: new Date().toISOString(),
+          }
+        );
 
-            // If payload includes identifiers, only clear when it matches the current modal call.
-            if (endedCallId && prev.call_id && endedCallId !== prev.call_id)
-              return prev;
-            if (endedCallSid && prev.call_sid && endedCallSid !== prev.call_sid)
-              return prev;
-
-            return null;
-          });
-
-          setIsVisible(false);
-
+        // Handle incoming call notification
+        if (data?.type === 'incoming_call' || data?.type === 'call_request') {
           logger.info(
-            '[IncomingCall] Dismissing incoming call modal (ended/missed)',
+            '[IncomingCallHandler] ✅ FOREGROUND incoming call notification detected',
             {
-              type: notification.data?.type,
-              call_id: endedCallId,
-              call_sid: endedCallSid,
+              call_id: data.call_id,
+              callSid: data.callSid,
+              caller_name: data.caller_name,
+              from: data.from,
+              call_type: data.call_type,
+              urgent: data.urgent,
+              timestamp: new Date().toISOString(),
             }
           );
-          return;
-        }
 
-        // We currently send "call_request" from our backend/app when a user is calling a professional.
-        // Twilio's own call invite is handled via the Voice SDK (see second effect below).
-        if (
-          notification.data?.type === 'incoming_call' ||
-          notification.data?.type === 'call_request'
-        ) {
+          // Show modal with call data
           const callData: IncomingCallData = {
-            call_sid: notification.data?.call_sid,
-            call_id: notification.data?.call_id,
-            caller_id: notification.data?.caller_id,
-            caller_name: notification.data?.caller_name || 'Unknown',
-            caller_avatar: notification.data?.caller_avatar,
-            call_type: notification.data?.call_type,
+            call_id: data.call_id || data.callSid || '',
+            caller_name: data.caller_name || data.from || 'Unknown Caller',
+            caller_avatar: data.caller_avatar,
+            call_type: data.call_type || 'voice',
+            urgent: data.urgent,
           };
 
-          setIncomingCall(callData);
-          setIsVisible(true);
+          logger.info(
+            '[IncomingCallHandler] 🎭 Showing modal from FOREGROUND notification',
+            {
+              callData: JSON.stringify(callData),
+              timestamp: new Date().toISOString(),
+            }
+          );
 
-          logger.info('[IncomingCall] Showing incoming call modal', {
-            call_sid: callData.call_sid,
-            caller_id: callData.caller_id,
-            caller_name: callData.caller_name,
-            call_id: callData.call_id,
-          });
+          setIncomingCall(callData);
+          setShowModal(true);
+
+          logger.info(
+            '[IncomingCallHandler] ✅ Modal state updated (FOREGROUND)',
+            {
+              call_id: callData.call_id,
+              timestamp: new Date().toISOString(),
+            }
+          );
+        } else {
+          logger.warn(
+            '[IncomingCallHandler] ⚠️ FOREGROUND non-call notification received',
+            {
+              type: data?.type,
+              allTypes: Object.keys(data || {}),
+              timestamp: new Date().toISOString(),
+            }
+          );
         }
       }
     );
 
+    logger.info(
+      '[IncomingCallHandler] ✅ FOREGROUND notification listener registered',
+      {
+        timestamp: new Date().toISOString(),
+      }
+    );
+
     return () => {
-      unsubscribe();
+      if (globalForegroundListener) {
+        logger.info(
+          '[IncomingCallHandler] 🔇 Removing FOREGROUND notification listener',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+        globalForegroundListener.remove();
+        globalForegroundListener = null;
+      }
     };
   }, []);
 
-  // Safety net: if we show the modal from a push (call_request) but the caller hangs up quickly,
-  // we may never receive a Twilio CallInvite (or the webhook push might fail).
-  // In that case, auto-dismiss after a short ring window, and also poll the DB call record if we have call_id.
+  // ========================================
+  // 2. BACKGROUND NOTIFICATION RESPONSE LISTENER
+  // ========================================
   useEffect(() => {
-    // cleanup previous timers
-    if (ringTimeoutRef.current) {
-      clearTimeout(ringTimeoutRef.current);
-      ringTimeoutRef.current = null;
+    logger.info(
+      '[IncomingCallHandler] 📬 Setting up BACKGROUND notification response listener',
+      {
+        hasExistingListener: !!globalBackgroundListener,
+        timestamp: new Date().toISOString(),
+      }
+    );
+
+    // Clean up existing listener
+    if (globalBackgroundListener) {
+      logger.debug(
+        '[IncomingCallHandler] 🧹 Removing existing background listener'
+      );
+      globalBackgroundListener.remove();
+      globalBackgroundListener = null;
     }
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
-    }
 
-    if (!isVisible || !incomingCall) return;
+    // Listen for notification taps (when app is in BACKGROUND/KILLED)
+    globalBackgroundListener =
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        logger.info('[IncomingCallHandler] 👆 BACKGROUND notification tapped', {
+          actionIdentifier: response.actionIdentifier,
+          notificationIdentifier: response.notification.request.identifier,
+          timestamp: new Date().toISOString(),
+        });
 
-    // Auto-dismiss after 45s if nothing happens.
-    ringTimeoutRef.current = setTimeout(() => {
-      if (!isVisible) return;
-      if (hadTwilioInviteRef.current) return; // let SDK drive it if invite exists
+        const data = response.notification.request.content.data as any;
 
-      logger.info('[IncomingCall] Auto-dismissing incoming modal (timeout)', {
-        call_id: incomingCall.call_id,
-        call_sid: incomingCall.call_sid,
-      });
-      setIsVisible(false);
-      setIncomingCall(null);
-    }, 45_000);
+        logger.info('[IncomingCallHandler] 🔍 BACKGROUND tap data parsed', {
+          type: data?.type,
+          hasCallId: !!data?.call_id,
+          callId: data?.call_id,
+          callSid: data?.callSid,
+          callerName: data?.caller_name,
+          from: data?.from,
+          allKeys: Object.keys(data || {}),
+          fullData: JSON.stringify(data, null, 2),
+          timestamp: new Date().toISOString(),
+        });
 
-    // If we have a DB call_id, poll it for end_time/status to dismiss as soon as caller cancels.
-    if (incomingCall.call_id) {
-      pollIntervalRef.current = setInterval(async () => {
-        try {
-          const { data, error } = await supabase
-            .from('calls')
-            .select('status, end_time')
-            .eq('id', incomingCall.call_id as string)
-            .maybeSingle();
+        if (data?.type === 'incoming_call' || data?.type === 'call_request') {
+          const callId = data.call_id || data.callSid || '';
 
-          if (error) return;
-          if (!data) return;
+          logger.info(
+            '[IncomingCallHandler] 📞 Navigating to call screen from BACKGROUND tap',
+            {
+              call_id: callId,
+              caller_name: data.caller_name,
+              from: data.from,
+              timestamp: new Date().toISOString(),
+            }
+          );
 
-          const ended =
-            Boolean(data.end_time) ||
-            data.status === 'cancelled' ||
-            data.status === 'missed' ||
-            data.status === 'completed';
-
-          if (ended) {
+          try {
+            router.push({
+              pathname: '/call/[id]' as any,
+              params: {
+                id: callId,
+                call_id: callId,
+                incoming: 'true',
+                caller_name: data.caller_name || data.from || 'Unknown Caller',
+              },
+            });
             logger.info(
-              '[IncomingCall] Auto-dismissing incoming modal (call ended in DB)',
+              '[IncomingCallHandler] ✅ Navigation triggered (BACKGROUND)',
               {
-                call_id: incomingCall.call_id,
-                status: data.status,
-                end_time: data.end_time,
+                call_id: callId,
+                timestamp: new Date().toISOString(),
               }
             );
-            void notificationsService.dismissIncomingCallNotifications({
-              callId: incomingCall.call_id,
-              callSid: incomingCall.call_sid,
-            });
-            setIsVisible(false);
-            setIncomingCall(null);
+          } catch (error) {
+            logger.error(
+              '[IncomingCallHandler] ❌ Navigation error (BACKGROUND)',
+              error,
+              {
+                call_id: callId,
+                errorMessage:
+                  error instanceof Error ? error.message : String(error),
+                errorStack: error instanceof Error ? error.stack : undefined,
+                timestamp: new Date().toISOString(),
+              }
+            );
           }
-        } catch (_e) {
-          // ignore polling errors
-        }
-      }, 2500);
-    }
-
-    return () => {
-      if (ringTimeoutRef.current) {
-        clearTimeout(ringTimeoutRef.current);
-        ringTimeoutRef.current = null;
-      }
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      }
-    };
-  }, [isVisible, incomingCall]);
-
-  useEffect(() => {
-    // Listen for Twilio Voice CallInvite (SDK-level "ringing" when app is foreground)
-    const unsubscribe = twilioVoiceService.subscribe((state) => {
-      if (!state.callInvite) {
-        // If we previously had a Twilio invite and it disappeared, dismiss the modal.
-        if (hadTwilioInviteRef.current) {
-          hadTwilioInviteRef.current = false;
-          const lastSid = lastInviteSidRef.current;
-          lastInviteSidRef.current = undefined;
-
-          setIncomingCall((prev) => {
-            if (!prev) return null;
-            // If we can correlate via SID, only dismiss the matching one.
-            if (lastSid && prev.call_sid && prev.call_sid !== lastSid)
-              return prev;
-            return null;
-          });
-          setIsVisible(false);
-          logger.info(
-            '[IncomingCall] Dismissing incoming call modal (invite ended)',
+        } else {
+          logger.warn(
+            '[IncomingCallHandler] ⚠️ BACKGROUND non-call notification tapped',
             {
-              call_sid: lastSid,
+              type: data?.type,
+              timestamp: new Date().toISOString(),
             }
           );
         }
-        return;
-      }
-
-      const invite = state.callInvite as any;
-      const callSid = invite.getCallSid?.();
-      hadTwilioInviteRef.current = true;
-      lastInviteSidRef.current = callSid;
-      const from = invite.getFrom?.() || invite.getCaller?.() || 'Unknown';
-      const custom = invite.getCustomParameters?.() as any;
-      const callIdFromCustom =
-        custom?.CallId || custom?.call_id || custom?.callId || undefined;
-
-      setIncomingCall((prev) => ({
-        call_sid: prev?.call_sid || callSid,
-        call_id: prev?.call_id || callIdFromCustom,
-        caller_id: prev?.caller_id || from,
-        caller_name: prev?.caller_name || from || 'Unknown',
-        caller_avatar: prev?.caller_avatar,
-        call_type: prev?.call_type || 'voice',
-      }));
-      setIsVisible(true);
-
-      logger.info('[IncomingCall] Twilio CallInvite received (ringing)', {
-        call_sid: callSid,
-        from,
-        call_id: callIdFromCustom,
       });
-    });
+
+    logger.info(
+      '[IncomingCallHandler] ✅ BACKGROUND notification response listener registered',
+      {
+        timestamp: new Date().toISOString(),
+      }
+    );
 
     return () => {
-      unsubscribe();
+      if (globalBackgroundListener) {
+        logger.info(
+          '[IncomingCallHandler] 🔇 Removing BACKGROUND notification response listener',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+        globalBackgroundListener.remove();
+        globalBackgroundListener = null;
+      }
     };
   }, []);
 
-  const handleAccept = async () => {
-    if (!incomingCall) return;
+  // ========================================
+  // 3. TWILIO CALLINVITE LISTENER
+  // ========================================
+  useEffect(() => {
+    logger.info('[IncomingCallHandler] 📞 Checking Twilio CallInvite state', {
+      twilioStatus: twilioVoice.callState.status,
+      hasCall: !!twilioVoice.callState.call,
+      hasCallInvite: !!twilioVoice.callState.callInvite,
+      timestamp: new Date().toISOString(),
+    });
 
-    try {
-      logger.info('[IncomingCall] Accepting call', {
-        call_sid: incomingCall.call_sid,
-        call_id: incomingCall.call_id,
+    // Check for incoming call from Twilio (use callInvite, not call)
+    if (
+      twilioVoice.callState.callInvite &&
+      twilioVoice.callState.status === 'ringing'
+    ) {
+      const callInvite = twilioVoice.callState.callInvite;
+      const callSid = (callInvite as any)?.getCallSid?.();
+      const customParams = (callInvite as any)?.getCustomParameters?.();
+
+      logger.info(
+        '[IncomingCallHandler] 🔔 Twilio CallInvite received (ringing)',
+        {
+          callSid,
+          customParams: JSON.stringify(customParams),
+          hasCustomParams: !!customParams,
+          customParamsKeys: customParams ? Object.keys(customParams) : [],
+          timestamp: new Date().toISOString(),
+        }
+      );
+
+      // Extract caller info from custom parameters
+      const callerName = customParams?.caller_name || 'Unknown Caller';
+      const callerAvatar = customParams?.caller_avatar;
+      const callType = customParams?.call_type || 'voice';
+      const urgent = customParams?.urgent === 'true';
+      const callId = customParams?.call_id;
+
+      logger.info(
+        '[IncomingCallHandler] 📋 Caller info extracted from Twilio',
+        {
+          callSid,
+          callId,
+          callerName,
+          hasAvatar: !!callerAvatar,
+          callType,
+          urgent,
+          timestamp: new Date().toISOString(),
+        }
+      );
+
+      // Show incoming call modal
+      logger.info(
+        '[IncomingCallHandler] 🎭 Showing incoming call modal from Twilio',
+        {
+          callSid,
+          callId,
+          callerName,
+          timestamp: new Date().toISOString(),
+        }
+      );
+
+      const callData: IncomingCallData = {
+        call_id: callId || callSid,
+        caller_name: callerName,
+        caller_avatar: callerAvatar,
+        call_type: callType as 'voice' | 'video',
+        urgent,
+      };
+
+      logger.debug(
+        '[IncomingCallHandler] 📝 Setting incoming call state from Twilio',
+        {
+          callData: JSON.stringify(callData),
+          timestamp: new Date().toISOString(),
+        }
+      );
+
+      setIncomingCall(callData);
+      setShowModal(true);
+
+      logger.info('[IncomingCallHandler] ✅ Modal state updated from Twilio', {
+        call_id: callData.call_id,
+        timestamp: new Date().toISOString(),
       });
+    } else {
+      logger.debug(
+        '[IncomingCallHandler] ℹ️ Twilio state check (no incoming call)',
+        {
+          status: twilioVoice.callState.status,
+          hasCall: !!twilioVoice.callState.call,
+          hasCallInvite: !!twilioVoice.callState.callInvite,
+          timestamp: new Date().toISOString(),
+        }
+      );
+    }
+  }, [twilioVoice.callState.callInvite, twilioVoice.callState.status]);
 
-      // Hide modal immediately
-      setIsVisible(false);
+  // 🔥 DECLINE HANDLER (useCallback ile sarmalandı)
+  const handleDecline = useCallback(async () => {
+    const currentCall = incomingCallRef.current;
 
-      // Remove the OS-level incoming notification once the user interacts (so it doesn't linger).
-      void notificationsService.dismissIncomingCallNotifications({
-        callId: incomingCall.call_id,
-        callSid: incomingCall.call_sid,
-      });
-
-      // Navigate to call screen (incoming=true). We prefer DB call_id if present.
-      if (incomingCall.call_id) {
-        router.push({
-          pathname: '/call/[id]',
-          params: {
-            id: incomingCall.call_id,
-            type: incomingCall.call_type || 'voice',
-            incoming: 'true',
-          },
-        });
-      } else {
-        // If we don't have a DB call record id, we can still show the modal UI;
-        // call screen currently expects a DB call id for details/accept flow.
-        logger.warn('[IncomingCall] Missing call_id; staying on modal', {
-          call_sid: incomingCall.call_sid,
-        });
-        setIsVisible(true);
-        return;
+    logger.info(
+      '[IncomingCallHandler] ❌ User declined call (or auto-dismissed)',
+      {
+        call_id: currentCall?.call_id,
+        caller_name: currentCall?.caller_name,
+        timestamp: new Date().toISOString(),
       }
+    );
 
-      // Clear incoming call state
-      setIncomingCall(null);
-    } catch (error) {
-      logger.error('[IncomingCall] Accept error:', error);
-      setIsVisible(false);
-      setIncomingCall(null);
+    // Clear timers
+    if (dismissTimeoutRef.current) {
+      logger.debug('[IncomingCallHandler] ⏰ Clearing dismiss timeout', {
+        timestamp: new Date().toISOString(),
+      });
+      clearTimeout(dismissTimeoutRef.current);
+      dismissTimeoutRef.current = null;
     }
-  };
+    if (pollingIntervalRef.current) {
+      logger.debug('[IncomingCallHandler] 🔄 Clearing polling interval', {
+        timestamp: new Date().toISOString(),
+      });
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
 
-  const handleDecline = async () => {
-    if (!incomingCall) return;
+    // Reject Twilio call if present (use callInvite for incoming calls)
+    if (twilioVoice.callState.callInvite) {
+      const callInvite = twilioVoice.callState.callInvite;
+      const callSid = (callInvite as any)?.getCallSid?.();
+      logger.info('[IncomingCallHandler] 📞 Rejecting Twilio call invite', {
+        callSid,
+        timestamp: new Date().toISOString(),
+      });
+      try {
+        (callInvite as any)?.reject?.();
+        logger.info(
+          '[IncomingCallHandler] ✅ Twilio call invite rejected successfully',
+          {
+            callSid,
+            timestamp: new Date().toISOString(),
+          }
+        );
+      } catch (error) {
+        logger.error(
+          '[IncomingCallHandler] ❌ Error rejecting Twilio call invite',
+          error,
+          {
+            callSid,
+            timestamp: new Date().toISOString(),
+          }
+        );
+      }
+    }
+
+    // Update DB status
+    if (currentCall?.call_id) {
+      logger.info(
+        '[IncomingCallHandler] 💾 Updating call status to no-answer',
+        {
+          call_id: currentCall.call_id,
+          timestamp: new Date().toISOString(),
+        }
+      );
+
+      (async () => {
+        try {
+          const { error, data } = await supabase
+            .from('calls')
+            .update({
+              status: 'no-answer',
+              ended_at: new Date().toISOString(),
+            })
+            .eq('id', currentCall.call_id);
+
+          if (error) {
+            logger.error('[IncomingCallHandler] ❌ DB update error', {
+              call_id: currentCall.call_id,
+              error: error.message,
+              errorCode: error.code,
+              errorDetails: error.details,
+              timestamp: new Date().toISOString(),
+            });
+          } else {
+            logger.info('[IncomingCallHandler] ✅ DB updated successfully', {
+              call_id: currentCall.call_id,
+              updatedData: data,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } catch (err: any) {
+          logger.error('[IncomingCallHandler] ❌ DB update exception', err, {
+            call_id: currentCall.call_id,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      })();
+    } else {
+      logger.warn('[IncomingCallHandler] ⚠️ No call_id to update in DB', {
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Hide modal
+    logger.debug('[IncomingCallHandler] 🎭 Hiding modal', {
+      timestamp: new Date().toISOString(),
+    });
+    setShowModal(false);
+    setIncomingCall(null);
+  }, [twilioVoice.callState.callInvite]);
+
+  // 🔥 ACCEPT HANDLER (useCallback ile sarmalandı)
+  const handleAccept = useCallback(() => {
+    const currentCall = incomingCallRef.current;
+
+    logger.info('[IncomingCallHandler] ✅ User accepted call', {
+      call_id: currentCall?.call_id,
+      caller_name: currentCall?.caller_name,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (!currentCall?.call_id) {
+      logger.error('[IncomingCallHandler] ❌ Cannot accept: no call_id', {
+        hasCall: !!currentCall,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    const callIdToNavigate = currentCall.call_id;
+
+    // Clear timers
+    if (dismissTimeoutRef.current) {
+      logger.debug(
+        '[IncomingCallHandler] ⏰ Clearing dismiss timeout on accept',
+        {
+          timestamp: new Date().toISOString(),
+        }
+      );
+      clearTimeout(dismissTimeoutRef.current);
+      dismissTimeoutRef.current = null;
+    }
+    if (pollingIntervalRef.current) {
+      logger.debug(
+        '[IncomingCallHandler] 🔄 Clearing polling interval on accept',
+        {
+          timestamp: new Date().toISOString(),
+        }
+      );
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+
+    // Hide modal
+    logger.debug('[IncomingCallHandler] 🎭 Hiding modal before navigation', {
+      call_id: callIdToNavigate,
+      timestamp: new Date().toISOString(),
+    });
+    setShowModal(false);
+    setIncomingCall(null);
+
+    // Navigate to call screen
+    logger.info('[IncomingCallHandler] 🚀 Navigating to call screen', {
+      call_id: callIdToNavigate,
+      timestamp: new Date().toISOString(),
+    });
 
     try {
-      logger.info('[IncomingCall] Declining call', {
-        call_sid: incomingCall.call_sid,
-        call_id: incomingCall.call_id,
+      router.push({
+        pathname: '/call/[id]' as any,
+        params: {
+          id: callIdToNavigate,
+          call_id: callIdToNavigate,
+          incoming: 'true',
+        },
       });
-
-      // Reject call invite if present (Twilio SDK)
-      await twilioVoiceService.rejectIncomingCall({
-        callId: incomingCall.call_id,
+      logger.info('[IncomingCallHandler] ✅ Navigation triggered', {
+        call_id: callIdToNavigate,
+        timestamp: new Date().toISOString(),
       });
-
-      setIsVisible(false);
-      setIncomingCall(null);
     } catch (error) {
-      logger.error('[IncomingCall] Decline error:', error);
-      setIsVisible(false);
-      setIncomingCall(null);
+      logger.error('[IncomingCallHandler] ❌ Navigation error', error, {
+        call_id: callIdToNavigate,
+        timestamp: new Date().toISOString(),
+      });
     }
-  };
+  }, []);
 
-  if (!incomingCall) {
+  // 🔥 AUTO-DISMISS TIMER
+  useEffect(() => {
+    if (showModal && incomingCall) {
+      logger.info(
+        '[IncomingCallHandler] ⏰ Starting auto-dismiss timer (45s)',
+        {
+          call_id: incomingCall.call_id,
+          caller_name: incomingCall.caller_name,
+          timestamp: new Date().toISOString(),
+        }
+      );
+
+      dismissTimeoutRef.current = setTimeout(() => {
+        logger.warn(
+          '[IncomingCallHandler] ⏰ Auto-dismissing modal (timeout)',
+          {
+            call_id: incomingCall.call_id,
+            elapsedTime: '45s',
+            timestamp: new Date().toISOString(),
+          }
+        );
+        handleDecline();
+      }, 45000); // 45 seconds
+
+      return () => {
+        if (dismissTimeoutRef.current) {
+          logger.info('[IncomingCallHandler] ⏰ Clearing auto-dismiss timer', {
+            call_id: incomingCall.call_id,
+            timestamp: new Date().toISOString(),
+          });
+          clearTimeout(dismissTimeoutRef.current);
+          dismissTimeoutRef.current = null;
+        }
+      };
+    } else {
+      logger.debug('[IncomingCallHandler] ⏰ Auto-dismiss timer not started', {
+        showModal,
+        hasIncomingCall: !!incomingCall,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }, [showModal, incomingCall, handleDecline]);
+
+  // 🔥 DB POLLING (check if caller hung up)
+  useEffect(() => {
+    if (showModal && incomingCall?.call_id) {
+      logger.info(
+        '[IncomingCallHandler] 🔄 Starting DB polling (2.5s interval)',
+        {
+          call_id: incomingCall.call_id,
+          timestamp: new Date().toISOString(),
+        }
+      );
+
+      let pollCount = 0;
+      pollingIntervalRef.current = setInterval(async () => {
+        pollCount++;
+        logger.info('[IncomingCallHandler] 🔍 Polling call status from DB', {
+          call_id: incomingCall.call_id,
+          pollCount,
+          timestamp: new Date().toISOString(),
+        });
+
+        try {
+          const { data, error } = await supabase
+            .from('calls')
+            .select('status, ended_at')
+            .eq('id', incomingCall.call_id)
+            .single();
+
+          if (error) {
+            logger.error('[IncomingCallHandler] ❌ DB polling error', {
+              call_id: incomingCall.call_id,
+              error: error.message,
+              errorCode: error.code,
+              errorDetails: error.details,
+              pollCount,
+              timestamp: new Date().toISOString(),
+            });
+            return;
+          }
+
+          logger.info('[IncomingCallHandler] ✅ DB polling result', {
+            call_id: incomingCall.call_id,
+            status: data?.status,
+            ended_at: data?.ended_at,
+            pollCount,
+            timestamp: new Date().toISOString(),
+          });
+
+          // If caller hung up, dismiss modal
+          if (
+            data?.status === 'cancelled' ||
+            data?.status === 'no-answer' ||
+            data?.ended_at
+          ) {
+            logger.warn(
+              '[IncomingCallHandler] 📞 Caller hung up, dismissing modal',
+              {
+                call_id: incomingCall.call_id,
+                status: data.status,
+                ended_at: data.ended_at,
+                pollCount,
+                timestamp: new Date().toISOString(),
+              }
+            );
+            handleDecline();
+          } else {
+            logger.debug('[IncomingCallHandler] ✅ Call still active', {
+              call_id: incomingCall.call_id,
+              status: data?.status,
+              pollCount,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } catch (err) {
+          logger.error('[IncomingCallHandler] ❌ DB polling exception', {
+            call_id: incomingCall.call_id,
+            error: String(err),
+            errorStack: err instanceof Error ? err.stack : undefined,
+            pollCount,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }, 2500); // Check every 2.5 seconds
+
+      return () => {
+        if (pollingIntervalRef.current) {
+          logger.info('[IncomingCallHandler] 🔄 Stopping DB polling', {
+            call_id: incomingCall.call_id,
+            timestamp: new Date().toISOString(),
+          });
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+      };
+    } else {
+      logger.debug('[IncomingCallHandler] 🔄 DB polling not started', {
+        showModal,
+        hasCallId: !!incomingCall?.call_id,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }, [showModal, incomingCall?.call_id, handleDecline]);
+
+  // 🔥 LOG: Modal State Changes
+  useEffect(() => {
+    logger.info('[IncomingCallHandler] 🎭 Modal state changed', {
+      showModal,
+      hasIncomingCall: !!incomingCall,
+      call_id: incomingCall?.call_id,
+      caller_name: incomingCall?.caller_name,
+      timestamp: new Date().toISOString(),
+    });
+  }, [showModal, incomingCall]);
+
+  // 🔥 LOG: Render cycle (useEffect içine taşındı)
+  useEffect(() => {
+    logger.debug('[IncomingCallHandler] 🎨 Render cycle', {
+      showModal,
+      hasIncomingCall: !!incomingCall,
+      call_id: incomingCall?.call_id,
+      twilioStatus: twilioVoice.callState.status,
+      componentAge: `${Date.now() - mountTimeRef.current}ms`,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  if (!showModal || !incomingCall) {
     return null;
   }
 
+  logger.debug('[IncomingCallHandler] 🎨 Rendering modal', {
+    call_id: incomingCall.call_id,
+    caller_name: incomingCall.caller_name,
+    timestamp: new Date().toISOString(),
+  });
+
   return (
     <Modal
-      visible={isVisible}
+      visible={showModal}
       transparent
-      animationType="fade"
+      animationType="slide"
       onRequestClose={handleDecline}
     >
       <View style={styles.overlay}>
-        <LinearGradient
-          colors={['#1f2937', '#374151']}
-          style={styles.container}
-        >
+        <View style={styles.modalContainer}>
           {/* Caller Avatar */}
-          <View style={styles.avatarContainer}>
-            {incomingCall.caller_avatar ? (
-              <Image
-                source={{ uri: incomingCall.caller_avatar }}
-                style={styles.avatar}
-              />
-            ) : (
-              <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                <Text style={styles.avatarInitial}>
-                  {incomingCall.caller_name.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            )}
-            <View style={styles.pulseRing} />
-            <View style={[styles.pulseRing, styles.pulseRingDelay]} />
-          </View>
+          {incomingCall.caller_avatar ? (
+            <Image
+              source={{ uri: incomingCall.caller_avatar }}
+              style={styles.avatar}
+              onLoad={() => {
+                logger.debug('[IncomingCallHandler] 🖼️ Avatar image loaded', {
+                  call_id: incomingCall.call_id,
+                  timestamp: new Date().toISOString(),
+                });
+              }}
+              onError={(error) => {
+                logger.error(
+                  '[IncomingCallHandler] ❌ Avatar image load error',
+                  error,
+                  {
+                    call_id: incomingCall.call_id,
+                    avatarUri: incomingCall.caller_avatar,
+                    timestamp: new Date().toISOString(),
+                  }
+                );
+              }}
+            />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarText}>
+                {incomingCall.caller_name.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
 
-          {/* Caller Info */}
-          <View style={styles.infoContainer}>
-            <Text style={styles.callerName}>{incomingCall.caller_name}</Text>
-            <Text style={styles.callStatus}>
-              {incomingCall.call_type === 'video'
-                ? 'Incoming video call...'
-                : 'Incoming voice call...'}
-            </Text>
-          </View>
+          {/* Caller Name */}
+          <Text style={styles.callerName}>{incomingCall.caller_name}</Text>
+          <Text style={styles.callType}>
+            {incomingCall.urgent ? '🚨 Urgent ' : ''}
+            {incomingCall.call_type === 'video' ? 'Video' : 'Voice'} Call
+          </Text>
 
-          {/* Call Actions */}
-          <View style={styles.actionsContainer}>
+          {/* Action Buttons */}
+          <View style={styles.buttonContainer}>
             <TouchableOpacity
-              style={[styles.actionButton, styles.declineButton]}
-              onPress={handleDecline}
+              style={[styles.button, styles.declineButton]}
+              onPress={() => {
+                logger.debug(
+                  '[IncomingCallHandler] 👆 Decline button pressed',
+                  {
+                    call_id: incomingCall.call_id,
+                    timestamp: new Date().toISOString(),
+                  }
+                );
+                handleDecline();
+              }}
             >
-              <PhoneOff size={32} color="#FFFFFF" />
+              <Text style={styles.buttonText}>Decline</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.actionButton, styles.acceptButton]}
-              onPress={handleAccept}
+              style={[styles.button, styles.acceptButton]}
+              onPress={() => {
+                logger.debug('[IncomingCallHandler] 👆 Accept button pressed', {
+                  call_id: incomingCall.call_id,
+                  timestamp: new Date().toISOString(),
+                });
+                handleAccept();
+              }}
             >
-              <Phone size={32} color="#FFFFFF" />
+              <Text style={styles.buttonText}>Accept</Text>
             </TouchableOpacity>
           </View>
-
-          {/* Action Labels */}
-          <View style={styles.labelsContainer}>
-            <Text style={styles.actionLabel}>Decline</Text>
-            <Text style={styles.actionLabel}>Accept</Text>
-          </View>
-        </LinearGradient>
+        </View>
       </View>
     </Modal>
   );
@@ -399,122 +911,74 @@ export function IncomingCallHandler() {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  container: {
-    width: '90%',
-    maxWidth: 400,
-    borderRadius: 24,
-    padding: 40,
+  modalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 30,
     alignItems: 'center',
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0px 8px 32px rgba(0,0,0,0.4)' }
-      : {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.4,
-          shadowRadius: 32,
-          elevation: 16,
-        }),
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginBottom: 32,
+    minWidth: 300,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 4,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    zIndex: 2,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 20,
   },
   avatarPlaceholder: {
-    backgroundColor: '#3B82F6',
-    alignItems: 'center',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#007AFF',
     justifyContent: 'center',
-  },
-  avatarInitial: {
-    fontSize: 48,
-    fontFamily: 'Inter-Bold',
-    color: '#FFFFFF',
-  },
-  pulseRing: {
-    position: 'absolute',
-    top: -10,
-    left: -10,
-    right: -10,
-    bottom: -10,
-    borderRadius: 70,
-    borderWidth: 2,
-    borderColor: '#10B981',
-    opacity: 0.6,
-    zIndex: 1,
-  },
-  pulseRingDelay: {
-    top: -20,
-    left: -20,
-    right: -20,
-    bottom: -20,
-    borderRadius: 80,
-    opacity: 0.3,
-  },
-  infoContainer: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: 20,
+  },
+  avatarText: {
+    fontSize: 40,
+    color: '#fff',
+    fontWeight: 'bold',
   },
   callerName: {
-    fontSize: 28,
-    fontFamily: 'Inter-Bold',
-    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: 'bold',
     marginBottom: 8,
     textAlign: 'center',
   },
-  callStatus: {
+  callType: {
     fontSize: 16,
-    fontFamily: 'Inter-Regular',
-    color: '#9CA3AF',
+    color: '#666',
+    marginBottom: 30,
     textAlign: 'center',
   },
-  actionsContainer: {
+  buttonContainer: {
     flexDirection: 'row',
-    gap: 60,
-    marginBottom: 16,
+    gap: 20,
   },
-  actionButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+  button: {
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 25,
+    minWidth: 120,
     alignItems: 'center',
-    justifyContent: 'center',
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0px 4px 16px rgba(0,0,0,0.3)' }
-      : {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 16,
-          elevation: 8,
-        }),
   },
   declineButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#FF3B30',
   },
   acceptButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#34C759',
   },
-  labelsContainer: {
-    flexDirection: 'row',
-    gap: 60,
-    paddingHorizontal: 36,
-  },
-  actionLabel: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#9CA3AF',
-    textAlign: 'center',
-    width: 72,
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

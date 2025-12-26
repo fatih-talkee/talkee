@@ -22,6 +22,9 @@ serve(async (req) => {
     const TWILIO_API_KEY = Deno.env.get('TWILIO_API_KEY');
     const TWILIO_API_SECRET = Deno.env.get('TWILIO_API_SECRET');
     const TWILIO_TWIML_APP_SID = Deno.env.get('TWILIO_TWIML_APP_SID');
+    const TWILIO_PUSH_CREDENTIAL_SID = Deno.env.get(
+      'TWILIO_PUSH_CREDENTIAL_SID'
+    ); // 🔥 EKLE
 
     if (
       !TWILIO_ACCOUNT_SID ||
@@ -71,6 +74,10 @@ serve(async (req) => {
     console.log('🔑 [twilio-token] API Key:', TWILIO_API_KEY);
     console.log('🔑 [twilio-token] Account SID:', TWILIO_ACCOUNT_SID);
     console.log('🔑 [twilio-token] TwiML App SID:', TWILIO_TWIML_APP_SID);
+    console.log(
+      '🔑 [twilio-token] Push Credential SID:',
+      TWILIO_PUSH_CREDENTIAL_SID
+    ); // 🔥 EKLE
 
     // Create JWT token for Twilio using jose (Deno-compatible)
     const now = Math.floor(Date.now() / 1000);
@@ -99,6 +106,7 @@ serve(async (req) => {
           incoming: {
             allow: true,
           },
+          push_credential_sid: TWILIO_PUSH_CREDENTIAL_SID, // 🔥 EKLE
         },
       },
     })

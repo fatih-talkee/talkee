@@ -9,7 +9,10 @@ export const daysOptions = [
 ];
 
 // Generate time options in 15-minute intervals (00:00 to 23:45)
-export const generateTimeOptions = (): Array<{ value: string; label: string }> => {
+export const generateTimeOptions = (): Array<{
+  value: string;
+  label: string;
+}> => {
   const times = [];
   for (let hour = 0; hour < 24; hour++) {
     for (let minute = 0; minute < 60; minute += 15) {
@@ -38,5 +41,3 @@ export const educationLevels = [
 ];
 
 // Default export to prevent Expo Router from treating this as a route
-export default null;
-

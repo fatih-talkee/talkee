@@ -1,6 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Calendar, Plus, Clock, DollarSign, Edit2, Trash2 } from 'lucide-react-native';
+import {
+  Calendar,
+  Plus,
+  Clock,
+  DollarSign,
+  Edit2,
+  Trash2,
+} from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -27,10 +34,7 @@ function AvailabilityCard({
   return (
     <Card
       key={item.id}
-      style={[
-        styles.availabilityCard,
-        { backgroundColor: theme.colors.card },
-      ]}
+      style={[styles.availabilityCard, { backgroundColor: theme.colors.card }]}
     >
       <View style={styles.cardTop}>
         <View style={styles.cardTopLeft}>
@@ -236,11 +240,7 @@ export function Step5Availability({
             { backgroundColor: theme.colors.primary },
           ]}
         >
-          <Calendar
-            size={20}
-            color={theme.colors.surface}
-            strokeWidth={2.5}
-          />
+          <Calendar size={20} color={theme.colors.surface} strokeWidth={2.5} />
         </View>
       </View>
 
@@ -248,10 +248,7 @@ export function Step5Availability({
         Set Your Availability
       </Text>
       <Text
-        style={[
-          styles.subtitleCompact,
-          { color: theme.colors.textSecondary },
-        ]}
+        style={[styles.subtitleCompact, { color: theme.colors.textSecondary }]}
       >
         Add your availability schedule
       </Text>
@@ -260,10 +257,7 @@ export function Step5Availability({
         <View style={styles.inputGroup}>
           {availabilities.length === 0 ? (
             <Card
-              style={[
-                styles.emptyCard,
-                { backgroundColor: theme.colors.card },
-              ]}
+              style={[styles.emptyCard, { backgroundColor: theme.colors.card }]}
             >
               <View style={styles.warningContainer}>
                 <Text
@@ -530,4 +524,3 @@ const styles = StyleSheet.create({
 });
 
 // Default export to prevent Expo Router from treating this as a route
-export default null;

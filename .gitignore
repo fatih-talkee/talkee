@@ -36,5 +36,9 @@ Library/
 .env*.local
 .env
 
+# Sentry config (may contain auth token)
+android/sentry.properties
+ios/sentry.properties
+
 # typescript
 *.tsbuildinfo

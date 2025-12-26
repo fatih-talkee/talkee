@@ -19,39 +19,40 @@ import {
   VideoOff,
   Mic,
   MicOff,
-  Volume2,
-  VolumeX,
-  MessageCircle,
-  MoveVertical as MoreVertical,
-  Minimize2,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 import { notificationsService } from '@/services';
-import { callsService } from '@/services/calls.service';
 
 // ✅ TWILIO IMPORTS
 import { useTwilioVoice } from '@/hooks/useTwilioVoice';
 import { useProfessional } from '@/hooks/useProfessionals';
 import { useProfile } from '@/hooks/useProfile';
-import { getSpeakerEnabled, setSpeakerEnabled } from '@/lib/audioRoute';
 
 export default function CallScreen() {
+  const mountTimeRef = useRef<number>(Date.now());
   const { id, type, urgent, incoming, rate_per_minute } =
     useLocalSearchParams();
+
+  logger.info('[CallScreen] 🎬 Component rendering', {
+    routeParams: { id, type, urgent, incoming, rate_per_minute },
+    timestamp: new Date().toISOString(),
+    platform: Platform.OS,
+  });
+
   const isIncoming = incoming === 'true';
   const insets = useSafeAreaInsets();
   const { user, isLoading: profileLoading } = useProfile();
 
-  const professionalId = isIncoming ? '' : (id as string);
+  const professionalId = (id as string) || '';
 
-  // ✅ FETCH PROFESSIONAL DATA (outgoing calls)
   const { data: professionalData, isLoading: professionalLoading } =
-    useProfessional(professionalId);
+    useProfessional(professionalId, {
+      enabled: !isIncoming && !!professionalId,
+    });
   const professional = professionalData || null;
 
-  // ✅ TWILIO VOICE HOOK
   const {
     callState,
     isInitialized,
@@ -66,7 +67,6 @@ export default function CallScreen() {
     toggleMute,
   } = useTwilioVoice();
 
-  // Derive UI state from Twilio call state
   const isMuted = callState.isMuted;
   const callSid =
     (callState.call as any)?.callSid ??
@@ -74,13 +74,40 @@ export default function CallScreen() {
     (callState.call as any)?.getSid?.();
   const inviteSid = (callState.callInvite as any)?.getCallSid?.();
 
-  // ✅ LOCAL STATE
+  useEffect(() => {
+    logger.debug('[CallScreen] 📡 Twilio call state changed', {
+      status: callState.status,
+      isMuted,
+      hasCall: !!callState.call,
+      hasCallInvite: !!callState.callInvite,
+      callSid,
+      inviteSid,
+      isInitialized,
+      isConnecting,
+      isConnected,
+      isIdle,
+      hasError: !!twilioError,
+      timestamp: new Date().toISOString(),
+    });
+  }, [
+    callState.status,
+    callState.call,
+    callState.callInvite,
+    isMuted,
+    callSid,
+    inviteSid,
+    isInitialized,
+    isConnecting,
+    isConnected,
+    isIdle,
+    twilioError,
+  ]);
+
   const [duration, setDuration] = useState(0);
   const [isVideoOff, setIsVideoOff] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
   const [callInitiated, setCallInitiated] = useState(false);
-  const [isSpeakerOn, setIsSpeakerOn] = useState(false);
-  const [dbCallId, setDbCallId] = useState<string | null>(null); // DB call record id (for per-minute billing)
+  const [dbCallId, setDbCallId] = useState<string | null>(null);
+  const pendingDbCallIdRef = useRef<string | null>(null);
   const [incomingCallDetails, setIncomingCallDetails] = useState<{
     callId: string;
     callerId?: string;
@@ -90,24 +117,42 @@ export default function CallScreen() {
     ratePerMinute?: number;
   } | null>(null);
 
-  // If we were navigated here from the professional profile, the UI can pass a rate snapshot.
-  // This avoids showing "$0.00" while the professional query is still loading.
   const ratePerMinuteParam = useMemo(() => {
     const raw = rate_per_minute;
     const s = Array.isArray(raw) ? raw[0] : raw;
-    if (!s) return null;
+    if (!s) {
+      logger.debug('[CallScreen] 💰 No rate_per_minute param', {
+        raw,
+        timestamp: new Date().toISOString(),
+      });
+      return null;
+    }
     const n = Number(s);
-    return Number.isFinite(n) ? n : null;
+    const result = Number.isFinite(n) ? n : null;
+    logger.debug('[CallScreen] 💰 Rate per minute param parsed', {
+      raw,
+      parsed: result,
+      timestamp: new Date().toISOString(),
+    });
+    return result;
   }, [rate_per_minute]);
 
   const effectiveRatePerMinute = useMemo(() => {
-    // Incoming (callee) should primarily trust the DB call row rate.
+    let result: number;
     if (isIncoming) {
-      return incomingCallDetails?.ratePerMinute ?? ratePerMinuteParam ?? 0;
+      result = incomingCallDetails?.ratePerMinute ?? ratePerMinuteParam ?? 0;
+    } else {
+      result = ratePerMinuteParam ?? Number(professional?.rate_per_minute || 0);
     }
-
-    // Outgoing (caller): prefer explicit param, then professional default rate.
-    return ratePerMinuteParam ?? Number(professional?.rate_per_minute || 0);
+    logger.debug('[CallScreen] 💰 Effective rate per minute calculated', {
+      isIncoming,
+      incomingRate: incomingCallDetails?.ratePerMinute,
+      paramRate: ratePerMinuteParam,
+      professionalRate: professional?.rate_per_minute,
+      effectiveRate: result,
+      timestamp: new Date().toISOString(),
+    });
+    return result;
   }, [
     isIncoming,
     incomingCallDetails?.ratePerMinute,
@@ -116,49 +161,215 @@ export default function CallScreen() {
   ]);
 
   const costPerSecond = useMemo(() => {
-    return effectiveRatePerMinute > 0 ? effectiveRatePerMinute / 60 : 0;
+    const result = effectiveRatePerMinute > 0 ? effectiveRatePerMinute / 60 : 0;
+    logger.debug('[CallScreen] 💰 Cost per second calculated', {
+      effectiveRatePerMinute,
+      costPerSecond: result,
+      timestamp: new Date().toISOString(),
+    });
+    return result;
   }, [effectiveRatePerMinute]);
 
   const callAttemptId = useMemo(() => {
     const rand = Math.random().toString(36).slice(2, 8);
-    return `call_${Date.now()}_${rand}`;
+    const attemptId = `call_${Date.now()}_${rand}`;
+    logger.info('[CallScreen] 🆔 Call attempt ID generated', {
+      callAttemptId: attemptId,
+      timestamp: new Date().toISOString(),
+    });
+    return attemptId;
   }, []);
 
-  // End the call if the user leaves this screen or backgrounds the app.
-  // (We can't reliably run code on process-kill; Twilio status callbacks + webhook push are the safety net.)
   const hasEndedRef = useRef(false);
   const callStateRef = useRef(callState);
   const lowBalanceWarnedRef = useRef(false);
-  const lastChargedMinuteRef = useRef<number>(0); // Track last charged minute (1-based)
-  const nextMinuteLowBalancePushSentRef = useRef(false); // Track if we sent push for next minute
-  const lastBalanceAfterChargeRef = useRef<number | null>(null); // Track balance after last charge
+  const lastChargedMinuteRef = useRef<number>(0);
+  const nextMinuteLowBalancePushSentRef = useRef(false);
+  const lastBalanceAfterChargeRef = useRef<number | null>(null);
 
   useEffect(() => {
     callStateRef.current = callState;
+    logger.debug('[CallScreen] 🔄 callStateRef updated', {
+      status: callState.status,
+      hasCall: !!callState.call,
+      hasCallInvite: !!callState.callInvite,
+      timestamp: new Date().toISOString(),
+    });
   }, [callState]);
 
-  // If the remote party ends the call, the Twilio SDK will transition our call state to "disconnected".
-  // In that case, exit the call screen automatically (otherwise the user gets stuck on the call UI).
-  // IMPORTANT: Only handle state updates for our own call, not for other calls (e.g., incoming calls on other screens)
   useEffect(() => {
-    if (!callInitiated) return;
-    if (hasEndedRef.current) return;
-    if (isIncoming) return; // Only for outgoing calls
+    logger.debug(
+      '[CallScreen] 🔧 Setting up disconnect check timeout (100ms)',
+      {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      }
+    );
 
-    // Filter: Only handle state updates if we have our own call SID or DB call ID
-    // This prevents handling state updates from other calls (e.g., when callee receives incoming call)
-    const currentCallSid = callSid;
-    const currentDbCallId = dbCallId;
+    const timeoutId = setTimeout(() => {
+      const currentStatus = callStateRef.current.status;
+      const currentCall = callStateRef.current.call;
 
-    // If we don't have a call SID or DB call ID yet, this might be a state update from another call
-    // Wait until we have our own call identifiers
-    if (!currentCallSid && !currentDbCallId) {
+      logger.debug('[CallScreen] 🔍 Disconnect check timeout triggered', {
+        callAttemptId,
+        currentStatus,
+        hasCall: !!currentCall,
+        hasEnded: hasEndedRef.current,
+        isIncoming,
+        timestamp: new Date().toISOString(),
+      });
+
+      if (hasEndedRef.current || isIncoming) {
+        logger.debug('[CallScreen] ⏭️ Skipping disconnect check', {
+          callAttemptId,
+          reason: hasEndedRef.current ? 'already ended' : 'incoming call',
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const wasConnected = callSid || dbCallId || pendingDbCallIdRef.current;
+      const isDisconnected =
+        currentStatus === 'disconnected' ||
+        (wasConnected && !currentCall && callInitiated);
+
+      if (isDisconnected) {
+        const currentCallSid = callSid;
+        const currentDbCallId = dbCallId || pendingDbCallIdRef.current;
+
+        if (!currentCallSid && !currentDbCallId && !callInitiated) {
+          return;
+        }
+
+        logger.info('[CallScreen] Disconnect detected via callStateRef check', {
+          callAttemptId,
+          status: currentStatus,
+          hasCall: !!currentCall,
+          wasConnected,
+          callSid: currentCallSid,
+          dbCallId: currentDbCallId,
+          callInitiated,
+          professionalId: professional?.id,
+          timestamp: Date.now(),
+        });
+
+        if (hasEndedRef.current) {
+          return;
+        }
+
+        hasEndedRef.current = true;
+        const professionalIdToUse =
+          professional?.id || (!isIncoming ? (id as string) : null);
+
+        logger.info('[CallScreen] 🔧 Scheduling navigation (100ms delay)', {
+          callAttemptId,
+          professionalIdToUse,
+          willNavigateTo:
+            professionalIdToUse && !isIncoming
+              ? `/professional/${professionalIdToUse}`
+              : 'back()',
+          timestamp: new Date().toISOString(),
+        });
+
+        setTimeout(() => {
+          try {
+            if (professionalIdToUse && !isIncoming) {
+              logger.info(
+                '[CallScreen] 🚀 Navigating to professional profile',
+                {
+                  callAttemptId,
+                  professionalId: professionalIdToUse,
+                  timestamp: new Date().toISOString(),
+                }
+              );
+              router.replace(`/professional/${professionalIdToUse}`);
+            } else {
+              logger.info('[CallScreen] 🚀 Using router.back()', {
+                callAttemptId,
+                timestamp: new Date().toISOString(),
+              });
+              router.back();
+            }
+          } catch (navError) {
+            logger.error('[CallScreen] ❌ Navigation error', navError, {
+              callAttemptId,
+              professionalIdToUse,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }, 100);
+      }
+    }, 100);
+
+    return () => {
+      logger.debug('[CallScreen] 🔧 Cleaning up disconnect check timeout', {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      });
+      clearTimeout(timeoutId);
+    };
+  }, [
+    callState.status,
+    callState.call,
+    callSid,
+    dbCallId,
+    callInitiated,
+    isIncoming,
+    professional?.id,
+    id,
+    callAttemptId,
+  ]);
+
+  useEffect(() => {
+    const currentStatus = callStateRef.current.status;
+    const currentCallState = callStateRef.current;
+
+    logger.info('[CallScreen] Disconnect check effect triggered', {
+      callAttemptId,
+      status: callState.status,
+      callStateRefStatus: currentStatus,
+      hasEnded: hasEndedRef.current,
+      isIncoming,
+      callInitiated,
+      callSid,
+      dbCallId,
+      pendingDbCallId: pendingDbCallIdRef.current,
+      professionalId: professional?.id,
+      routeId: id,
+      timestamp: Date.now(),
+    });
+
+    if (hasEndedRef.current) {
+      logger.info('[CallScreen] Skipping disconnect check (already ended)', {
+        callAttemptId,
+      });
+      return;
+    }
+    if (isIncoming) {
+      logger.info('[CallScreen] Skipping disconnect check (incoming call)', {
+        callAttemptId,
+      });
       return;
     }
 
-    // Additional filter: If we have a callInvite but this is an outgoing call, ignore it
-    // (incoming call invites should only be handled by incoming call screens)
-    if (callState.callInvite && !isIncoming) {
+    const currentCallSid = callSid;
+    const currentDbCallId = dbCallId || pendingDbCallIdRef.current;
+
+    if (!currentCallSid && !currentDbCallId && !callInitiated) {
+      logger.info(
+        '[CallScreen] Skipping disconnected state (no call identifiers yet)',
+        {
+          callAttemptId,
+          callInitiated,
+          hasCallSid: !!currentCallSid,
+          hasDbCallId: !!currentDbCallId,
+          hasPendingDbCallId: !!pendingDbCallIdRef.current,
+        }
+      );
+      return;
+    }
+
+    if (currentCallState.callInvite && !isIncoming) {
       logger.warn(
         '[CallScreen] Ignoring callInvite state update for outgoing call',
         {
@@ -170,106 +381,330 @@ export default function CallScreen() {
       return;
     }
 
-    if (callState.status === 'disconnected') {
-      hasEndedRef.current = true;
-      logger.info('[CallScreen] Call ended by remote/SDK; leaving screen', {
+    const wasConnected = currentCallSid || currentDbCallId;
+    const callDisappeared =
+      wasConnected && !currentCallState.call && callInitiated;
+    const isDisconnected =
+      callState.status === 'disconnected' ||
+      currentStatus === 'disconnected' ||
+      callDisappeared;
+
+    if (isDisconnected) {
+      logger.info('[CallScreen] Disconnected state detected', {
         callAttemptId,
         callSid: currentCallSid,
         dbCallId: currentDbCallId,
+        callInitiated,
+        status: callState.status,
+        callStateRefStatus: currentStatus,
+        hasCall: !!currentCallState.call,
+        callDisappeared,
+        wasConnected,
+        error: callState.error
+          ? {
+              message: callState.error.message,
+              name: callState.error.name,
+              code: (callState.error as any)?.code,
+            }
+          : null,
+        professionalId: professional?.id,
+        routeId: id,
+        hasProfessional: !!professional,
+        isIncoming,
+        hasEnded: hasEndedRef.current,
       });
-      // Don't call disconnect() here; SDK already disconnected.
-      router.back();
+
+      if (hasEndedRef.current) {
+        logger.warn('[CallScreen] Already ended, skipping navigation', {
+          callAttemptId,
+        });
+        return;
+      }
+
+      hasEndedRef.current = true;
+
+      const errorDetails = callState.error
+        ? {
+            message: callState.error.message,
+            name: callState.error.name,
+            code: (callState.error as any)?.code,
+            stack: callState.error.stack,
+          }
+        : null;
+
+      logger.info('[CallScreen] Call ended/cancelled; leaving screen', {
+        callAttemptId,
+        callSid: currentCallSid,
+        dbCallId: currentDbCallId,
+        pendingDbCallId: pendingDbCallIdRef.current,
+        callInitiated,
+        status: callState.status,
+        error: errorDetails,
+        professionalId: professional?.id,
+        professionalUserId: professional?.user_id,
+        routeId: id,
+        hasProfessional: !!professional,
+        isIncoming,
+        timestamp: Date.now(),
+      });
+
+      const professionalIdToUse =
+        professional?.id || (!isIncoming ? (id as string) : null);
+
+      logger.info('[CallScreen] Preparing navigation', {
+        callAttemptId,
+        professionalIdToUse,
+        hasProfessionalId: !!professional?.id,
+        hasRouteId: !!id,
+        isIncoming,
+        willNavigateTo:
+          professionalIdToUse && !isIncoming
+            ? `/professional/${professionalIdToUse}`
+            : 'back()',
+      });
+
+      setTimeout(() => {
+        try {
+          if (professionalIdToUse && !isIncoming) {
+            logger.info('[CallScreen] Navigating to professional profile', {
+              callAttemptId,
+              professionalId: professionalIdToUse,
+              source: professional?.id ? 'professional.id' : 'route.id',
+            });
+            router.replace(`/professional/${professionalIdToUse}`);
+          } else {
+            logger.info('[CallScreen] Using router.back()', {
+              callAttemptId,
+              isIncoming,
+            });
+            router.back();
+          }
+        } catch (navError) {
+          logger.error('[CallScreen] Navigation error', navError, {
+            callAttemptId,
+            professionalIdToUse,
+            isIncoming,
+          });
+        }
+      }, 100);
     }
   }, [
     callState.status,
     callState.callInvite,
+    callState.error,
+    callState.call,
     callInitiated,
     callAttemptId,
     callSid,
     dbCallId,
     isIncoming,
+    professional?.id,
+    id,
   ]);
 
   const safeEndCall = async (reason: string) => {
-    if (hasEndedRef.current) return;
+    logger.info('[CallScreen] 🔧 safeEndCall called', {
+      callAttemptId,
+      reason,
+      hasEnded: hasEndedRef.current,
+      currentStatus: callStateRef.current.status,
+      timestamp: new Date().toISOString(),
+    });
 
-    // If there's no active call/invite, don't spam disconnect.
+    if (hasEndedRef.current) {
+      logger.debug('[CallScreen] ⏭️ Call already ended, skipping', {
+        callAttemptId,
+        reason,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
     const active =
       callStateRef.current.status === 'connecting' ||
       callStateRef.current.status === 'ringing' ||
       callStateRef.current.status === 'connected' ||
       !!callStateRef.current.callInvite;
 
-    if (!active) return;
+    logger.debug('[CallScreen] 🔍 Checking if call is active', {
+      callAttemptId,
+      reason,
+      active,
+      status: callStateRef.current.status,
+      hasCallInvite: !!callStateRef.current.callInvite,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (!active) {
+      logger.debug('[CallScreen] ⏭️ Call not active, skipping end', {
+        callAttemptId,
+        reason,
+        status: callStateRef.current.status,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
 
     hasEndedRef.current = true;
-    logger.info('[CallScreen] Auto-ending call', {
+    logger.info('[CallScreen] 📞 Auto-ending call', {
       callAttemptId,
       reason,
       status: callStateRef.current.status,
+      timestamp: new Date().toISOString(),
     });
     try {
+      const disconnectStartTime = Date.now();
       await disconnect();
-    } catch (e) {
-      logger.warn('[CallScreen] Auto-end call failed', {
+      logger.info('[CallScreen] ✅ Call disconnected successfully', {
         callAttemptId,
         reason,
+        elapsed: `${Date.now() - disconnectStartTime}ms`,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (e) {
+      logger.error('[CallScreen] ❌ Auto-end call failed', e, {
+        callAttemptId,
+        reason,
+        timestamp: new Date().toISOString(),
       });
     }
   };
 
   useEffect(() => {
+    logger.info('[CallScreen] 🔧 Setting up AppState listener', {
+      callAttemptId,
+      timestamp: new Date().toISOString(),
+    });
+
     const sub = AppState.addEventListener('change', (nextState) => {
-      // Don't auto-hangup on transient 'inactive' (common on iOS during interruptions/overlays).
-      // Only auto-end when the app is truly backgrounded AND we haven't connected yet.
+      logger.debug('[CallScreen] 📱 AppState changed', {
+        callAttemptId,
+        nextState,
+        currentStatus: callStateRef.current.status,
+        timestamp: new Date().toISOString(),
+      });
+
       if (nextState === 'background') {
         const status = callStateRef.current.status;
         const stillConnecting = status === 'connecting' || status === 'ringing';
+        logger.info('[CallScreen] 📱 App moved to background', {
+          callAttemptId,
+          status,
+          stillConnecting,
+          timestamp: new Date().toISOString(),
+        });
+
         if (stillConnecting) {
+          logger.warn(
+            '[CallScreen] ⚠️ Ending call - app moved to background during connection',
+            {
+              callAttemptId,
+              status,
+              timestamp: new Date().toISOString(),
+            }
+          );
           void safeEndCall(`appstate:${nextState}`);
         }
       }
     });
 
-    return () => {
-      sub.remove();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      // IMPORTANT:
-      // Do not auto-hangup on unmount. In practice, this screen can unmount/re-mount due to
-      // auth redirects, cache invalidations, or navigation reshuffles while a call is still connecting.
-      // Auto-ending here caused the caller to hang up right as the callee answered.
-      //
-      // Call teardown is handled explicitly via the hangup button and by Twilio SDK/webhooks.
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ✅ LOAD CALL DETAILS (incoming calls)
-  useEffect(() => {
-    let mounted = true;
-    if (!isIncoming) return;
-    if (!id) return;
-
-    // If the user opened this screen from an OS notification, dismiss the original call_request
-    // so it doesn't stay in the tray while they're viewing/answering.
-    void notificationsService.dismissIncomingCallNotifications({
-      callId: id as string,
-      callSid: callSid as any,
+    logger.info('[CallScreen] ✅ AppState listener registered', {
+      callAttemptId,
+      timestamp: new Date().toISOString(),
     });
 
+    return () => {
+      logger.info('[CallScreen] 🔧 Removing AppState listener', {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      });
+      sub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    logger.debug(
+      '[CallScreen] 🔧 Component lifecycle effect (no auto-hangup on unmount)',
+      {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      }
+    );
+
+    return () => {
+      logger.debug(
+        '[CallScreen] 🔚 Component lifecycle cleanup (no auto-hangup)',
+        {
+          callAttemptId,
+          timestamp: new Date().toISOString(),
+        }
+      );
+      // Do not auto-hangup on unmount
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!isIncoming) {
+      logger.debug(
+        '[CallScreen] ⏭️ Skipping incoming call details load (not incoming)',
+        {
+          callAttemptId,
+          timestamp: new Date().toISOString(),
+        }
+      );
+      return;
+    }
+    if (!id) {
+      logger.warn('[CallScreen] ⚠️ No call ID provided for incoming call', {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    logger.info('[CallScreen] 🔧 Dismissing incoming call notifications', {
+      callAttemptId,
+      callId: id as string,
+      callSid,
+      timestamp: new Date().toISOString(),
+    });
+
+    void notificationsService
+      .dismissIncomingCallNotifications({
+        callId: id as string,
+        callSid: callSid as any,
+      })
+      .then(() => {
+        logger.info('[CallScreen] ✅ Incoming call notifications dismissed', {
+          callAttemptId,
+          callId: id as string,
+          timestamp: new Date().toISOString(),
+        });
+      })
+      .catch((error) => {
+        logger.error('[CallScreen] ❌ Failed to dismiss notifications', error, {
+          callAttemptId,
+          callId: id as string,
+          timestamp: new Date().toISOString(),
+        });
+      });
+
     (async () => {
+      const loadStartTime = Date.now();
       try {
-        logger.info('[CallScreen] Loading incoming call details', {
+        logger.info('[CallScreen] 🔧 Loading incoming call details', {
           callAttemptId,
           callId: id,
+          timestamp: new Date().toISOString(),
         });
 
-        // Add timeout wrapper to prevent SocketTimeoutException
+        logger.debug('[CallScreen] 🔧 Creating query promise', {
+          callAttemptId,
+          callId: id,
+          timestamp: new Date().toISOString(),
+        });
+
         const queryPromise = supabase
           .from('calls')
           .select(
@@ -283,9 +718,19 @@ export default function CallScreen() {
           .eq('id', id as string)
           .single();
 
-        // Add explicit timeout (30 seconds) to prevent SocketTimeoutException
+        logger.debug('[CallScreen] 🔧 Creating timeout promise (30s)', {
+          callAttemptId,
+          callId: id,
+          timestamp: new Date().toISOString(),
+        });
+
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => {
+            logger.warn('[CallScreen] ⏰ Query timeout after 30 seconds', {
+              callAttemptId,
+              callId: id,
+              timestamp: new Date().toISOString(),
+            });
             reject(
               new Error(
                 'Query timeout: Failed to load call details within 30 seconds'
@@ -294,21 +739,72 @@ export default function CallScreen() {
           }, 30_000);
         });
 
+        logger.debug('[CallScreen] 🔧 Racing query and timeout promises', {
+          callAttemptId,
+          callId: id,
+          timestamp: new Date().toISOString(),
+        });
+
         const { data, error } = (await Promise.race([
           queryPromise,
           timeoutPromise,
         ])) as any;
 
+        const loadElapsed = Date.now() - loadStartTime;
+        logger.info('[CallScreen] ✅ Query completed', {
+          callAttemptId,
+          callId: id,
+          elapsed: `${loadElapsed}ms`,
+          hasError: !!error,
+          hasData: !!data,
+          timestamp: new Date().toISOString(),
+        });
+
         if (error) {
+          logger.error('[CallScreen] ❌ Query error', error, {
+            callAttemptId,
+            callId: id,
+            errorMessage: error.message,
+            errorCode: error.code,
+            timestamp: new Date().toISOString(),
+          });
           throw error;
         }
 
-        if (!mounted) return;
+        if (!mounted) {
+          logger.warn('[CallScreen] ⚠️ Component unmounted during query', {
+            callAttemptId,
+            callId: id,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+
+        logger.debug('[CallScreen] 🔍 Parsing query result', {
+          callAttemptId,
+          callId: id,
+          hasData: !!data,
+          dataKeys: data ? Object.keys(data) : [],
+          timestamp: new Date().toISOString(),
+        });
+
         const caller = Array.isArray((data as any)?.caller)
           ? (data as any).caller[0]
           : (data as any)?.caller;
         const callId = data?.id;
-        setIncomingCallDetails({
+
+        logger.info('[CallScreen] 📋 Incoming call details parsed', {
+          callAttemptId,
+          callId,
+          callType: data?.call_type,
+          ratePerMinute: data?.rate_per_minute,
+          callerId: caller?.id,
+          callerName: caller?.name,
+          hasCallerAvatar: !!caller?.avatar_url,
+          timestamp: new Date().toISOString(),
+        });
+
+        const callDetails = {
           callId: callId,
           callType: data?.call_type,
           ratePerMinute: data?.rate_per_minute
@@ -317,46 +813,146 @@ export default function CallScreen() {
           callerId: caller?.id,
           callerName: caller?.name,
           callerAvatarUrl: caller?.avatar_url,
+        };
+
+        logger.debug('[CallScreen] 🔧 Setting incoming call details state', {
+          callAttemptId,
+          callDetails,
+          timestamp: new Date().toISOString(),
         });
-        // Set DB call ID for incoming calls
+
+        setIncomingCallDetails(callDetails);
         if (callId) {
+          logger.debug('[CallScreen] 🔧 Setting dbCallId', {
+            callAttemptId,
+            callId,
+            timestamp: new Date().toISOString(),
+          });
           setDbCallId(callId);
         }
+
+        logger.info(
+          '[CallScreen] ✅ Incoming call details loaded successfully',
+          {
+            callAttemptId,
+            callId,
+            elapsed: `${Date.now() - loadStartTime}ms`,
+            timestamp: new Date().toISOString(),
+          }
+        );
       } catch (e) {
-        logger.error('[CallScreen] Failed to load incoming call details', e, {
-          callAttemptId,
-          callId: id,
-          error: e instanceof Error ? e.message : String(e),
-        });
+        const loadElapsed = Date.now() - loadStartTime;
+        logger.error(
+          '[CallScreen] ❌ Failed to load incoming call details',
+          e,
+          {
+            callAttemptId,
+            callId: id,
+            error: e instanceof Error ? e.message : String(e),
+            errorStack: e instanceof Error ? e.stack : undefined,
+            elapsed: `${loadElapsed}ms`,
+            timestamp: new Date().toISOString(),
+          }
+        );
         if (mounted) {
-          // Set minimal call details to allow screen to render
+          logger.warn('[CallScreen] ⚠️ Setting fallback call details', {
+            callAttemptId,
+            callId: id as string,
+            ratePerMinute: ratePerMinuteParam ?? undefined,
+            timestamp: new Date().toISOString(),
+          });
           setIncomingCallDetails({
             callId: id as string,
             ratePerMinute: ratePerMinuteParam ?? undefined,
           });
-          // Set DB call ID from route param
           setDbCallId(id as string);
         }
       }
     })();
 
     return () => {
+      logger.debug('[CallScreen] 🔧 Cleaning up incoming call details loader', {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      });
       mounted = false;
     };
-  }, [isIncoming, id, callAttemptId, ratePerMinuteParam]);
+  }, [isIncoming, id, callAttemptId, ratePerMinuteParam, callSid]);
 
-  // Incoming screen: if the caller hangs up before we accept (or before invite arrives),
-  // we might be sitting on this screen. Listen for webhook follow-up pushes and exit.
   useEffect(() => {
-    if (!isIncoming) return;
+    if (pendingDbCallIdRef.current && !dbCallId) {
+      logger.info('[CallScreen] 🔧 Setting dbCallId from pending ref', {
+        callAttemptId,
+        pendingDbCallId: pendingDbCallIdRef.current,
+        timestamp: new Date().toISOString(),
+      });
+      setDbCallId(pendingDbCallIdRef.current);
+      pendingDbCallIdRef.current = null;
+      logger.info('[CallScreen] ✅ dbCallId set from pending ref', {
+        callAttemptId,
+        dbCallId: pendingDbCallIdRef.current,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }, [dbCallId]);
+
+  useEffect(() => {
+    if (!isIncoming) {
+      logger.debug(
+        '[CallScreen] ⏭️ Skipping notification listener (not incoming)',
+        {
+          callAttemptId,
+          timestamp: new Date().toISOString(),
+        }
+      );
+      return;
+    }
+
+    logger.info(
+      '[CallScreen] 🔧 Setting up notification listener for incoming call',
+      {
+        callAttemptId,
+        callId: incomingCallDetails?.callId,
+        callSid,
+        inviteSid,
+        timestamp: new Date().toISOString(),
+      }
+    );
 
     const unsubscribe = notificationsService.onNotificationReceived(
       (notification) => {
+        logger.debug('[CallScreen] 🔔 Notification received', {
+          callAttemptId,
+          notificationType: notification.data?.type,
+          timestamp: new Date().toISOString(),
+        });
+
         const type = notification.data?.type;
-        if (type !== 'call_ended' && type !== 'call_missed') return;
+        if (type !== 'call_ended' && type !== 'call_missed') {
+          logger.debug(
+            '[CallScreen] ⏭️ Ignoring notification (not call_ended/call_missed)',
+            {
+              callAttemptId,
+              type,
+              timestamp: new Date().toISOString(),
+            }
+          );
+          return;
+        }
 
         const endedCallId = notification.data?.call_id;
         const endedCallSid = notification.data?.call_sid;
+
+        logger.debug('[CallScreen] 🔍 Checking notification match', {
+          callAttemptId,
+          type,
+          endedCallId,
+          endedCallSid,
+          currentCallId: incomingCallDetails?.callId,
+          currentCallSid: callSid,
+          currentInviteSid: inviteSid,
+          timestamp: new Date().toISOString(),
+        });
 
         const matchesCallId =
           Boolean(endedCallId) &&
@@ -367,12 +963,37 @@ export default function CallScreen() {
           Boolean(endedCallSid) &&
           (endedCallSid === callSid || endedCallSid === inviteSid);
 
-        if (!matchesCallId && !matchesSid) return;
-        if (hasEndedRef.current) return;
+        logger.debug('[CallScreen] 🔍 Match results', {
+          callAttemptId,
+          matchesCallId,
+          matchesSid,
+          timestamp: new Date().toISOString(),
+        });
+
+        if (!matchesCallId && !matchesSid) {
+          logger.debug(
+            '[CallScreen] ⏭️ Notification does not match current call',
+            {
+              callAttemptId,
+              timestamp: new Date().toISOString(),
+            }
+          );
+          return;
+        }
+        if (hasEndedRef.current) {
+          logger.debug(
+            '[CallScreen] ⏭️ Call already ended, ignoring notification',
+            {
+              callAttemptId,
+              timestamp: new Date().toISOString(),
+            }
+          );
+          return;
+        }
 
         hasEndedRef.current = true;
         logger.info(
-          '[CallScreen] Incoming call ended before answer; leaving screen',
+          '[CallScreen] 📞 Incoming call ended before answer; leaving screen',
           {
             callAttemptId,
             type,
@@ -380,13 +1001,23 @@ export default function CallScreen() {
             endedCallSid,
             callSid,
             inviteSid,
+            timestamp: new Date().toISOString(),
           }
         );
         router.back();
       }
     );
 
+    logger.info('[CallScreen] ✅ Notification listener registered', {
+      callAttemptId,
+      timestamp: new Date().toISOString(),
+    });
+
     return () => {
+      logger.info('[CallScreen] 🔧 Removing notification listener', {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      });
       unsubscribe();
     };
   }, [
@@ -397,7 +1028,6 @@ export default function CallScreen() {
     inviteSid,
   ]);
 
-  // ✅ INITIATE CALL ON MOUNT (outgoing only)
   useEffect(() => {
     logger.info('[CallScreen] Auto-init check', {
       callAttemptId,
@@ -412,9 +1042,6 @@ export default function CallScreen() {
 
     if (isIncoming) return;
 
-    // IMPORTANT: Filter out state updates from other calls (e.g., incoming calls on other screens)
-    // If we have a callInvite but this is an outgoing call, ignore it
-    // (incoming call invites should only be handled by incoming call screens)
     if (callState.callInvite && !isIncoming) {
       logger.warn(
         '[CallScreen] Ignoring callInvite state update for outgoing call',
@@ -427,7 +1054,6 @@ export default function CallScreen() {
       return;
     }
 
-    // Wait for profile to load before initiating call
     if (profileLoading) {
       logger.info('[CallScreen] Waiting for user profile to load...', {
         callAttemptId,
@@ -436,8 +1062,6 @@ export default function CallScreen() {
       return;
     }
 
-    // Ensure user is authenticated before making call
-    // Only show error if profile has finished loading and user is still null
     if (!user) {
       logger.error(
         '[CallScreen] User not authenticated, cannot make call',
@@ -448,7 +1072,6 @@ export default function CallScreen() {
           hasUser: false,
         }
       );
-      // Use setTimeout to avoid showing alert during navigation
       setTimeout(() => {
         Alert.alert(
           'Authentication Required',
@@ -464,7 +1087,6 @@ export default function CallScreen() {
       return;
     }
 
-    // All conditions met - initiate call
     if (!callInitiated && professional && user && isInitialized && isIdle) {
       logger.info('[CallScreen] All conditions met, initiating call...', {
         callAttemptId,
@@ -492,49 +1114,165 @@ export default function CallScreen() {
     isIncoming,
   ]);
 
-  // ✅ DURATION TIMER (only when connected)
-  // IMPORTANT: Only start timer for our own call, not for other calls
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
 
-    // Only start timer if:
-    // 1. We have a call SID or DB call ID (our own call)
-    // 2. We're connected
-    // 3. This is not an incoming call OR we've accepted the incoming call
-    const hasOwnCall = !!callSid || !!dbCallId;
+    const hasOwnCall = !!callSid || !!dbCallId || !!pendingDbCallIdRef.current;
     const shouldStartTimer =
       isConnected && hasOwnCall && (callInitiated || !isIncoming);
 
+    logger.info('[CallScreen] Duration timer effect', {
+      callAttemptId,
+      isConnected,
+      hasOwnCall,
+      hasCallSid: !!callSid,
+      hasDbCallId: !!dbCallId,
+      hasPendingDbCallId: !!pendingDbCallIdRef.current,
+      callInitiated,
+      isIncoming,
+      shouldStartTimer,
+      currentDuration: duration,
+      timestamp: Date.now(),
+    });
+
     if (shouldStartTimer) {
+      logger.info('[CallScreen] Starting duration timer', {
+        callAttemptId,
+        callSid,
+        dbCallId,
+        pendingDbCallId: pendingDbCallIdRef.current,
+        timestamp: Date.now(),
+      });
+
       interval = setInterval(() => {
-        setDuration((prev) => prev + 1);
+        setDuration((prev) => {
+          const newDuration = prev + 1;
+          if (newDuration % 10 === 0) {
+            logger.info('[CallScreen] Duration timer tick', {
+              callAttemptId,
+              duration: newDuration,
+              timestamp: Date.now(),
+            });
+          }
+          return newDuration;
+        });
       }, 1000);
+    } else {
+      logger.info('[CallScreen] Not starting duration timer', {
+        callAttemptId,
+        reason: !isConnected
+          ? 'not connected'
+          : !hasOwnCall
+          ? 'no own call'
+          : 'call not initiated',
+        isConnected,
+        hasOwnCall,
+        callInitiated,
+        isIncoming,
+        timestamp: Date.now(),
+      });
     }
+
     return () => {
-      if (interval) clearInterval(interval);
+      if (interval) {
+        logger.info('[CallScreen] Clearing duration timer', {
+          callAttemptId,
+          timestamp: Date.now(),
+        });
+        clearInterval(interval);
+      }
     };
-  }, [isConnected, callSid, dbCallId, callInitiated, isIncoming]);
+  }, [
+    isConnected,
+    callSid,
+    dbCallId,
+    callInitiated,
+    isIncoming,
+    callAttemptId,
+  ]);
 
-  // ✅ PER-MINUTE BILLING (caller only, prepaid-style)
-  // Her dakika başında (00:01, 01:00, 02:00, ...) o dakikanın parası kesilir.
-  // Bir sonraki dakika için bakiye kontrol edilir; yoksa push gönderilir.
-  // Eğer hala yüklenmezse ve bir sonraki dakikaya girildiğinde bakiye yoksa → call kapatılır.
   useEffect(() => {
-    if (isIncoming) return; // Only for caller
-    if (!isConnected) return;
-    if (!dbCallId) return; // Need call ID to charge
-    if (effectiveRatePerMinute <= 0) return;
+    logger.debug('[CallScreen] 🔍 Per-minute charge check', {
+      callAttemptId,
+      isIncoming,
+      isConnected,
+      hasDbCallId: !!dbCallId,
+      effectiveRatePerMinute,
+      duration,
+      timestamp: new Date().toISOString(),
+    });
 
-    // Her dakika başında (duration % 60 === 0 && duration > 0) charge this minute
-    const currentMinute = Math.floor(duration / 60) + 1; // 1-based minute number
+    if (isIncoming) {
+      logger.debug(
+        '[CallScreen] ⏭️ Skipping per-minute charge (incoming call)',
+        {
+          callAttemptId,
+          timestamp: new Date().toISOString(),
+        }
+      );
+      return;
+    }
+    if (!isConnected) {
+      logger.debug(
+        '[CallScreen] ⏭️ Skipping per-minute charge (not connected)',
+        {
+          callAttemptId,
+          timestamp: new Date().toISOString(),
+        }
+      );
+      return;
+    }
+    if (!dbCallId) {
+      logger.debug('[CallScreen] ⏭️ Skipping per-minute charge (no dbCallId)', {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+    if (effectiveRatePerMinute <= 0) {
+      logger.debug('[CallScreen] ⏭️ Skipping per-minute charge (rate is 0)', {
+        callAttemptId,
+        effectiveRatePerMinute,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    const currentMinute = Math.floor(duration / 60) + 1;
     const isMinuteBoundary = duration > 0 && duration % 60 === 0;
 
+    logger.debug('[CallScreen] 🔍 Minute boundary check', {
+      callAttemptId,
+      duration,
+      currentMinute,
+      isMinuteBoundary,
+      lastChargedMinute: lastChargedMinuteRef.current,
+      shouldCharge:
+        isMinuteBoundary && currentMinute > lastChargedMinuteRef.current,
+      timestamp: new Date().toISOString(),
+    });
+
     if (isMinuteBoundary && currentMinute > lastChargedMinuteRef.current) {
+      logger.info('[CallScreen] 💰 Charging for minute', {
+        callAttemptId,
+        callId: dbCallId,
+        minute_number: currentMinute,
+        duration,
+        timestamp: new Date().toISOString(),
+      });
+
       lastChargedMinuteRef.current = currentMinute;
 
-      // Charge this minute
       (async () => {
+        const chargeStartTime = Date.now();
         try {
+          logger.debug('[CallScreen] 🔧 Invoking charge-call-minute function', {
+            callAttemptId,
+            callId: dbCallId,
+            minute_number: currentMinute,
+            timestamp: new Date().toISOString(),
+          });
+
           const { data, error } = await supabase.functions.invoke(
             'charge-call-minute',
             {
@@ -545,12 +1283,26 @@ export default function CallScreen() {
             }
           );
 
+          const chargeElapsed = Date.now() - chargeStartTime;
+          logger.debug('[CallScreen] ✅ Charge function completed', {
+            callAttemptId,
+            callId: dbCallId,
+            minute_number: currentMinute,
+            elapsed: `${chargeElapsed}ms`,
+            hasError: !!error,
+            hasData: !!data,
+            timestamp: new Date().toISOString(),
+          });
+
           if (error) {
-            logger.error('[CallScreen] Per-minute charge failed', {
+            logger.error('[CallScreen] ❌ Per-minute charge failed', error, {
               callAttemptId,
               callId: dbCallId,
               minute_number: currentMinute,
-              error: error.message,
+              errorMessage: error.message,
+              errorCode: error.code,
+              elapsed: `${chargeElapsed}ms`,
+              timestamp: new Date().toISOString(),
             });
             return;
           }
@@ -558,27 +1310,51 @@ export default function CallScreen() {
           const nextMinuteAffordable = data?.next_minute_affordable ?? true;
           const newBalance = data?.new_balance ?? 0;
 
-          logger.info('[CallScreen] Minute charged', {
+          logger.info('[CallScreen] ✅ Minute charged successfully', {
             callAttemptId,
             callId: dbCallId,
             minute_number: currentMinute,
             cost: data?.cost,
             new_balance: newBalance,
             next_minute_affordable: nextMinuteAffordable,
+            elapsed: `${chargeElapsed}ms`,
+            timestamp: new Date().toISOString(),
           });
 
-          // Update user balance in local state (optimistic update)
           if (user && (user as any).wallet_balance !== undefined) {
+            const oldBalance = (user as any).wallet_balance;
             (user as any).wallet_balance = newBalance;
+            logger.debug('[CallScreen] 🔧 Updated user wallet balance', {
+              callAttemptId,
+              oldBalance,
+              newBalance,
+              timestamp: new Date().toISOString(),
+            });
           }
 
-          // Check if next minute is affordable
           if (!nextMinuteAffordable) {
-            // This is the first time we detect next minute is not affordable
+            logger.warn('[CallScreen] ⚠️ Next minute not affordable', {
+              callAttemptId,
+              callId: dbCallId,
+              minute_number: currentMinute,
+              newBalance,
+              nextMinuteCost: effectiveRatePerMinute,
+              hasSentPush: nextMinuteLowBalancePushSentRef.current,
+              timestamp: new Date().toISOString(),
+            });
+
             if (!nextMinuteLowBalancePushSentRef.current) {
               nextMinuteLowBalancePushSentRef.current = true;
+              logger.info(
+                '[CallScreen] 🔧 Sending low balance push notification',
+                {
+                  callAttemptId,
+                  callId: dbCallId,
+                  userId: user?.id,
+                  timestamp: new Date().toISOString(),
+                }
+              );
 
-              // Send push notification about low balance (one time)
               try {
                 await notificationsService.sendPushNotification(
                   user?.id || '',
@@ -590,17 +1366,38 @@ export default function CallScreen() {
                     action_url: 'talkee://credit-selection',
                   }
                 );
+                logger.info(
+                  '[CallScreen] ✅ Low balance push sent successfully',
+                  {
+                    callAttemptId,
+                    callId: dbCallId,
+                    userId: user?.id,
+                    timestamp: new Date().toISOString(),
+                  }
+                );
               } catch (pushErr) {
-                logger.warn('[CallScreen] Failed to send low balance push', {
-                  callAttemptId,
-                  error:
-                    pushErr instanceof Error
-                      ? pushErr.message
-                      : String(pushErr),
-                });
+                logger.error(
+                  '[CallScreen] ❌ Failed to send low balance push',
+                  pushErr,
+                  {
+                    callAttemptId,
+                    callId: dbCallId,
+                    userId: user?.id,
+                    error:
+                      pushErr instanceof Error
+                        ? pushErr.message
+                        : String(pushErr),
+                    timestamp: new Date().toISOString(),
+                  }
+                );
               }
 
-              // Show in-app alert (one time)
+              logger.info('[CallScreen] 🔧 Showing low balance alert', {
+                callAttemptId,
+                callId: dbCallId,
+                timestamp: new Date().toISOString(),
+              });
+
               Alert.alert(
                 'Low Balance',
                 'Your balance is low. Please add credits to continue the call.',
@@ -616,28 +1413,42 @@ export default function CallScreen() {
               );
             }
           } else {
-            // Balance was added, reset the warning flag
+            logger.debug('[CallScreen] ✅ Next minute is affordable', {
+              callAttemptId,
+              callId: dbCallId,
+              minute_number: currentMinute,
+              newBalance,
+              nextMinuteCost: effectiveRatePerMinute,
+              timestamp: new Date().toISOString(),
+            });
             nextMinuteLowBalancePushSentRef.current = false;
           }
 
-          // Check if we're starting a minute we can't afford
-          // This happens when we charge minute N, but minute N+1 is not affordable
-          // and we've already sent the warning. At the start of minute N+1, end the call.
           const nextMinute = currentMinute + 1;
           const nextMinuteCost = effectiveRatePerMinute;
           const balanceAfterThisMinute = newBalance;
 
-          // At the start of the next minute (when we're about to charge it),
-          // if we can't afford it, end the call
-          // We check this by seeing if we just charged minute N and we're about to charge minute N+1
+          logger.debug(
+            '[CallScreen] 🔍 Checking if balance sufficient for next minute',
+            {
+              callAttemptId,
+              callId: dbCallId,
+              currentMinute,
+              nextMinute,
+              balanceAfterThisMinute,
+              nextMinuteCost,
+              isSufficient: balanceAfterThisMinute >= nextMinuteCost,
+              timestamp: new Date().toISOString(),
+            }
+          );
+
           if (
             balanceAfterThisMinute < nextMinuteCost &&
             nextMinuteLowBalancePushSentRef.current &&
             !hasEndedRef.current
           ) {
-            // We warned the user, but they didn't add credits, and we're about to start an unaffordable minute
             logger.warn(
-              '[CallScreen] Ending call - insufficient balance for next minute',
+              '[CallScreen] ⚠️ Ending call - insufficient balance for next minute',
               {
                 callAttemptId,
                 callId: dbCallId,
@@ -645,6 +1456,7 @@ export default function CallScreen() {
                 nextMinute,
                 balanceAfterThisMinute,
                 nextMinuteCost,
+                timestamp: new Date().toISOString(),
               }
             );
 
@@ -667,10 +1479,13 @@ export default function CallScreen() {
             );
           }
         } catch (err) {
-          logger.error('[CallScreen] Per-minute charge error', err, {
+          logger.error('[CallScreen] ❌ Per-minute charge error', err, {
             callAttemptId,
             callId: dbCallId,
             minute_number: currentMinute,
+            errorMessage: err instanceof Error ? err.message : String(err),
+            errorStack: err instanceof Error ? err.stack : undefined,
+            timestamp: new Date().toISOString(),
           });
         }
       })();
@@ -685,23 +1500,102 @@ export default function CallScreen() {
     user,
   ]);
 
-  // Caller-side guardrail: best-effort auto-end when balance is depleted.
-  // (The server/webhook still decides final billing; this is UX + fraud/overrun prevention.)
   const maxAffordableSeconds = useMemo(() => {
-    if (isIncoming) return null;
+    if (isIncoming) {
+      logger.debug(
+        '[CallScreen] ⏭️ Skipping max affordable calculation (incoming)',
+        {
+          callAttemptId,
+          timestamp: new Date().toISOString(),
+        }
+      );
+      return null;
+    }
     const bal = Number((user as any)?.wallet_balance ?? 0);
-    if (!Number.isFinite(bal) || bal <= 0) return 0;
-    if (costPerSecond <= 0) return null;
-    return Math.floor(bal / costPerSecond);
+    if (!Number.isFinite(bal) || bal <= 0) {
+      logger.debug('[CallScreen] 💰 Max affordable: 0 (no balance)', {
+        callAttemptId,
+        balance: bal,
+        timestamp: new Date().toISOString(),
+      });
+      return 0;
+    }
+    if (costPerSecond <= 0) {
+      logger.debug(
+        '[CallScreen] 💰 Max affordable: null (no cost per second)',
+        {
+          callAttemptId,
+          costPerSecond,
+          timestamp: new Date().toISOString(),
+        }
+      );
+      return null;
+    }
+    const result = Math.floor(bal / costPerSecond);
+    logger.debug('[CallScreen] 💰 Max affordable seconds calculated', {
+      callAttemptId,
+      balance: bal,
+      costPerSecond,
+      maxAffordableSeconds: result,
+      timestamp: new Date().toISOString(),
+    });
+    return result;
   }, [isIncoming, user, costPerSecond]);
 
   useEffect(() => {
-    if (isIncoming) return;
-    if (!isConnected) return;
-    if (maxAffordableSeconds == null) return;
+    logger.debug('[CallScreen] 🔍 Balance depletion check', {
+      callAttemptId,
+      isIncoming,
+      isConnected,
+      maxAffordableSeconds,
+      duration,
+      remaining:
+        maxAffordableSeconds != null ? maxAffordableSeconds - duration : null,
+      lowBalanceWarned: lowBalanceWarnedRef.current,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (isIncoming) {
+      logger.debug('[CallScreen] ⏭️ Skipping balance check (incoming)', {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+    if (!isConnected) {
+      logger.debug('[CallScreen] ⏭️ Skipping balance check (not connected)', {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+    if (maxAffordableSeconds == null) {
+      logger.debug(
+        '[CallScreen] ⏭️ Skipping balance check (no max affordable)',
+        {
+          callAttemptId,
+          timestamp: new Date().toISOString(),
+        }
+      );
+      return;
+    }
 
     const remaining = maxAffordableSeconds - duration;
+    logger.debug('[CallScreen] 🔍 Balance remaining check', {
+      callAttemptId,
+      remaining,
+      maxAffordableSeconds,
+      duration,
+      lowBalanceWarned: lowBalanceWarnedRef.current,
+      timestamp: new Date().toISOString(),
+    });
+
     if (remaining <= 60 && remaining > 0 && !lowBalanceWarnedRef.current) {
+      logger.warn('[CallScreen] ⚠️ Low balance warning (60s remaining)', {
+        callAttemptId,
+        remaining,
+        timestamp: new Date().toISOString(),
+      });
       lowBalanceWarnedRef.current = true;
       Alert.alert(
         'Low balance',
@@ -710,27 +1604,56 @@ export default function CallScreen() {
     }
 
     if (remaining <= 0 && !hasEndedRef.current) {
+      logger.warn('[CallScreen] ⚠️ Balance depleted - ending call', {
+        callAttemptId,
+        remaining,
+        maxAffordableSeconds,
+        duration,
+        timestamp: new Date().toISOString(),
+      });
       Alert.alert(
         'Balance depleted',
         'Your call has ended because your balance is depleted.'
       );
       void safeEndCall('balance_depleted').then(() => {
+        logger.info('[CallScreen] 🚀 Navigating back after balance depletion', {
+          callAttemptId,
+          timestamp: new Date().toISOString(),
+        });
         router.back();
       });
     }
   }, [isIncoming, isConnected, maxAffordableSeconds, duration]);
 
-  // ✅ HANDLE TWILIO ERRORS
   useEffect(() => {
     if (twilioError) {
-      logger.error('[CallScreen] Twilio error:', twilioError);
+      logger.error('[CallScreen] ❌ Twilio error detected', twilioError, {
+        callAttemptId,
+        errorMessage: twilioError.message,
+        errorName: twilioError.name,
+        errorStack: twilioError.stack,
+        timestamp: new Date().toISOString(),
+      });
+      logger.info('[CallScreen] 🔧 Showing Twilio error alert', {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      });
       Alert.alert(
         'Call Error',
         twilioError.message || 'Failed to connect call',
         [
           {
             text: 'OK',
-            onPress: () => router.back(),
+            onPress: () => {
+              logger.info(
+                '[CallScreen] 🚀 Navigating back after Twilio error',
+                {
+                  callAttemptId,
+                  timestamp: new Date().toISOString(),
+                }
+              );
+              router.back();
+            },
           },
         ]
       );
@@ -738,47 +1661,118 @@ export default function CallScreen() {
   }, [twilioError]);
 
   const handleAcceptIncoming = async () => {
-    if (!incomingCallDetails?.callId) return;
+    logger.info('[CallScreen] 👆 Accept button pressed', {
+      callAttemptId,
+      hasIncomingCallDetails: !!incomingCallDetails,
+      callId: incomingCallDetails?.callId,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (!incomingCallDetails?.callId) {
+      logger.warn('[CallScreen] ⚠️ Cannot accept incoming call - no callId', {
+        callAttemptId,
+        hasIncomingCallDetails: !!incomingCallDetails,
+        incomingCallDetails,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
     try {
-      logger.info('[CallScreen] Accepting incoming call', {
+      const acceptStartTime = Date.now();
+      logger.info('[CallScreen] 📞 Accepting incoming call', {
         callAttemptId,
         callId: incomingCallDetails.callId,
         hasInvite: !!callState.callInvite,
+        inviteSid: inviteSid,
         status: callState.status,
+        callSid,
+        timestamp: new Date().toISOString(),
       });
+
       await acceptIncomingCall(incomingCallDetails.callId, callAttemptId);
-      setCallInitiated(true);
-    } catch (e) {
-      logger.error('[CallScreen] Accept incoming call failed', e, {
+
+      const acceptElapsed = Date.now() - acceptStartTime;
+      logger.info('[CallScreen] ✅ Incoming call accepted successfully', {
         callAttemptId,
         callId: incomingCallDetails.callId,
+        newStatus: callState.status,
+        elapsed: `${acceptElapsed}ms`,
+        timestamp: new Date().toISOString(),
+      });
+
+      logger.debug('[CallScreen] 🔧 Setting callInitiated to true', {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      });
+      setCallInitiated(true);
+    } catch (e) {
+      logger.error('[CallScreen] ❌ Accept incoming call failed', e, {
+        callAttemptId,
+        callId: incomingCallDetails.callId,
+        hasInvite: !!callState.callInvite,
+        inviteSid: inviteSid,
+        status: callState.status,
+        errorMessage: e instanceof Error ? e.message : String(e),
+        errorStack: e instanceof Error ? e.stack : undefined,
+        timestamp: new Date().toISOString(),
       });
     }
   };
 
   const handleRejectIncoming = async () => {
-    if (!incomingCallDetails?.callId) return;
+    logger.info('[CallScreen] 👆 Reject button pressed', {
+      callAttemptId,
+      hasIncomingCallDetails: !!incomingCallDetails,
+      callId: incomingCallDetails?.callId,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (!incomingCallDetails?.callId) {
+      logger.warn('[CallScreen] ⚠️ Cannot reject - no callId', {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
     try {
-      logger.info('[CallScreen] Rejecting incoming call', {
+      const rejectStartTime = Date.now();
+      logger.info('[CallScreen] 📞 Rejecting incoming call', {
         callAttemptId,
         callId: incomingCallDetails.callId,
         hasInvite: !!callState.callInvite,
         status: callState.status,
+        timestamp: new Date().toISOString(),
       });
       await rejectIncomingCall(incomingCallDetails.callId, callAttemptId);
-      router.back();
-    } catch (e) {
-      logger.error('[CallScreen] Reject incoming call failed', e, {
+      const rejectElapsed = Date.now() - rejectStartTime;
+      logger.info('[CallScreen] ✅ Incoming call rejected successfully', {
         callAttemptId,
         callId: incomingCallDetails.callId,
+        elapsed: `${rejectElapsed}ms`,
+        timestamp: new Date().toISOString(),
+      });
+      logger.info('[CallScreen] 🚀 Navigating back after reject', {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      });
+      router.back();
+    } catch (e) {
+      logger.error('[CallScreen] ❌ Reject incoming call failed', e, {
+        callAttemptId,
+        callId: incomingCallDetails.callId,
+        errorMessage: e instanceof Error ? e.message : String(e),
+        errorStack: e instanceof Error ? e.stack : undefined,
+        timestamp: new Date().toISOString(),
+      });
+      logger.info('[CallScreen] 🚀 Navigating back after reject error', {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
       });
       router.back();
     }
   };
 
-  // ✅ INITIATE CALL FUNCTION
   const initiateCall = async () => {
-    // Double-check user is authenticated (defensive check)
     if (!user) {
       logger.error(
         '[CallScreen] User not authenticated in initiateCall',
@@ -789,7 +1783,6 @@ export default function CallScreen() {
           hasUser: false,
         }
       );
-      // Use setTimeout to avoid showing alert during navigation
       setTimeout(() => {
         Alert.alert(
           'Authentication Required',
@@ -808,8 +1801,8 @@ export default function CallScreen() {
     if (!professional) {
       logger.error('[CallScreen] Missing professional data', {
         callAttemptId,
-        hasProfessional: !!professional,
-        professionalId: professional?.id,
+        hasProfessional: false,
+        professionalId: null,
       });
       Alert.alert(
         'Call Failed',
@@ -824,7 +1817,6 @@ export default function CallScreen() {
       return;
     }
 
-    // Validate professional has required fields
     if (!professional.id || !professional.user_id) {
       logger.error('[CallScreen] Invalid professional data', {
         callAttemptId,
@@ -845,9 +1837,14 @@ export default function CallScreen() {
     }
 
     try {
+      const initiateStartTime = Date.now();
+      logger.info('[CallScreen] 🔧 Setting callInitiated to true', {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      });
       setCallInitiated(true);
 
-      logger.info('[CallScreen] Initiating call', {
+      logger.info('[CallScreen] 📞 Initiating call', {
         callAttemptId,
         routeProfessionalId: id,
         professionalId: professional.id,
@@ -858,22 +1855,46 @@ export default function CallScreen() {
           isInitialized,
           status: callState.status,
         },
+        timestamp: new Date().toISOString(),
       });
 
-      // Call Twilio makeCall (this will create call record internally)
-      // Pass user explicitly to avoid race condition with useTwilioVoice's useProfile
+      logger.debug('[CallScreen] 🔧 Calling makeCall function', {
+        callAttemptId,
+        professionalId: professional.id,
+        professionalUserId: professional.user_id,
+        callType: type as 'voice' | 'video',
+        urgent: urgent === 'true',
+        timestamp: new Date().toISOString(),
+      });
+
       await makeCall(
-        professional.id, // DB: professionals.id
-        professional.user_id, // Twilio: users.id identity of callee
+        professional.id,
+        professional.user_id,
         type as 'voice' | 'video',
         urgent === 'true',
         callAttemptId,
-        user // Pass user explicitly to avoid race condition
+        user
       );
 
-      // After makeCall, fetch the most recent pending/active call for this user to get call_id
-      // (makeCall creates the call record, but doesn't return it to CallScreen)
+      const makeCallElapsed = Date.now() - initiateStartTime;
+      logger.info('[CallScreen] ✅ makeCall completed', {
+        callAttemptId,
+        elapsed: `${makeCallElapsed}ms`,
+        timestamp: new Date().toISOString(),
+      });
+
       try {
+        const fetchStartTime = Date.now();
+        logger.debug(
+          '[CallScreen] 🔧 Fetching call_id for per-minute billing',
+          {
+            callAttemptId,
+            callerId: user.id,
+            professionalId: professional.id,
+            timestamp: new Date().toISOString(),
+          }
+        );
+
         const { data: recentCall, error: fetchErr } = await supabase
           .from('calls')
           .select('id')
@@ -884,27 +1905,57 @@ export default function CallScreen() {
           .limit(1)
           .maybeSingle();
 
+        const fetchElapsed = Date.now() - fetchStartTime;
+
         if (!fetchErr && recentCall?.id) {
-          setDbCallId(recentCall.id);
-          logger.info('[CallScreen] Retrieved call_id for per-minute billing', {
+          pendingDbCallIdRef.current = recentCall.id;
+          logger.info(
+            '[CallScreen] ✅ Retrieved call_id for per-minute billing',
+            {
+              callAttemptId,
+              callId: recentCall.id,
+              elapsed: `${fetchElapsed}ms`,
+              timestamp: new Date().toISOString(),
+            }
+          );
+        } else if (fetchErr) {
+          logger.warn('[CallScreen] ⚠️ Failed to fetch call_id', {
             callAttemptId,
-            callId: recentCall.id,
+            error: fetchErr.message,
+            errorCode: fetchErr.code,
+            elapsed: `${fetchElapsed}ms`,
+            timestamp: new Date().toISOString(),
+          });
+        } else {
+          logger.debug('[CallScreen] ℹ️ No recent call found', {
+            callAttemptId,
+            elapsed: `${fetchElapsed}ms`,
+            timestamp: new Date().toISOString(),
           });
         }
       } catch (fetchErr) {
-        logger.warn(
-          '[CallScreen] Failed to fetch call_id (per-minute billing may not work)',
-          {
-            callAttemptId,
-            error:
-              fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
-          }
-        );
+        logger.error('[CallScreen] ❌ Exception fetching call_id', fetchErr, {
+          callAttemptId,
+          error:
+            fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
+          errorStack: fetchErr instanceof Error ? fetchErr.stack : undefined,
+          timestamp: new Date().toISOString(),
+        });
       }
 
-      logger.info('[CallScreen] Call initiated successfully');
+      const totalElapsed = Date.now() - initiateStartTime;
+      logger.info('[CallScreen] ✅ Call initiated successfully', {
+        callAttemptId,
+        totalElapsed: `${totalElapsed}ms`,
+        timestamp: new Date().toISOString(),
+      });
     } catch (error) {
-      logger.error('[CallScreen] Failed to initiate call:', error);
+      logger.error('[CallScreen] ❌ Failed to initiate call', error, {
+        callAttemptId,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString(),
+      });
       Alert.alert(
         'Call Failed',
         'Could not start the call. Please try again.',
@@ -918,7 +1969,6 @@ export default function CallScreen() {
     }
   };
 
-  // ✅ FORMAT DURATION
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -927,88 +1977,84 @@ export default function CallScreen() {
       .padStart(2, '0')}`;
   };
 
-  // ✅ CALCULATE CURRENT COST
   const currentCost = duration * costPerSecond;
 
-  // ✅ HANDLE END CALL
   const handleEndCall = async () => {
+    logger.info('[CallScreen] 👆 End call button pressed', {
+      callAttemptId,
+      currentStatus: callState.status,
+      timestamp: new Date().toISOString(),
+    });
+
     try {
-      logger.info('[CallScreen] Ending call');
-
-      // Disconnect Twilio call
-      await disconnect();
-
-      // Go back to previous screen
-      router.back();
-    } catch (error) {
-      logger.error('[CallScreen] Error ending call:', error);
-      // Go back anyway
-      router.back();
-    }
-  };
-
-  // ✅ HANDLE MUTE TOGGLE
-  const handleMuteToggle = () => {
-    try {
-      toggleMute();
-      logger.info('[CallScreen] Mute toggled', { callAttemptId });
-    } catch (error) {
-      logger.error('[CallScreen] Error toggling mute:', error);
-    }
-  };
-
-  const handleSpeakerToggle = async () => {
-    try {
-      // Prefer local state for UX responsiveness; then verify actual route.
-      const desired = !isSpeakerOn;
-      const ok = await setSpeakerEnabled(desired);
-      const actual = ok
-        ? await getSpeakerEnabled().catch(() => desired)
-        : isSpeakerOn;
-      setIsSpeakerOn(actual);
-
-      logger.info('[CallScreen] Speaker toggled', {
+      const endStartTime = Date.now();
+      logger.info('[CallScreen] 📞 Ending call', {
         callAttemptId,
-        desired,
-        ok,
-        actual,
+        currentStatus: callState.status,
+        callSid,
+        dbCallId,
+        timestamp: new Date().toISOString(),
       });
-    } catch (e) {
-      logger.error('[CallScreen] Speaker toggle failed', e, { callAttemptId });
+      await disconnect();
+      const endElapsed = Date.now() - endStartTime;
+      logger.info('[CallScreen] ✅ Call disconnected successfully', {
+        callAttemptId,
+        elapsed: `${endElapsed}ms`,
+        timestamp: new Date().toISOString(),
+      });
+      logger.info('[CallScreen] 🚀 Navigating back after end call', {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      });
+      router.back();
+    } catch (error) {
+      logger.error('[CallScreen] ❌ Error ending call', error, {
+        callAttemptId,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString(),
+      });
+      logger.info('[CallScreen] 🚀 Navigating back after end call error', {
+        callAttemptId,
+        timestamp: new Date().toISOString(),
+      });
+      router.back();
     }
   };
 
-  // Keep the speaker UI in sync with the real audio route after connect.
-  useEffect(() => {
-    if (!isConnected) return;
-    if (Platform.OS === 'web') return;
+  const handleMuteToggle = async () => {
+    logger.info('[CallScreen] 👆 Mute toggle button pressed', {
+      callAttemptId,
+      currentMuteState: isMuted,
+      timestamp: new Date().toISOString(),
+    });
 
-    let cancelled = false;
-    (async () => {
-      const current = await getSpeakerEnabled().catch(() => false);
-      if (!cancelled) setIsSpeakerOn(current);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isConnected]);
-
-  // ✅ LOADING STATE (outgoing only)
-  if (!isIncoming && (professionalLoading || !professional)) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <LinearGradient
-          colors={['#1f2937', '#374151']}
-          style={styles.background}
-        >
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading...</Text>
-          </View>
-        </LinearGradient>
-      </SafeAreaView>
-    );
-  }
+    try {
+      const toggleStartTime = Date.now();
+      logger.debug('[CallScreen] 🔧 Calling toggleMute', {
+        callAttemptId,
+        currentMuteState: isMuted,
+        timestamp: new Date().toISOString(),
+      });
+      await toggleMute();
+      const toggleElapsed = Date.now() - toggleStartTime;
+      logger.info('[CallScreen] ✅ Mute toggled successfully', {
+        callAttemptId,
+        previousMuteState: isMuted,
+        newMuteState: !isMuted,
+        elapsed: `${toggleElapsed}ms`,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error('[CallScreen] ❌ Error toggling mute', error, {
+        callAttemptId,
+        currentMuteState: isMuted,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  };
 
   const otherParty = useMemo(() => {
     if (isIncoming) {
@@ -1038,10 +2084,37 @@ export default function CallScreen() {
     return t === 'video' ? 'video' : 'voice';
   }, [isIncoming, incomingCallDetails?.callType, type]);
 
-  // Incoming UI: show "answer" modal-style screen until user accepts/rejects.
-  // After accept, we render the normal in-call UI (controls/timer).
+  if (!isIncoming && (professionalLoading || !professional)) {
+    logger.debug('[CallScreen] ⏸️ Showing loading screen', {
+      callAttemptId,
+      professionalLoading,
+      hasProfessional: !!professional,
+      timestamp: new Date().toISOString(),
+    });
+    return (
+      <SafeAreaView style={styles.container}>
+        <LinearGradient
+          colors={['#1f2937', '#374151']}
+          style={styles.background}
+        >
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
+        </LinearGradient>
+      </SafeAreaView>
+    );
+  }
+
   if (isIncoming && !callInitiated) {
     const canAccept = !!callState.callInvite;
+    logger.debug('[CallScreen] 📞 Rendering incoming call screen', {
+      callAttemptId,
+      callInitiated,
+      canAccept,
+      hasCallInvite: !!callState.callInvite,
+      callerName: otherParty.name,
+      timestamp: new Date().toISOString(),
+    });
     return (
       <SafeAreaView style={styles.container}>
         <LinearGradient
@@ -1095,49 +2168,22 @@ export default function CallScreen() {
     );
   }
 
-  // ✅ MINIMIZED VIEW
-  if (isMinimized) {
-    return (
-      <View style={styles.minimizedCall}>
-        <TouchableOpacity
-          style={styles.minimizedContent}
-          onPress={() => setIsMinimized(false)}
-        >
-          <Image
-            source={{ uri: otherParty.avatarUrl || '' }}
-            style={styles.minimizedAvatar}
-          />
-          <View style={styles.minimizedInfo}>
-            <Text style={styles.minimizedName}>
-              {otherParty.name || 'Unknown'}
-            </Text>
-            <Text style={styles.minimizedDuration}>
-              {formatDuration(duration)}
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.minimizedEndCall}
-            onPress={handleEndCall}
-          >
-            <PhoneOff size={16} color="#ffffff" />
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+  logger.debug('[CallScreen] 🎨 Rendering active call screen', {
+    callAttemptId,
+    isIncoming,
+    isConnected,
+    isConnecting,
+    duration,
+    isMuted,
+    isVideoOff,
+    effectiveCallType,
+    timestamp: new Date().toISOString(),
+  });
 
-  // ✅ MAIN CALL SCREEN
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient colors={['#1f2937', '#374151']} style={styles.background}>
-        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.minimizeButton}
-            onPress={() => setIsMinimized(true)}
-          >
-            <Minimize2 size={20} color="#ffffff" />
-          </TouchableOpacity>
           <View style={styles.callInfo}>
             <Text style={styles.callStatus}>
               {isConnecting
@@ -1151,12 +2197,8 @@ export default function CallScreen() {
               {urgent === 'true' && ' (Urgent)'}
             </Text>
           </View>
-          <TouchableOpacity style={styles.moreButton}>
-            <MoreVertical size={20} color="#ffffff" />
-          </TouchableOpacity>
         </View>
 
-        {/* Other Party Info */}
         <View style={styles.professionalInfo}>
           <View style={styles.professionalCard}>
             <Image
@@ -1172,7 +2214,6 @@ export default function CallScreen() {
           </View>
         </View>
 
-        {/* Call Stats */}
         <View style={styles.callStats}>
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Duration</Text>
@@ -1198,7 +2239,6 @@ export default function CallScreen() {
           )}
         </View>
 
-        {/* Video Preview (for video calls) */}
         {effectiveCallType === 'video' && !isVideoOff && (
           <View style={styles.videoContainer}>
             <View style={styles.localVideo}>
@@ -1209,12 +2249,10 @@ export default function CallScreen() {
           </View>
         )}
 
-        {/* Call Controls */}
         <View
           style={[
             styles.callControls,
             {
-              // Keep controls above Android system navigation bar / gesture area
               paddingBottom:
                 (Platform.OS === 'android' ? 64 : 40) + (insets.bottom || 0),
             },
@@ -1235,28 +2273,21 @@ export default function CallScreen() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[
-              styles.controlButton,
-              isSpeakerOn && styles.controlButtonActiveSpeaker,
-            ]}
-            onPress={handleSpeakerToggle}
-            disabled={!isConnected || Platform.OS === 'web'}
-          >
-            {isSpeakerOn ? (
-              <Volume2 size={24} color="#ffffff" />
-            ) : (
-              <VolumeX size={24} color="#ffffff" />
-            )}
-          </TouchableOpacity>
-
           {type === 'video' && (
             <TouchableOpacity
               style={[
                 styles.controlButton,
                 isVideoOff && styles.controlButtonActive,
               ]}
-              onPress={() => setIsVideoOff(!isVideoOff)}
+              onPress={() => {
+                logger.info('[CallScreen] 👆 Video toggle button pressed', {
+                  callAttemptId,
+                  currentVideoState: isVideoOff,
+                  newVideoState: !isVideoOff,
+                  timestamp: new Date().toISOString(),
+                });
+                setIsVideoOff(!isVideoOff);
+              }}
               disabled={!isConnected}
             >
               {isVideoOff ? (
@@ -1268,13 +2299,6 @@ export default function CallScreen() {
           )}
 
           <TouchableOpacity
-            style={styles.controlButton}
-            disabled={!isConnected}
-          >
-            <MessageCircle size={24} color="#ffffff" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
             style={styles.endCallButton}
             onPress={handleEndCall}
           >
@@ -1282,7 +2306,6 @@ export default function CallScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Call SID Debug Info (remove in production) */}
         {__DEV__ && callSid && (
           <View style={styles.debugInfo}>
             <Text style={styles.debugText}>Call SID: {callSid}</Text>
@@ -1312,19 +2335,11 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 16,
-  },
-  minimizeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   callInfo: {
     alignItems: 'center',
@@ -1338,14 +2353,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter-Bold',
     color: '#ffffff',
-  },
-  moreButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   professionalInfo: {
     flex: 1,
@@ -1445,64 +2452,10 @@ const styles = StyleSheet.create({
   controlButtonActive: {
     backgroundColor: '#ef4444',
   },
-  controlButtonActiveSpeaker: {
-    backgroundColor: '#10B981',
-  },
   endCallButton: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#ef4444',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  minimizedCall: {
-    position: 'absolute',
-    top: 50,
-    left: 16,
-    right: 16,
-    zIndex: 1000,
-  },
-  minimizedContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1f2937',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0px 4px 8px rgba(0,0,0,0.3)' }
-      : {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 8,
-        }),
-  },
-  minimizedAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 12,
-  },
-  minimizedInfo: {
-    flex: 1,
-  },
-  minimizedName: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#ffffff',
-  },
-  minimizedDuration: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    color: '#d1d5db',
-  },
-  minimizedEndCall: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
     backgroundColor: '#ef4444',
     alignItems: 'center',
     justifyContent: 'center',

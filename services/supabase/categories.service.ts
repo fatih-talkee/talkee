@@ -176,12 +176,58 @@ class CategoriesService {
       // Get all categories with their professional counts
       const countsStart = Date.now();
       logger.info('[CategoriesService] 📊 Calling getCategoriesWithCounts...');
-      const categoriesWithCounts = await this.getCategoriesWithCounts();
-      const countsDuration = Date.now() - countsStart;
-      logger.info('[CategoriesService] ✅ Professional counts fetched', {
-        duration: `${countsDuration}ms`,
-        categoryCount: categoriesWithCounts.length,
+
+      // Declare variables in outer scope
+      let categoriesWithCounts: any[] = [];
+      let countsDuration = 0;
+
+      // Add timeout to getCategoriesWithCounts
+      const getCategoriesWithCountsPromise = this.getCategoriesWithCounts();
+      let getCategoriesWithCountsTimeoutId: ReturnType<
+        typeof setTimeout
+      > | null = null;
+      const getCategoriesWithCountsTimeout = new Promise((_, reject) => {
+        getCategoriesWithCountsTimeoutId = setTimeout(() => {
+          const timeoutElapsed = Date.now() - countsStart;
+          const timeoutError = new Error('getCategoriesWithCounts timeout');
+          logger.error(
+            '[CategoriesService] ⏱️ getCategoriesWithCounts TIMEOUT in getPopularCategories',
+            timeoutError,
+            {
+              elapsedTime: `${timeoutElapsed}ms`,
+              timeoutLimit: '30000ms', // ✅ INCREASED TO 30 SECONDS
+              timestamp: new Date().toISOString(),
+            }
+          );
+          reject(timeoutError);
+        }, 30000); // ✅ INCREASED TO 30 SECONDS
       });
+
+      try {
+        categoriesWithCounts = (await Promise.race([
+          getCategoriesWithCountsPromise,
+          getCategoriesWithCountsTimeout,
+        ])) as any;
+
+        // Clear timeout if query succeeded
+        if (getCategoriesWithCountsTimeoutId) {
+          clearTimeout(getCategoriesWithCountsTimeoutId);
+          getCategoriesWithCountsTimeoutId = null;
+        }
+
+        countsDuration = Date.now() - countsStart;
+        logger.info('[CategoriesService] ✅ Professional counts fetched', {
+          duration: `${countsDuration}ms`,
+          categoryCount: categoriesWithCounts.length,
+        });
+      } catch (error: any) {
+        // Clear timeout on error
+        if (getCategoriesWithCountsTimeoutId) {
+          clearTimeout(getCategoriesWithCountsTimeoutId);
+          getCategoriesWithCountsTimeoutId = null;
+        }
+        throw error;
+      }
 
       // Process Promise.allSettled results
       const processStart = Date.now();
@@ -338,6 +384,7 @@ class CategoriesService {
 
   /**
    * Get all categories with their professional counts
+   * OPTIMIZED: Fetches all data in 3 queries instead of 68*3 queries
    * Counts professionals from both category_id field and professional_categories junction table
    * Avoids double counting professionals that appear in both
    */
@@ -350,190 +397,200 @@ class CategoriesService {
     });
 
     try {
+      // Step 1: Get all categories (with timeout)
       const categoriesStart = Date.now();
       logger.info('[CategoriesService] 📊 Fetching base categories...');
-      const categories = await this.getCategories();
+
+      const categoriesQuery = this.getCategories();
+      let categoriesTimeoutId: ReturnType<typeof setTimeout> | null = null;
+      const categoriesTimeout = new Promise<never>((_, reject) => {
+        categoriesTimeoutId = setTimeout(() => {
+          reject(new Error('getCategories timeout'));
+        }, 30000); // ✅ INCREASED TO 30 SECONDS
+      });
+
+      let categories: Category[];
+      try {
+        categories = await Promise.race([categoriesQuery, categoriesTimeout]);
+        if (categoriesTimeoutId) {
+          clearTimeout(categoriesTimeoutId);
+          categoriesTimeoutId = null;
+        }
+      } catch (error: any) {
+        if (categoriesTimeoutId) {
+          clearTimeout(categoriesTimeoutId);
+          categoriesTimeoutId = null;
+        }
+        if (error?.message?.includes('timeout')) {
+          logger.error('[CategoriesService] ⏱️ getCategories TIMEOUT', error, {
+            elapsedTime: `${Date.now() - categoriesStart}ms`,
+            timeoutLimit: '30000ms',
+            timestamp: new Date().toISOString(),
+          });
+          // Return empty array on timeout
+          return [];
+        }
+        throw error;
+      }
+
       const categoriesDuration = Date.now() - categoriesStart;
+
       logger.info('[CategoriesService] ✅ Base categories fetched', {
         duration: `${categoriesDuration}ms`,
         count: categories.length,
       });
 
-      // Get professional counts for each category
-      // Use Promise.allSettled to handle individual failures gracefully
+      if (categories.length === 0) {
+        return [];
+      }
+
+      // Step 2: OPTIMIZED - Fetch all data in parallel (2 queries total, no verification needed)
       const countsStart = Date.now();
       logger.info(
-        '[CategoriesService] 📊 Fetching professional counts for categories...',
+        '[CategoriesService] 📊 Fetching professional counts (optimized - 2 queries)...',
         {
           categoryCount: categories.length,
         }
       );
-      const categoriesWithCountsPromise = Promise.allSettled(
-        categories.map(async (category) => {
-          try {
-            // Get professional IDs from category_id field
-            const { data: directProfessionals, error: directError } =
-              await supabase
-                .from('professionals')
-                .select('id')
-                .eq('category_id', category.id)
-                .eq('is_active', true)
-                .eq('is_public', true);
 
-            if (directError) {
-              console.error(
-                `❌ [getCategoriesWithCounts] Error fetching direct professionals for ${category.name} (${category.id}):`,
-                directError
-              );
-              // Continue with empty array on error
-            }
+      // Query 1: Get all active/public professionals with their category_id
+      // This gives us ALL active/public professionals - we'll use this to verify junction entries
+      const professionalsQuery = supabase
+        .from('professionals')
+        .select('id, category_id')
+        .eq('is_active', true)
+        .eq('is_public', true);
 
-            // Get professional IDs from professional_categories junction table
-            // Add retry logic for network errors
-            let junctionData = null;
-            let junctionError = null;
-            let retries = 3;
+      // Query 2: Get all junction table entries
+      const junctionQuery = supabase
+        .from('professional_categories')
+        .select('professional_id, category_id');
 
-            while (retries > 0) {
-              const result = await supabase
-                .from('professional_categories')
-                .select('professional_id')
-                .eq('category_id', category.id);
+      // Execute queries in parallel with timeout
+      const queryTimeout = 30000; // ✅ INCREASED TO 30 SECONDS
+      const queriesPromise = Promise.all([professionalsQuery, junctionQuery]);
 
-              junctionData = result.data;
-              junctionError = result.error;
-
-              // If no error or not a network error, break
-              if (
-                !junctionError ||
-                !junctionError.message?.includes('Network')
-              ) {
-                break;
-              }
-
-              // Wait before retry (exponential backoff)
-              await new Promise((resolve) =>
-                setTimeout(resolve, 1000 * (4 - retries))
-              );
-              retries--;
-            }
-
-            if (junctionError) {
-              console.error(
-                `❌ [getCategoriesWithCounts] Error fetching junction professionals for ${category.name} (${category.id}):`,
-                junctionError
-              );
-              // Continue with empty array on error
-            }
-
-            // Get unique professional IDs from both sources
-            const directIds = new Set(
-              (directProfessionals || []).map((p) => p.id)
-            );
-            const junctionIds = new Set(
-              (junctionData || []).map((item) => item.professional_id)
-            );
-
-            // Combine and get unique count (union of both sets)
-            const uniqueIds = new Set([...directIds, ...junctionIds]);
-
-            // Verify these professionals are active and public
-            if (uniqueIds.size > 0) {
-              const { count, error: countError } = await supabase
-                .from('professionals')
-                .select('id', { count: 'exact', head: true })
-                .in('id', Array.from(uniqueIds))
-                .eq('is_active', true)
-                .eq('is_public', true);
-
-              if (countError) {
-                console.error(
-                  `❌ [getCategoriesWithCounts] Error counting professionals for ${category.name} (${category.id}):`,
-                  countError
-                );
-                return {
-                  ...category,
-                  professionalCount: uniqueIds.size, // Fallback to set size
-                };
-              }
-
-              return {
-                ...category,
-                professionalCount: count || 0,
-              };
-            }
-
-            return {
-              ...category,
-              professionalCount: 0,
-            };
-          } catch (error) {
-            // Handle any unexpected errors for this category
-            console.error(
-              `❌ [getCategoriesWithCounts] Unexpected error for ${category.name} (${category.id}):`,
-              error
-            );
-            // Return category with 0 count on error
-            return {
-              ...category,
-              professionalCount: 0,
-            };
-          }
-        })
-      );
-
-      const categoriesWithCounts = await categoriesWithCountsPromise;
-      const countsDuration = Date.now() - countsStart;
-      logger.info('[CategoriesService] ✅ Professional counts fetched', {
-        duration: `${countsDuration}ms`,
-        categoryCount: categories.length,
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error('Categories queries timeout'));
+        }, queryTimeout);
       });
 
-      // Process Promise.allSettled results
-      const processStart = Date.now();
-      logger.info(
-        '[CategoriesService] 📊 Processing Promise.allSettled results...',
-        {
-          total: categoriesWithCounts.length,
+      let professionalsResult: any;
+      let junctionResult: any;
+
+      try {
+        [professionalsResult, junctionResult] = await Promise.race([
+          queriesPromise,
+          timeoutPromise,
+        ]);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
         }
-      );
-      const results = categoriesWithCounts.map((result, index) => {
-        if (result.status === 'fulfilled') {
-          return result.value;
-        } else {
-          // If a promise was rejected, log and return a default value
-          logger.warn(
-            '[CategoriesService] ⚠️ Category count promise rejected',
+      } catch (error: any) {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        if (error?.message?.includes('timeout')) {
+          logger.error(
+            '[CategoriesService] ⏱️ getCategoriesWithCounts TIMEOUT in getPopularCategories',
+            error,
             {
-              index,
-              reason: result.reason?.message || String(result.reason),
+              elapsedTime: `${Date.now() - countsStart}ms`,
+              timeoutLimit: `${queryTimeout}ms`,
+              timestamp: new Date().toISOString(),
             }
           );
-          console.error(
-            `❌ [getCategoriesWithCounts] Promise rejected for category at index ${index}:`,
-            result.reason
-          );
-          // Return default value for the category at this index
-          return {
-            ...categories[index],
+          // Return categories with 0 counts on timeout
+          return categories.map((cat) => ({
+            ...cat,
             professionalCount: 0,
-          };
+          }));
+        }
+        throw error;
+      }
+
+      // Handle errors
+      if (professionalsResult.error) {
+        logger.error(
+          '[CategoriesService] ❌ Error fetching professionals',
+          professionalsResult.error
+        );
+        // Fallback: return categories with 0 counts
+        return categories.map((cat) => ({
+          ...cat,
+          professionalCount: 0,
+        }));
+      }
+
+      if (junctionResult.error) {
+        logger.error(
+          '[CategoriesService] ❌ Error fetching junction table',
+          junctionResult.error
+        );
+        // Continue with direct professionals only
+      }
+
+      // Step 3: Create a Set of all active/public professional IDs (for fast lookup)
+      // This eliminates the need for verification queries - we already have all active/public professionals
+      const activePublicProfessionalIds = new Set(
+        (professionalsResult.data || []).map((p: any) => p.id)
+      );
+
+      // Step 4: Build category counts in memory
+      const categoryCounts = new Map<string, Set<string>>();
+
+      // Initialize all categories with empty sets
+      categories.forEach((cat) => {
+        categoryCounts.set(cat.id, new Set());
+      });
+
+      // Add direct professionals (from category_id field)
+      (professionalsResult.data || []).forEach((prof: any) => {
+        if (prof.category_id) {
+          const categorySet = categoryCounts.get(prof.category_id);
+          if (categorySet) {
+            categorySet.add(prof.id);
+          }
         }
       });
 
-      const processDuration = Date.now() - processStart;
+      // Add junction professionals (from professional_categories table)
+      // Only count if professional is active/public (check against our Set)
+      (junctionResult.data || []).forEach((item: any) => {
+        if (activePublicProfessionalIds.has(item.professional_id)) {
+          const categorySet = categoryCounts.get(item.category_id);
+          if (categorySet) {
+            categorySet.add(item.professional_id);
+          }
+        }
+      });
+
+      // Step 5: Build result
+      const categoriesWithCounts = categories.map((category) => {
+        const count = categoryCounts.get(category.id)?.size || 0;
+        return {
+          ...category,
+          professionalCount: count,
+        };
+      });
+
+      const countsDuration = Date.now() - countsStart;
       const totalDuration = Date.now() - startTime;
+
       logger.info('[CategoriesService] ✅ getCategoriesWithCounts completed', {
         totalDuration: `${totalDuration}ms`,
-        resultCount: results.length,
+        resultCount: categoriesWithCounts.length,
         breakdown: {
           getCategories: `${categoriesDuration}ms`,
           professionalCounts: `${countsDuration}ms`,
-          processing: `${processDuration}ms`,
         },
       });
 
-      return results;
+      return categoriesWithCounts;
     } catch (error: any) {
       const totalDuration = Date.now() - startTime;
       let errorMessage = 'Unknown error';

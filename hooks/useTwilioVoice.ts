@@ -1,491 +1,618 @@
 import {
-  useState,
   useEffect,
+  useState,
   useCallback,
-  useRef,
   useSyncExternalStore,
+  useRef,
 } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
-import { twilioVoiceService, CallState } from '@/services/twilioVoice.service';
+import { twilioVoiceService } from '@/services/twilioVoice.service';
+import type { CallState } from '@/services/twilioVoice.service';
 import { logger } from '@/lib/logger';
 import { useProfile } from './useProfile';
 
-export interface UseTwilioVoiceOptions {
-  /**
-   * Auto-connect on mount
-   * @default false
-   */
-  autoConnect?: boolean;
+export function useTwilioVoice() {
+  const mountTimeRef = useRef<number>(Date.now());
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const { user, isLoading: profileLoading } = useProfile();
 
-  /**
-   * Callback when call connects
-   */
-  onCallConnected?: () => void;
+  logger.debug('[useTwilioVoice] 🎬 Hook rendering', {
+    hasUser: !!user,
+    userId: user?.id,
+    profileLoading,
+    isInitialized,
+    hasError: !!error,
+    timestamp: new Date().toISOString(),
+  });
 
-  /**
-   * Callback when call disconnects
-   */
-  onCallDisconnected?: (error?: Error) => void;
+  // Get call state from service using useSyncExternalStore
+  logger.debug('[useTwilioVoice] 🔧 Setting up useSyncExternalStore', {
+    timestamp: new Date().toISOString(),
+  });
 
-  /**
-   * Callback when call status changes
-   */
-  onStatusChange?: (status: CallState['status']) => void;
-
-  /**
-   * Callback when incoming call received
-   */
-  onIncomingCall?: (callInvite: CallState['callInvite']) => void;
-}
-
-export interface UseTwilioVoiceReturn {
-  // State
-  callState: CallState;
-  isInitialized: boolean;
-  isConnected: boolean;
-  isConnecting: boolean;
-  isIdle: boolean;
-  callDuration: number;
-
-  // Actions
-  makeCall: (
-    professionalId: string,
-    professionalUserId: string,
-    callType?: 'voice' | 'video',
-    urgent?: boolean,
-    debugId?: string
-  ) => Promise<void>;
-  acceptIncomingCall: (callId?: string, debugId?: string) => Promise<void>;
-  rejectIncomingCall: (callId?: string, debugId?: string) => Promise<void>;
-  disconnect: () => Promise<void>;
-  toggleMute: () => Promise<void>;
-  toggleHold: () => Promise<void>;
-  sendDigits: (digits: string) => Promise<void>;
-
-  // Error
-  error: Error | null;
-  clearError: () => void;
-}
-
-/**
- * Custom hook for managing Twilio Voice calls
- *
- * @example
- * ```tsx
- * const {
- *   callState,
- *   isConnected,
- *   makeCall,
- *   disconnect,
- *   toggleMute,
- * } = useTwilioVoice({
- *   onCallConnected: () => console.log('Call connected!'),
- *   onCallDisconnected: () => console.log('Call ended'),
- * });
- *
- * // Make a call
- * await makeCall('professional-id-123');
- *
- * // Mute/unmute
- * await toggleMute();
- *
- * // End call
- * await disconnect();
- * ```
- */
-export function useTwilioVoice(
-  options: UseTwilioVoiceOptions = {}
-): UseTwilioVoiceReturn {
-  const { user } = useProfile();
-
-  // Use useSyncExternalStore to sync external state with React
-  // This is the React 18 way to handle external state and avoids "Rendered fewer hooks" error
   const callState = useSyncExternalStore(
-    // Subscribe function
     (callback) => {
+      logger.debug('[useTwilioVoice] 🔧 Subscribing to Twilio state changes', {
+        timestamp: new Date().toISOString(),
+      });
       return twilioVoiceService.subscribe(callback);
     },
-    // Get snapshot function
-    () => twilioVoiceService.getState(),
-    // Get server snapshot function (for SSR)
-    () => twilioVoiceService.getState()
+    () => {
+      const state = twilioVoiceService.getState();
+      logger.debug('[useTwilioVoice] 📡 Getting Twilio state (client)', {
+        status: state.status,
+        hasCall: !!state.call,
+        hasCallInvite: !!state.callInvite,
+        isMuted: state.isMuted,
+        timestamp: new Date().toISOString(),
+      });
+      return state;
+    },
+    () => {
+      const state = twilioVoiceService.getState();
+      logger.debug('[useTwilioVoice] 📡 Getting Twilio state (server)', {
+        status: state.status,
+        hasCall: !!state.call,
+        hasCallInvite: !!state.callInvite,
+        isMuted: state.isMuted,
+        timestamp: new Date().toISOString(),
+      });
+      return state;
+    }
   );
 
-  const [callDuration, setCallDuration] = useState(0);
-  const [error, setError] = useState<Error | null>(null);
-
-  const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const callStartTimeRef = useRef<number | null>(null);
-  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
-  const isMountedRef = useRef(true);
-
-  // Handle callbacks when state changes
   useEffect(() => {
-    isMountedRef.current = true;
+    logger.debug('[useTwilioVoice] 📡 Call state changed', {
+      status: callState.status,
+      hasCall: !!callState.call,
+      hasCallInvite: !!callState.callInvite,
+      isMuted: callState.isMuted,
+      isOnHold: callState.isOnHold,
+      duration: callState.duration,
+      hasError: !!callState.error,
+      errorMessage: callState.error?.message,
+      timestamp: new Date().toISOString(),
+    });
+  }, [callState]);
 
-    if (callState.status === 'connected' && options.onCallConnected) {
-      options.onCallConnected();
-    }
-
-    if (callState.status === 'disconnected' && options.onCallDisconnected) {
-      options.onCallDisconnected(callState.error || undefined);
-    }
-
-    if (options.onStatusChange) {
-      options.onStatusChange(callState.status);
-    }
-
-    if (callState.callInvite && options.onIncomingCall) {
-      options.onIncomingCall(callState.callInvite);
-    }
-
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, [
-    callState.status,
-    callState.error,
-    callState.callInvite,
-    options.onCallConnected,
-    options.onCallDisconnected,
-    options.onStatusChange,
-    options.onIncomingCall,
-  ]);
-
-  // Track call duration
   useEffect(() => {
-    if (callState.status === 'connected') {
-      // Start duration tracking
-      callStartTimeRef.current = Date.now();
-
-      durationIntervalRef.current = setInterval(() => {
-        if (callStartTimeRef.current) {
-          const duration = Math.floor(
-            (Date.now() - callStartTimeRef.current) / 1000
-          );
-          setCallDuration(duration);
-        }
-      }, 1000) as any;
-    } else {
-      // Stop duration tracking
-      if (durationIntervalRef.current) {
-        clearInterval(durationIntervalRef.current);
-        durationIntervalRef.current = null;
-      }
-
-      if (callState.status === 'disconnected') {
-        callStartTimeRef.current = null;
-        setCallDuration(0);
-      }
-    }
-
-    return () => {
-      if (durationIntervalRef.current) {
-        clearInterval(durationIntervalRef.current);
-      }
-    };
-  }, [callState.status]);
-
-  // Handle app state changes (background/foreground)
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      // If app goes to background during a call, keep the call active
-      if (
-        appStateRef.current.match(/active/) &&
-        nextAppState === 'background' &&
-        callState.status === 'connected'
-      ) {
-        logger.info(
-          '[useTwilioVoice] App backgrounded during call - call continues'
-        );
-      }
-
-      // If app returns to foreground during a call
-      if (
-        appStateRef.current === 'background' &&
-        nextAppState === 'active' &&
-        callState.status === 'connected'
-      ) {
-        logger.info(
-          '[useTwilioVoice] App foregrounded during call - call continues'
-        );
-      }
-
-      appStateRef.current = nextAppState;
+    const mountTime = Date.now();
+    mountTimeRef.current = mountTime;
+    logger.info('[useTwilioVoice] 🎬 Hook mounted', {
+      hasUser: !!user,
+      userId: user?.id,
+      profileLoading,
+      timestamp: new Date().toISOString(),
     });
 
     return () => {
-      subscription.remove();
+      logger.info('[useTwilioVoice] 🔚 Hook unmounting', {
+        hasUser: !!user,
+        userId: user?.id,
+        lifespan: `${Date.now() - mountTime}ms`,
+        timestamp: new Date().toISOString(),
+      });
     };
-  }, [callState.status]);
+  }, []);
 
-  // Sync error state
+  // ✅ FIX: Initialize + Auto-register (proper async handling)
   useEffect(() => {
-    if (callState.error) {
-      setError(callState.error);
-    }
-  }, [callState.error]);
+    const initStartTime = Date.now();
+    let mounted = true;
 
-  /**
-   * Make an outgoing call
-   */
+    logger.info('[useTwilioVoice] 🔧 Initialization effect triggered', {
+      hasUser: !!user,
+      userId: user?.id,
+      profileLoading,
+      isSdkInitialized: twilioVoiceService.isSdkInitialized(),
+      timestamp: new Date().toISOString(),
+    });
+
+    // ✅ IIFE (Immediately Invoked Function Expression)
+    (async () => {
+      try {
+        // Initialize SDK if not already initialized
+        const isSdkInitialized = twilioVoiceService.isSdkInitialized();
+        logger.debug('[useTwilioVoice] 🔍 Checking SDK initialization status', {
+          isSdkInitialized,
+          timestamp: new Date().toISOString(),
+        });
+
+        if (!isSdkInitialized) {
+          const initStartTime = Date.now();
+          logger.info('[useTwilioVoice] 🔧 Initializing Twilio Voice SDK...', {
+            timestamp: new Date().toISOString(),
+          });
+          await twilioVoiceService.initialize();
+          const initElapsed = Date.now() - initStartTime;
+          logger.info('[useTwilioVoice] ✅ Twilio Voice SDK initialized', {
+            elapsed: `${initElapsed}ms`,
+            timestamp: new Date().toISOString(),
+          });
+        } else {
+          logger.debug(
+            '[useTwilioVoice] ℹ️ SDK already initialized (skipping)',
+            {
+              timestamp: new Date().toISOString(),
+            }
+          );
+        }
+
+        if (mounted) {
+          logger.debug('[useTwilioVoice] 🔧 Setting isInitialized to true', {
+            timestamp: new Date().toISOString(),
+          });
+          setIsInitialized(true);
+          logger.info('[useTwilioVoice] ✅ Hook state: SDK initialized', {
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        // AUTO-REGISTER: Register with Twilio when user is authenticated
+        logger.debug('[useTwilioVoice] 🔍 Checking registration conditions', {
+          hasUser: !!user,
+          profileLoading,
+          mounted,
+          shouldRegister: !!(user && !profileLoading && mounted),
+          timestamp: new Date().toISOString(),
+        });
+
+        if (user && !profileLoading && mounted) {
+          try {
+            const registerStartTime = Date.now();
+            logger.info(
+              '[useTwilioVoice] 🔧 Auto-registering device for incoming calls',
+              {
+                userId: user.id,
+                userName: user.name,
+                timestamp: new Date().toISOString(),
+              }
+            );
+
+            await twilioVoiceService.register();
+
+            const registerElapsed = Date.now() - registerStartTime;
+            logger.info('[useTwilioVoice] ✅ Device registered successfully', {
+              userId: user.id,
+              elapsed: `${registerElapsed}ms`,
+              timestamp: new Date().toISOString(),
+            });
+          } catch (regError) {
+            logger.error(
+              '[useTwilioVoice] ❌ Auto-registration failed',
+              regError,
+              {
+                userId: user?.id,
+                errorMessage:
+                  regError instanceof Error
+                    ? regError.message
+                    : String(regError),
+                errorStack:
+                  regError instanceof Error ? regError.stack : undefined,
+                timestamp: new Date().toISOString(),
+              }
+            );
+            // Don't throw - registration failure shouldn't block UI
+          }
+        } else if (!user && !profileLoading) {
+          logger.info(
+            '[useTwilioVoice] ⏭️ No authenticated user, skipping auto-registration',
+            {
+              hasUser: !!user,
+              profileLoading,
+              timestamp: new Date().toISOString(),
+            }
+          );
+        } else {
+          logger.debug('[useTwilioVoice] ⏭️ Skipping registration', {
+            hasUser: !!user,
+            profileLoading,
+            mounted,
+            reason: !user
+              ? 'no user'
+              : profileLoading
+              ? 'profile loading'
+              : 'not mounted',
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        const totalElapsed = Date.now() - initStartTime;
+        logger.info('[useTwilioVoice] ✅ Initialization effect completed', {
+          totalElapsed: `${totalElapsed}ms`,
+          isInitialized: mounted ? true : false,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (err) {
+        const totalElapsed = Date.now() - initStartTime;
+        logger.error('[useTwilioVoice] ❌ Initialization failed', err, {
+          elapsed: `${totalElapsed}ms`,
+          errorMessage: err instanceof Error ? err.message : String(err),
+          errorStack: err instanceof Error ? err.stack : undefined,
+          timestamp: new Date().toISOString(),
+        });
+        if (mounted) {
+          logger.debug('[useTwilioVoice] 🔧 Setting error state', {
+            error: err instanceof Error ? err : new Error(String(err)),
+            timestamp: new Date().toISOString(),
+          });
+          setError(err instanceof Error ? err : new Error(String(err)));
+        }
+      }
+    })();
+
+    return () => {
+      logger.debug('[useTwilioVoice] 🔧 Cleaning up initialization effect', {
+        timestamp: new Date().toISOString(),
+      });
+      mounted = false;
+    };
+  }, [user, profileLoading]); // Re-register when user changes
+
   const makeCall = useCallback(
     async (
       professionalId: string,
       professionalUserId: string,
-      callType: 'voice' | 'video' = 'voice',
+      type: 'voice' | 'video' = 'voice',
       urgent: boolean = false,
       debugId?: string,
-      overrideUser?: NonNullable<typeof user> // Allow passing user from parent component
+      userOverride?: any
     ) => {
-      // Use overrideUser if provided, otherwise fall back to hook's user
-      const effectiveUser = overrideUser || user;
-
-      if (!effectiveUser) {
-        const error = new Error('User not authenticated');
-        setError(error);
-        logger.error(
-          '[useTwilioVoice] Cannot make call - user not authenticated',
-          undefined,
-          {
-            hasOverrideUser: !!overrideUser,
-            hasHookUser: !!user,
-          }
-        );
-        throw error;
-      }
-
-      // Allow starting a new call after a completed/disconnected call.
-      // Only block while a call is actively in progress.
-      if (
-        callState.status === 'connecting' ||
-        callState.status === 'ringing' ||
-        callState.status === 'connected' ||
-        callState.status === 'reconnecting'
-      ) {
-        const error = new Error('A call is already in progress');
-        setError(error);
-        logger.warn(
-          '[useTwilioVoice] Cannot make call - call already in progress'
-        );
-        throw error;
-      }
+      const makeCallStartTime = Date.now();
+      logger.info('[useTwilioVoice] 📞 makeCall function called', {
+        professionalId,
+        professionalUserId,
+        type,
+        urgent,
+        debugId,
+        hasUserOverride: !!userOverride,
+        timestamp: new Date().toISOString(),
+      });
 
       try {
-        setError(null);
-        logger.info('[useTwilioVoice] Making call...', {
+        const effectiveUser = userOverride || user;
+        logger.debug('[useTwilioVoice] 🔍 Determining effective user', {
+          hasUserOverride: !!userOverride,
+          hasUser: !!user,
+          effectiveUserId: effectiveUser?.id,
+          timestamp: new Date().toISOString(),
+        });
+
+        if (!effectiveUser) {
+          logger.error(
+            '[useTwilioVoice] ❌ User not authenticated',
+            undefined,
+            {
+              hasUserOverride: !!userOverride,
+              hasUser: !!user,
+              timestamp: new Date().toISOString(),
+            }
+          );
+          throw new Error('User not authenticated');
+        }
+
+        logger.debug('[useTwilioVoice] 🔍 Checking call state', {
+          currentStatus: callState.status,
+          isIdle: callState.status === 'idle',
+          timestamp: new Date().toISOString(),
+        });
+
+        if (callState.status !== 'idle') {
+          logger.warn('[useTwilioVoice] ⚠️ Cannot make call - not idle', {
+            currentStatus: callState.status,
+            hasCall: !!callState.call,
+            hasCallInvite: !!callState.callInvite,
+            timestamp: new Date().toISOString(),
+          });
+          throw new Error(
+            `Cannot make call - current status: ${callState.status}`
+          );
+        }
+
+        logger.info('[useTwilioVoice] 📞 Making call...', {
           debugId,
           professionalId,
           professionalUserId,
-          callType,
+          callerId: effectiveUser.id,
+          callType: type,
           urgent,
+          timestamp: new Date().toISOString(),
         });
 
+        const serviceCallStartTime = Date.now();
         await twilioVoiceService.makeCall({
           professionalId,
           professionalUserId,
           callerId: effectiveUser.id,
-          type: callType,
+          type,
           urgent,
           debugId,
         });
 
-        logger.info('[useTwilioVoice] Call initiated successfully');
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err));
-        setError(error);
-        logger.error('[useTwilioVoice] Make call error:', error);
+        const serviceCallElapsed = Date.now() - serviceCallStartTime;
+        const totalElapsed = Date.now() - makeCallStartTime;
+        logger.info('[useTwilioVoice] ✅ Call initiated successfully', {
+          debugId,
+          professionalId,
+          professionalUserId,
+          serviceElapsed: `${serviceCallElapsed}ms`,
+          totalElapsed: `${totalElapsed}ms`,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        const totalElapsed = Date.now() - makeCallStartTime;
+        logger.error('[useTwilioVoice] ❌ Make call error', error, {
+          debugId,
+          professionalId,
+          professionalUserId,
+          elapsed: `${totalElapsed}ms`,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
+          timestamp: new Date().toISOString(),
+        });
         throw error;
       }
     },
-    [user, callState.status]
+    [callState.status, user]
   );
 
-  /**
-   * Accept incoming call invite
-   */
   const acceptIncomingCall = useCallback(
-    async (callId?: string, debugId?: string) => {
+    async (callId: string, debugId?: string) => {
+      const acceptStartTime = Date.now();
+      logger.info('[useTwilioVoice] 📞 acceptIncomingCall function called', {
+        debugId,
+        callId,
+        currentStatus: callState.status,
+        hasCallInvite: !!callState.callInvite,
+        timestamp: new Date().toISOString(),
+      });
+
       try {
-        setError(null);
-        logger.info('[useTwilioVoice] Accepting incoming call...', {
+        logger.info('[useTwilioVoice] 📞 Accepting incoming call...', {
           debugId,
           callId,
+          currentStatus: callState.status,
+          hasCallInvite: !!callState.callInvite,
+          timestamp: new Date().toISOString(),
         });
-        await twilioVoiceService.acceptIncomingCall({ callId, debugId });
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err));
-        setError(error);
-        logger.error('[useTwilioVoice] Accept incoming call error:', error);
+
+        const serviceAcceptStartTime = Date.now();
+        await twilioVoiceService.acceptIncomingCall({
+          callId,
+          debugId,
+        });
+
+        const serviceAcceptElapsed = Date.now() - serviceAcceptStartTime;
+        const totalElapsed = Date.now() - acceptStartTime;
+        logger.info('[useTwilioVoice] ✅ Incoming call accepted successfully', {
+          debugId,
+          callId,
+          serviceElapsed: `${serviceAcceptElapsed}ms`,
+          totalElapsed: `${totalElapsed}ms`,
+          newStatus: callState.status,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        const totalElapsed = Date.now() - acceptStartTime;
+        logger.error('[useTwilioVoice] ❌ Accept call error', error, {
+          debugId,
+          callId,
+          elapsed: `${totalElapsed}ms`,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
+          currentStatus: callState.status,
+          timestamp: new Date().toISOString(),
+        });
         throw error;
       }
     },
-    []
+    [callState.status, callState.callInvite]
   );
 
-  /**
-   * Reject incoming call invite
-   */
   const rejectIncomingCall = useCallback(
-    async (callId?: string, debugId?: string) => {
+    async (callId: string, debugId?: string) => {
+      const rejectStartTime = Date.now();
+      logger.info('[useTwilioVoice] 📞 rejectIncomingCall function called', {
+        debugId,
+        callId,
+        currentStatus: callState.status,
+        hasCallInvite: !!callState.callInvite,
+        timestamp: new Date().toISOString(),
+      });
+
       try {
-        setError(null);
-        logger.info('[useTwilioVoice] Rejecting incoming call...', {
+        logger.info('[useTwilioVoice] 📞 Rejecting incoming call...', {
           debugId,
           callId,
+          currentStatus: callState.status,
+          hasCallInvite: !!callState.callInvite,
+          timestamp: new Date().toISOString(),
         });
-        await twilioVoiceService.rejectIncomingCall({ callId, debugId });
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err));
-        setError(error);
-        logger.error('[useTwilioVoice] Reject incoming call error:', error);
+
+        const serviceRejectStartTime = Date.now();
+        await twilioVoiceService.rejectIncomingCall({
+          callId,
+          debugId,
+        });
+
+        const serviceRejectElapsed = Date.now() - serviceRejectStartTime;
+        const totalElapsed = Date.now() - rejectStartTime;
+        logger.info('[useTwilioVoice] ✅ Incoming call rejected successfully', {
+          debugId,
+          callId,
+          serviceElapsed: `${serviceRejectElapsed}ms`,
+          totalElapsed: `${totalElapsed}ms`,
+          newStatus: callState.status,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        const totalElapsed = Date.now() - rejectStartTime;
+        logger.error('[useTwilioVoice] ❌ Reject call error', error, {
+          debugId,
+          callId,
+          elapsed: `${totalElapsed}ms`,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
+          currentStatus: callState.status,
+          timestamp: new Date().toISOString(),
+        });
         throw error;
       }
     },
-    []
+    [callState.status, callState.callInvite]
   );
 
-  /**
-   * Disconnect active call
-   */
   const disconnect = useCallback(async () => {
-    try {
-      setError(null);
-      logger.info('[useTwilioVoice] Disconnecting call...');
+    const disconnectStartTime = Date.now();
+    logger.info('[useTwilioVoice] 📞 disconnect function called', {
+      currentStatus: callState.status,
+      hasCall: !!callState.call,
+      hasCallInvite: !!callState.callInvite,
+      timestamp: new Date().toISOString(),
+    });
 
+    try {
+      logger.info('[useTwilioVoice] 📞 Disconnecting call...', {
+        currentStatus: callState.status,
+        hasCall: !!callState.call,
+        callSid:
+          (callState.call as any)?.callSid ?? (callState.call as any)?.sid,
+        timestamp: new Date().toISOString(),
+      });
+
+      const serviceDisconnectStartTime = Date.now();
       await twilioVoiceService.disconnect();
+      const serviceDisconnectElapsed = Date.now() - serviceDisconnectStartTime;
 
-      logger.info('[useTwilioVoice] Call disconnected successfully');
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
-      logger.error('[useTwilioVoice] Disconnect error:', error);
+      const totalElapsed = Date.now() - disconnectStartTime;
+      logger.info('[useTwilioVoice] ✅ Call disconnected successfully', {
+        serviceElapsed: `${serviceDisconnectElapsed}ms`,
+        totalElapsed: `${totalElapsed}ms`,
+        previousStatus: callState.status,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      const totalElapsed = Date.now() - disconnectStartTime;
+      logger.error('[useTwilioVoice] ❌ Disconnect error', error, {
+        elapsed: `${totalElapsed}ms`,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        currentStatus: callState.status,
+        timestamp: new Date().toISOString(),
+      });
       throw error;
     }
-  }, []);
+  }, [callState.status, callState.call, callState.callInvite]);
 
-  /**
-   * Toggle mute
-   */
   const toggleMute = useCallback(async () => {
+    const toggleStartTime = Date.now();
+    const currentMuteState = callState.isMuted;
+    logger.info('[useTwilioVoice] 📞 toggleMute function called', {
+      currentMuteState,
+      timestamp: new Date().toISOString(),
+    });
+
     try {
-      setError(null);
-      logger.info('[useTwilioVoice] Toggling mute...');
-
-      const newMuteState = await twilioVoiceService.toggleMute();
-
-      logger.info('[useTwilioVoice] Mute toggled:', newMuteState);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
-      logger.error('[useTwilioVoice] Toggle mute error:', error);
-      throw error;
-    }
-  }, []);
-
-  /**
-   * Toggle hold
-   */
-  const toggleHold = useCallback(async () => {
-    try {
-      setError(null);
-      logger.info('[useTwilioVoice] Toggling hold...');
-
-      const newHoldState = await twilioVoiceService.toggleHold();
-
-      logger.info('[useTwilioVoice] Hold toggled:', newHoldState);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
-      logger.error('[useTwilioVoice] Toggle hold error:', error);
-      throw error;
-    }
-  }, []);
-
-  /**
-   * Send DTMF digits
-   */
-  const sendDigits = useCallback(async (digits: string) => {
-    try {
-      setError(null);
-      logger.info('[useTwilioVoice] Sending digits:', digits);
-
-      await twilioVoiceService.sendDigits(digits);
-
-      logger.info('[useTwilioVoice] Digits sent successfully');
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
-      logger.error('[useTwilioVoice] Send digits error:', error);
-      throw error;
-    }
-  }, []);
-
-  /**
-   * Clear error
-   */
-  const clearError = useCallback(() => {
-    setError(null);
-  }, []);
-
-  // Auto-connect on mount if enabled
-  useEffect(() => {
-    if (options.autoConnect && user && callState.status === 'idle') {
-      // This would be for auto-answering incoming calls
-      // For now, we'll skip this as it's not common UX
-      logger.info(
-        '[useTwilioVoice] Auto-connect is enabled but not implemented for outgoing calls'
+      logger.debug(
+        '[useTwilioVoice] 🔧 Calling twilioVoiceService.toggleMute',
+        {
+          currentMuteState,
+          timestamp: new Date().toISOString(),
+        }
       );
-    }
-  }, [options.autoConnect, user, callState.status]);
 
-  // Computed states
-  const isInitialized = twilioVoiceService.isSdkInitialized();
-  const isConnected = callState.status === 'connected';
-  const isConnecting =
-    callState.status === 'connecting' || callState.status === 'ringing';
-  const isIdle =
-    callState.status === 'idle' || callState.status === 'disconnected';
+      const serviceToggleStartTime = Date.now();
+      const newMuteState = await twilioVoiceService.toggleMute();
+      const serviceToggleElapsed = Date.now() - serviceToggleStartTime;
+
+      const totalElapsed = Date.now() - toggleStartTime;
+      logger.info('[useTwilioVoice] ✅ Mute toggled successfully', {
+        previousMuteState: currentMuteState,
+        newMuteState,
+        serviceElapsed: `${serviceToggleElapsed}ms`,
+        totalElapsed: `${totalElapsed}ms`,
+        timestamp: new Date().toISOString(),
+      });
+      return newMuteState;
+    } catch (error) {
+      const totalElapsed = Date.now() - toggleStartTime;
+      logger.error('[useTwilioVoice] ❌ Toggle mute error', error, {
+        currentMuteState,
+        elapsed: `${totalElapsed}ms`,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString(),
+      });
+      throw error;
+    }
+  }, [callState.isMuted]);
+
+  // Log computed values changes
+  useEffect(() => {
+    logger.debug('[useTwilioVoice] 📊 Computed state values', {
+      isIdle: callState.status === 'idle',
+      isConnecting: callState.status === 'connecting',
+      isRinging: callState.status === 'ringing',
+      isConnected: callState.status === 'connected',
+      isReconnecting: callState.status === 'reconnecting',
+      isDisconnected: callState.status === 'disconnected',
+      status: callState.status,
+      timestamp: new Date().toISOString(),
+    });
+  }, [callState.status]);
+
+  // Log initialization state changes
+  useEffect(() => {
+    logger.debug('[useTwilioVoice] 🔧 Initialization state changed', {
+      isInitialized,
+      timestamp: new Date().toISOString(),
+    });
+  }, [isInitialized]);
+
+  // Log error state changes
+  useEffect(() => {
+    if (error) {
+      logger.error('[useTwilioVoice] ❌ Error state set', error, {
+        errorMessage: error.message,
+        errorName: error.name,
+        errorStack: error.stack,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }, [error]);
+
+  logger.debug('[useTwilioVoice] 🎨 Returning hook values', {
+    hasCallState: !!callState,
+    isInitialized,
+    hasError: !!error,
+    computedStates: {
+      isIdle: callState.status === 'idle',
+      isConnecting: callState.status === 'connecting',
+      isRinging: callState.status === 'ringing',
+      isConnected: callState.status === 'connected',
+    },
+    timestamp: new Date().toISOString(),
+  });
 
   return {
     // State
     callState,
     isInitialized,
-    isConnected,
-    isConnecting,
-    isIdle,
-    callDuration,
+    error,
 
-    // Actions
+    // Computed
+    isIdle: callState.status === 'idle',
+    isConnecting: callState.status === 'connecting',
+    isRinging: callState.status === 'ringing',
+    isConnected: callState.status === 'connected',
+    isReconnecting: callState.status === 'reconnecting',
+    isDisconnected: callState.status === 'disconnected',
+
+    // Methods
     makeCall,
     acceptIncomingCall,
     rejectIncomingCall,
     disconnect,
     toggleMute,
-    toggleHold,
-    sendDigits,
-
-    // Error
-    error,
-    clearError,
   };
-}
-
-/**
- * Format call duration as MM:SS or HH:MM:SS
- */
-export function formatCallDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-
-  if (hours > 0) {
-    return `${hours.toString().padStart(2, '0')}:${minutes
-      .toString()
-      .padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-
-  return `${minutes.toString().padStart(2, '0')}:${secs
-    .toString()
-    .padStart(2, '0')}`;
 }

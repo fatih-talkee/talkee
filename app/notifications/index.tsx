@@ -55,7 +55,6 @@ export default function NotificationsScreen() {
   useEffect(() => {
     logger.info('[Notifications] 🔔 Notifications screen mounted', {
       timestamp: new Date().toISOString(),
-      stackTrace: new Error().stack,
     });
   }, []);
 

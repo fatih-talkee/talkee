@@ -16,7 +16,13 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
 
+// ❌ KALDIRILDI - import net.talkee.app.AudioManagerPackage
+
+import com.twiliovoicereactnative.VoiceApplicationProxy
+
 class MainApplication : Application(), ReactApplication {
+
+  private val voiceApplicationProxy = VoiceApplicationProxy(this)
 
   override val reactNativeHost: ReactNativeHost = ReactNativeHostWrapper(
       this,
@@ -25,13 +31,15 @@ class MainApplication : Application(), ReactApplication {
             PackageList(this).packages.apply {
               // Packages that cannot be autolinked yet can be added manually here, for example:
               // add(MyReactNativePackage())
+              
+              // ❌ KALDIRILDI - add(AudioManagerPackage())
             }
 
-          override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
+        override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
 
-          override fun getUseDeveloperSupport(): Boolean = BuildConfig.DEBUG
+        override fun getUseDeveloperSupport(): Boolean = BuildConfig.DEBUG
 
-          override val isNewArchEnabled: Boolean = BuildConfig.IS_NEW_ARCHITECTURE_ENABLED
+        override val isNewArchEnabled: Boolean = BuildConfig.IS_NEW_ARCHITECTURE_ENABLED
       }
   )
 
@@ -40,6 +48,9 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    // Initialize Twilio Voice SDK before React Native
+    voiceApplicationProxy.onCreate()
+    
     DefaultNewArchitectureEntryPoint.releaseLevel = try {
       ReleaseLevel.valueOf(BuildConfig.REACT_NATIVE_RELEASE_LEVEL.uppercase())
     } catch (e: IllegalArgumentException) {
@@ -52,5 +63,10 @@ class MainApplication : Application(), ReactApplication {
   override fun onConfigurationChanged(newConfig: Configuration) {
     super.onConfigurationChanged(newConfig)
     ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig)
+  }
+
+  override fun onTerminate() {
+    voiceApplicationProxy.onTerminate()
+    super.onTerminate()
   }
 }

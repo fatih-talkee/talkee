@@ -11,6 +11,7 @@ import {
   Pressable,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
@@ -46,6 +47,7 @@ interface SettingsItem {
 export default function ProfessionalSettingsScreen() {
   const router = useRouter();
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const { profileData } = useProfile();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -211,7 +213,10 @@ export default function ProfessionalSettingsScreen() {
       <Header showLogo showBack onBackPress={() => router.push('/(tabs)')} />
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: 24 + Math.max(insets.bottom, 0) + 100 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
@@ -478,7 +483,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 24,
-    paddingBottom: 40,
   },
   header: {
     marginBottom: 32,

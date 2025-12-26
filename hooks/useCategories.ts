@@ -42,7 +42,38 @@ export function usePopularCategories(
       });
       const startTime = Date.now();
       try {
-        const result = await categoriesService.getPopularCategories(limit);
+        // Add additional timeout wrapper for React Query
+        const queryPromise = categoriesService.getPopularCategories(limit);
+        let queryTimeoutId: ReturnType<typeof setTimeout> | null = null;
+        const queryTimeout = new Promise((_, reject) => {
+          queryTimeoutId = setTimeout(() => {
+            const timeoutElapsed = Date.now() - startTime;
+            const timeoutError = new Error(
+              'Popular categories query timeout in hook'
+            );
+            logger.error(
+              '[usePopularCategories] ⏱️ Query TIMEOUT in React Query hook',
+              timeoutError,
+              {
+                elapsedTime: `${timeoutElapsed}ms`,
+                timeoutLimit: '25000ms',
+                timestamp: new Date().toISOString(),
+              }
+            );
+            reject(timeoutError);
+          }, 25000);
+        });
+
+        const result = (await Promise.race([
+          queryPromise,
+          queryTimeout,
+        ])) as any;
+
+        // Clear timeout if query succeeded
+        if (queryTimeoutId) {
+          clearTimeout(queryTimeoutId);
+        }
+
         const duration = Date.now() - startTime;
         logger.info('[usePopularCategories] ✅ Fetch completed', {
           duration: `${duration}ms`,
@@ -51,6 +82,11 @@ export function usePopularCategories(
         });
         return result;
       } catch (error: any) {
+        // Clear timeout on error too
+        if (queryTimeoutId) {
+          clearTimeout(queryTimeoutId);
+        }
+
         const duration = Date.now() - startTime;
         logger.error('[usePopularCategories] ❌ Fetch failed', {
           error: error?.message || String(error),
@@ -63,6 +99,8 @@ export function usePopularCategories(
     ...CACHE_CONFIG.CATEGORIES,
     // Force refetch on mount to ensure fresh data
     refetchOnMount: true,
+    retry: 1, // Only retry once on failure
+    retryDelay: 1000, // Wait 1 second before retry
   });
 }
 
