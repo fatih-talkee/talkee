@@ -1,12 +1,9 @@
 // hooks/useCalls.ts
 // React Query hooks for call management
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { callsService } from '@/services';
 import type { Call } from '@/types';
-import { CACHE_CONFIG } from '@/lib/cacheConfig';
-import { handleError } from '@/lib/errorHandler';
-import { logger } from '@/lib/logger';
 
 export interface CallFilters {
   status?: Call['status'];
@@ -15,19 +12,12 @@ export interface CallFilters {
   endDate?: Date;
   professionalId?: string;
 }
-
-// Query Keys Factory Pattern
-export const callsKeys = {
-  all: ['calls'] as const,
-  lists: () => [...callsKeys.all, 'list'] as const,
-  history: (filters?: CallFilters, limit?: number, offset?: number) =>
-    [...callsKeys.lists(), 'history', filters, limit, offset] as const,
-  details: () => [...callsKeys.all, 'detail'] as const,
-  detail: (callId: string) => [...callsKeys.details(), callId] as const,
-};
+import { handleError } from '@/lib/errorHandler';
+import { CallFilters as CallFiltersType } from '@/types/database.types';
 
 /**
  * Get call history for current user
+ * Used in: Call History Screen
  */
 export function useCallHistory(
   filters?: CallFilters,
@@ -35,15 +25,17 @@ export function useCallHistory(
   offset: number = 0
 ) {
   return useQuery({
-    queryKey: callsKeys.history(filters, limit, offset),
+    queryKey: [
+      'calls',
+      'history',
+      filters as unknown as CallFiltersType,
+      limit,
+      offset,
+    ],
     queryFn: async () => {
       try {
-        // Best-effort: clean up old calls that got stuck in "pending".
-        // Keeps "All Calls" from showing stale pending entries.
-        void callsService.cleanupStalePendingCalls(1);
-
         const history = await callsService.getCallHistory(
-          filters,
+          filters as unknown as CallFiltersType,
           limit,
           offset
         );
@@ -53,16 +45,18 @@ export function useCallHistory(
         throw error;
       }
     },
-    ...CACHE_CONFIG.CALLS_HISTORY,
+    staleTime: 1000 * 60 * 2, // 2 minutes
+    gcTime: 1000 * 60 * 10, // 10 minutes
   });
 }
 
 /**
  * Get a single call by ID
+ * Reserved for future use (call details screen)
  */
 export function useCall(callId: string) {
   return useQuery({
-    queryKey: callsKeys.detail(callId),
+    queryKey: ['calls', callId],
     queryFn: async () => {
       try {
         const call = await callsService.getCall(callId);
@@ -73,97 +67,6 @@ export function useCall(callId: string) {
       }
     },
     enabled: !!callId,
-    ...CACHE_CONFIG.CALL_DETAIL,
-  });
-}
-
-/**
- * Start a call (when both parties connect)
- */
-export function useStartCall() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (callId: string) => {
-      try {
-        const call = await callsService.startCall(callId);
-        return call;
-      } catch (error) {
-        handleError(error, { title: 'Failed to start call' });
-        throw error;
-      }
-    },
-    onSuccess: (data) => {
-      if (data) {
-        // Update call in cache
-        queryClient.setQueryData(callsKeys.detail(data.id), data);
-        // Invalidate call history
-        queryClient.invalidateQueries({ queryKey: callsKeys.lists() });
-      }
-    },
-    onError: (error) => {
-      handleError(error, { title: 'Failed to start call' });
-    },
-  });
-}
-
-/**
- * End a call
- */
-export function useEndCall() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (callId: string) => {
-      try {
-        const call = await callsService.endCall(callId);
-        return call;
-      } catch (error) {
-        handleError(error, { title: 'Failed to end call' });
-        throw error;
-      }
-    },
-    onSuccess: (data) => {
-      if (data) {
-        // Update call in cache
-        queryClient.setQueryData(callsKeys.detail(data.id), data);
-        // Invalidate call history
-        queryClient.invalidateQueries({ queryKey: callsKeys.lists() });
-      }
-    },
-    onError: (error) => {
-      handleError(error, { title: 'Failed to end call' });
-    },
-  });
-}
-
-/**
- * Block/unblock user from call (for call history)
- * Note: This is different from useBlockUser in useBlockedUsers.ts
- * This one is specifically for blocking users from call history
- */
-export function useBlockUserFromCall() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      userId,
-      isBlocked,
-    }: {
-      userId: string;
-      isBlocked: boolean;
-    }) => {
-      // TODO: Implement block user service method
-      // For now, this is handled locally in the component
-      logger.info('Block user mutation called', { userId, isBlocked });
-      return { userId, isBlocked };
-    },
-    onSuccess: () => {
-      // Invalidate call history to refresh
-      queryClient.invalidateQueries({ queryKey: callsKeys.lists() });
-    },
-    onError: (error) => {
-      handleError(error, { title: 'Failed to update block status' });
-    },
+    staleTime: 1000 * 60 * 5, // 5 minutes
   });
 }

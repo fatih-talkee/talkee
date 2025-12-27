@@ -1,11 +1,11 @@
 import { Voice, Call, CallInvite } from '@twilio/voice-react-native-sdk';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
-import { PermissionsAndroid, Platform } from 'react-native';
+import { PermissionsAndroid, Platform, AppState } from 'react-native';
 import { callsService } from '@/services/calls.service';
-import { notificationsService } from '@/services/notifications.service';
 import { usersService } from '@/services/supabase/user.service';
 import { CallStatus as DbCallStatus } from '@/types/database.types';
+import BillingService from '@/services/billingService';
 
 export type CallStatus =
   | 'idle'
@@ -30,6 +30,11 @@ class TwilioVoiceService {
   private activeCall: Call | null = null;
   private accessToken: string | null = null;
   private listeners: Map<string, Set<(state: CallState) => void>> = new Map();
+  private durationInterval: ReturnType<typeof setInterval> | null = null;
+  private perMinuteInterval: ReturnType<typeof setInterval> | null = null;
+  private currentDbCallId: string | null = null;
+  private lastChargedMinute: number = 0;
+  private appStateSubscription: any = null;
 
   private state: CallState = {
     status: 'idle',
@@ -70,6 +75,9 @@ class TwilioVoiceService {
       this.setupVoiceListeners();
       const listenersElapsed = Date.now() - listenersStartTime;
 
+      // ✅ NEW: Setup AppState listener for background handling
+      this.setupAppStateListener();
+
       const totalElapsed = Date.now() - initStartTime;
       logger.info('[TwilioVoice] ✅ Initialized successfully', {
         voiceCreateElapsed: `${voiceCreateElapsed}ms`,
@@ -87,6 +95,52 @@ class TwilioVoiceService {
       });
       throw error;
     }
+  }
+
+  // ✅ NEW: Setup AppState listener
+  private setupAppStateListener(): void {
+    logger.info('[TwilioVoice] 🔧 Setting up AppState listener', {
+      timestamp: new Date().toISOString(),
+    });
+
+    this.appStateSubscription = AppState.addEventListener(
+      'change',
+      (nextState) => {
+        logger.debug('[TwilioVoice] 📱 AppState changed', {
+          nextState,
+          currentStatus: this.state.status,
+          timestamp: new Date().toISOString(),
+        });
+
+        if (nextState === 'background') {
+          // ✅ FIX: Only disconnect if call is actively connecting (outgoing)
+          // Don't disconnect ringing calls (incoming) - user might be reviewing the modal
+          const isOutgoingConnecting = this.state.status === 'connecting';
+
+          logger.info('[TwilioVoice] 📱 App moved to background', {
+            status: this.state.status,
+            isOutgoingConnecting,
+            timestamp: new Date().toISOString(),
+          });
+
+          if (isOutgoingConnecting) {
+            logger.warn(
+              '[TwilioVoice] ⚠️ Ending outgoing call - app moved to background during connection',
+              {
+                status: this.state.status,
+                timestamp: new Date().toISOString(),
+              }
+            );
+
+            void this.disconnect();
+          }
+        }
+      }
+    );
+
+    logger.info('[TwilioVoice] ✅ AppState listener registered', {
+      timestamp: new Date().toISOString(),
+    });
   }
 
   isSdkInitialized(): boolean {
@@ -136,12 +190,16 @@ class TwilioVoiceService {
       });
 
       if (!data?.token) {
-        logger.error('[TwilioVoice] ❌ No token received from server', undefined, {
-          hasData: !!data,
-          dataKeys: data ? Object.keys(data) : [],
-          elapsed: `${invokeElapsed}ms`,
-          timestamp: new Date().toISOString(),
-        });
+        logger.error(
+          '[TwilioVoice] ❌ No token received from server',
+          undefined,
+          {
+            hasData: !!data,
+            dataKeys: data ? Object.keys(data) : [],
+            elapsed: `${invokeElapsed}ms`,
+            timestamp: new Date().toISOString(),
+          }
+        );
         throw new Error('No token received from server');
       }
 
@@ -156,15 +214,6 @@ class TwilioVoiceService {
         totalElapsed: `${totalElapsed}ms`,
         timestamp: new Date().toISOString(),
       });
-
-      if (__DEV__) {
-        logger.debug('[TwilioVoice] 🔍 [DEBUG] Token details', {
-          tokenLength: data.token.length,
-          identity: data.identity,
-          expiresAt: data.expiresAt,
-          tokenPrefix: data.token.substring(0, 20) + '...',
-        });
-      }
 
       return data.token;
     } catch (error) {
@@ -237,9 +286,12 @@ class TwilioVoiceService {
 
     try {
       if (!this.voice) {
-        logger.debug('[TwilioVoice] ⏭️ No voice instance, skipping unregister', {
-          timestamp: new Date().toISOString(),
-        });
+        logger.debug(
+          '[TwilioVoice] ⏭️ No voice instance, skipping unregister',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
         return;
       }
 
@@ -284,6 +336,8 @@ class TwilioVoiceService {
     type?: 'voice' | 'video';
     urgent?: boolean;
     debugId?: string;
+    ratePerMinute?: number;
+    userBalance?: number;
   }): Promise<Call> {
     const makeCallStartTime = Date.now();
     let createdCallId: string | null = null;
@@ -295,6 +349,8 @@ class TwilioVoiceService {
       callerId: params.callerId,
       type: params.type || 'voice',
       urgent: params.urgent || false,
+      ratePerMinute: params.ratePerMinute,
+      userBalance: params.userBalance,
       hasVoice: !!this.voice,
       hasAccessToken: !!this.accessToken,
       currentStatus: this.state.status,
@@ -356,14 +412,21 @@ class TwilioVoiceService {
       const callRecordElapsed = Date.now() - callRecordStartTime;
 
       if (!callRecord) {
-        logger.error('[TwilioVoice] ❌ Failed to create call record', undefined, {
-          debugId: params.debugId,
-          elapsed: `${callRecordElapsed}ms`,
-          timestamp: new Date().toISOString(),
-        });
+        logger.error(
+          '[TwilioVoice] ❌ Failed to create call record',
+          undefined,
+          {
+            debugId: params.debugId,
+            elapsed: `${callRecordElapsed}ms`,
+            timestamp: new Date().toISOString(),
+          }
+        );
         throw new Error('Failed to create call record');
       }
       createdCallId = callRecord.id;
+
+      // ✅ NEW: Store DB call ID for per-minute billing
+      this.currentDbCallId = callRecord.id;
 
       logger.info('[TwilioVoice] ✅ Call record created', {
         debugId: params.debugId,
@@ -374,87 +437,34 @@ class TwilioVoiceService {
         timestamp: new Date().toISOString(),
       });
 
-      // ✅ ENHANCED: Send push notification with comprehensive logging
-      try {
-        logger.info('[TwilioVoice] 🔔 Preparing to send push notification', {
+      // ✅ IncomingCallHandler will show custom modal automatically
+      // When voice.connect() is called, Twilio SDK triggers Voice.Event.CallInvite on receiver's device
+      // This event is caught by setupVoiceListeners() which updates callState.callInvite
+      // IncomingCallHandler listens to callState via useTwilioVoice() and shows modal when callInvite exists
+      // Modal displays: caller avatar, name, rate per minute, Accept/Decline buttons
+      // When user clicks Accept, modal closes immediately and acceptIncomingCall() is called
+      // This bypasses Twilio's native invitation screen and opens the active call screen directly
+      logger.info(
+        '[TwilioVoice] ✅ Call initiated - IncomingCallHandler will show custom modal',
+        {
           debugId: params.debugId,
           callId: callRecord.id,
           professionalUserId: params.professionalUserId,
+          note: 'No push notification needed - modal triggered by Voice.Event.CallInvite',
           timestamp: new Date().toISOString(),
-        });
-
-        // Get caller info
-        const currentUser = await usersService.getCurrentUser();
-        logger.info('[TwilioVoice] 👤 Caller info retrieved', {
-          debugId: params.debugId,
-          callerName: currentUser?.name,
-          callerId: currentUser?.id,
-          hasAvatar: !!currentUser?.avatar_url,
-        });
-
-        const callerName = currentUser?.name || 'Someone';
-        const callerAvatar = currentUser?.avatar_url || null;
-
-        logger.info('[TwilioVoice] 📤 Calling sendPushNotification...', {
-          debugId: params.debugId,
-          targetUserId: params.professionalUserId,
-          title: '📞 Incoming Call',
-          body: `${callerName} is calling you`,
-        });
-
-        const pushResult = await notificationsService.sendPushNotification(
-          params.professionalUserId, // Callee's user ID
-          '📞 Incoming Call',
-          `${callerName} is calling you`,
-          {
-            type: 'incoming_call',
-            call_id: callRecord.id,
-            caller_id: params.callerId,
-            caller_name: callerName,
-            caller_avatar: callerAvatar,
-            call_type: params.type || 'voice',
-            urgent: params.urgent || false,
-            sent_at: new Date().toISOString(),
-          },
-          'talkee-default-v2' // Android notification channel
-        );
-
-        logger.info('[TwilioVoice] ✅ Push notification result', {
-          debugId: params.debugId,
-          callId: callRecord.id,
-          success: pushResult,
-          timestamp: new Date().toISOString(),
-        });
-
-        if (!pushResult) {
-          logger.warn('[TwilioVoice] ⚠️ Push notification failed', {
-            debugId: params.debugId,
-            callId: callRecord.id,
-            professionalUserId: params.professionalUserId,
-            reason: 'sendPushNotification returned false',
-          });
-        } else {
-          logger.info('[TwilioVoice] ✅ Push notification sent successfully', {
-            debugId: params.debugId,
-            callId: callRecord.id,
-          });
         }
-      } catch (pushError) {
-        logger.error('[TwilioVoice] ❌ Push notification error', pushError, {
-          debugId: params.debugId,
-          callId: callRecord.id,
-          errorMessage:
-            pushError instanceof Error ? pushError.message : String(pushError),
-          errorStack: pushError instanceof Error ? pushError.stack : undefined,
-        });
-      }
+      );
 
       if (!this.voice) {
-        logger.error('[TwilioVoice] ❌ Voice SDK was cleaned up before call could be made', undefined, {
-          debugId: params.debugId,
-          callId: callRecord.id,
-          timestamp: new Date().toISOString(),
-        });
+        logger.error(
+          '[TwilioVoice] ❌ Voice SDK was cleaned up before call could be made',
+          undefined,
+          {
+            debugId: params.debugId,
+            callId: callRecord.id,
+            timestamp: new Date().toISOString(),
+          }
+        );
         throw new Error('Voice SDK was cleaned up before call could be made');
       }
 
@@ -496,13 +506,6 @@ class TwilioVoiceService {
         callState: (call as any)?.getState?.(),
         connectElapsed: `${connectElapsed}ms`,
         timestamp: new Date().toISOString(),
-      });
-
-      logger.info('[TwilioVoice] voice.connect returned call object', {
-        debugId: params.debugId,
-        callId: callRecord.id,
-        callState: (call as any)?.getState?.(),
-        timestamp: Date.now(),
       });
 
       try {
@@ -584,15 +587,13 @@ class TwilioVoiceService {
       });
 
       this.activeCall = call;
-      this.setupCallListeners(call, callRecord.id, params.debugId);
-
-      // ✅ FIX: Defer state update to avoid React hooks violation
-      logger.debug('[TwilioVoice] ⏱️ Deferring state update to avoid React hooks violation', {
-        debugId: params.debugId,
-        callId: callRecord.id,
-        newStatus: 'connecting',
-        timestamp: new Date().toISOString(),
-      });
+      this.setupCallListeners(
+        call,
+        callRecord.id,
+        params.debugId,
+        params.ratePerMinute || Number(callRecord.rate_per_minute),
+        params.userBalance
+      );
 
       setTimeout(() => {
         this.updateState({ status: 'connecting', call });
@@ -650,9 +651,6 @@ class TwilioVoiceService {
           });
       }
 
-      const err = error instanceof Error ? error : new Error(String(error));
-
-      // ✅ FIX: Reset to idle on error
       logger.debug('[TwilioVoice] 🔄 Resetting state to idle due to error', {
         debugId: params.debugId,
         timestamp: new Date().toISOString(),
@@ -730,11 +728,15 @@ class TwilioVoiceService {
     });
 
     if (result !== PermissionsAndroid.RESULTS.GRANTED) {
-      logger.error('[TwilioVoice] ❌ Microphone permission not granted', undefined, {
-        debugId,
-        result,
-        timestamp: new Date().toISOString(),
-      });
+      logger.error(
+        '[TwilioVoice] ❌ Microphone permission not granted',
+        undefined,
+        {
+          debugId,
+          result,
+          timestamp: new Date().toISOString(),
+        }
+      );
       throw new Error('Microphone permission not granted');
     }
 
@@ -747,11 +749,15 @@ class TwilioVoiceService {
   async acceptIncomingCall(params?: {
     callId?: string;
     debugId?: string;
+    ratePerMinute?: number;
+    userBalance?: number;
   }): Promise<Call> {
     const acceptStartTime = Date.now();
     logger.info('[TwilioVoice] 📞 acceptIncomingCall function called', {
       debugId: params?.debugId,
       callId: params?.callId,
+      ratePerMinute: params?.ratePerMinute,
+      userBalance: params?.userBalance,
       hasVoice: !!this.voice,
       hasCallInvite: !!this.state.callInvite,
       currentStatus: this.state.status,
@@ -768,11 +774,15 @@ class TwilioVoiceService {
 
     const callInvite = this.state.callInvite;
     if (!callInvite) {
-      logger.error('[TwilioVoice] ❌ No incoming call invite to accept', undefined, {
-        debugId: params?.debugId,
-        callId: params?.callId,
-        timestamp: new Date().toISOString(),
-      });
+      logger.error(
+        '[TwilioVoice] ❌ No incoming call invite to accept',
+        undefined,
+        {
+          debugId: params?.debugId,
+          callId: params?.callId,
+          timestamp: new Date().toISOString(),
+        }
+      );
       throw new Error('No incoming call invite to accept');
     }
 
@@ -806,7 +816,10 @@ class TwilioVoiceService {
       timestamp: new Date().toISOString(),
     });
 
+    // ✅ NEW: Store DB call ID for incoming calls
     if (params?.callId) {
+      this.currentDbCallId = params.callId;
+
       try {
         logger.debug('[TwilioVoice] 🔍 Extracting invite SID', {
           debugId: params?.debugId,
@@ -861,14 +874,6 @@ class TwilioVoiceService {
 
     this.activeCall = call;
 
-    // ✅ FIX: Defer state update to avoid React hooks violation
-    logger.debug('[TwilioVoice] ⏱️ Deferring state update', {
-      debugId: params?.debugId,
-      callId: params?.callId,
-      newStatus: 'connecting',
-      timestamp: new Date().toISOString(),
-    });
-
     setTimeout(() => {
       this.updateState({ status: 'connecting', call, callInvite: null });
     }, 0);
@@ -879,7 +884,13 @@ class TwilioVoiceService {
       timestamp: new Date().toISOString(),
     });
 
-    this.setupCallListeners(call, params?.callId, params?.debugId);
+    this.setupCallListeners(
+      call,
+      params?.callId,
+      params?.debugId,
+      params?.ratePerMinute,
+      params?.userBalance
+    );
 
     const totalElapsed = Date.now() - acceptStartTime;
     logger.info('[TwilioVoice] ✅ Incoming call accepted', {
@@ -939,12 +950,19 @@ class TwilioVoiceService {
         timestamp: new Date().toISOString(),
       });
     } catch (rejectError) {
-      logger.error('[TwilioVoice] ❌ Error rejecting call invite', rejectError, {
-        debugId: params?.debugId,
-        callId: params?.callId,
-        errorMessage: rejectError instanceof Error ? rejectError.message : String(rejectError),
-        timestamp: new Date().toISOString(),
-      });
+      logger.error(
+        '[TwilioVoice] ❌ Error rejecting call invite',
+        rejectError,
+        {
+          debugId: params?.debugId,
+          callId: params?.callId,
+          errorMessage:
+            rejectError instanceof Error
+              ? rejectError.message
+              : String(rejectError),
+          timestamp: new Date().toISOString(),
+        }
+      );
     } finally {
       logger.debug('[TwilioVoice] 🔄 Resetting state to idle', {
         debugId: params?.debugId,
@@ -1014,7 +1032,8 @@ class TwilioVoiceService {
       }
 
       logger.info('[TwilioVoice] 📞 Disconnecting call...', {
-        callSid: (this.activeCall as any)?.callSid ?? (this.activeCall as any)?.sid,
+        callSid:
+          (this.activeCall as any)?.callSid ?? (this.activeCall as any)?.sid,
         currentStatus: this.state.status,
         timestamp: new Date().toISOString(),
       });
@@ -1030,18 +1049,31 @@ class TwilioVoiceService {
 
       this.activeCall = null;
 
-      // ✅ FIX: Reset to 'idle' instead of 'disconnected'
-      // This allows making a second call immediately
+      // ✅ Stop duration tracking
+      this.stopDurationTracking();
+
+      // ✅ Stop per-minute billing
+      this.stopPerMinuteBilling();
+
+      // ✅ Stop BillingService
+      if (BillingService.isTracking()) {
+        logger.info('[TwilioVoice] 💰 Stopping BillingService', {
+          timestamp: new Date().toISOString(),
+        });
+        BillingService.stopTracking();
+      }
+
       logger.debug('[TwilioVoice] 🔄 Resetting state to idle', {
         timestamp: new Date().toISOString(),
       });
 
       this.updateState({
-        status: 'idle', // ← Changed from 'disconnected'
+        status: 'idle',
         call: null,
         error: null,
         isMuted: false,
         isOnHold: false,
+        duration: 0,
       });
 
       const totalElapsed = Date.now() - disconnectStartTime;
@@ -1058,7 +1090,6 @@ class TwilioVoiceService {
         timestamp: new Date().toISOString(),
       });
 
-      // ✅ FIX: Even on error, reset to idle
       logger.debug('[TwilioVoice] 🔄 Resetting state to idle (error case)', {
         timestamp: new Date().toISOString(),
       });
@@ -1069,6 +1100,7 @@ class TwilioVoiceService {
         error: error as Error,
         isMuted: false,
         isOnHold: false,
+        duration: 0,
       });
 
       throw error;
@@ -1182,7 +1214,7 @@ class TwilioVoiceService {
   async sendDigits(digits: string): Promise<void> {
     const sendStartTime = Date.now();
     logger.info('[TwilioVoice] 🔢 sendDigits function called', {
-      digits: digits.replace(/\d/g, '*'), // Mask digits for privacy
+      digits: digits.replace(/\d/g, '*'),
       digitsLength: digits.length,
       hasActiveCall: !!this.activeCall,
       timestamp: new Date().toISOString(),
@@ -1222,6 +1254,147 @@ class TwilioVoiceService {
         timestamp: new Date().toISOString(),
       });
       throw error;
+    }
+  }
+
+  // ✅ NEW: Duration tracking (from CallScreen)
+  private startDurationTracking(): void {
+    logger.info('[TwilioVoice] ⏱️ Starting duration tracking', {
+      timestamp: new Date().toISOString(),
+    });
+
+    if (this.durationInterval) {
+      logger.warn('[TwilioVoice] ⚠️ Duration interval already running', {
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    this.durationInterval = setInterval(() => {
+      this.updateState({ duration: this.state.duration + 1 });
+    }, 1000);
+
+    logger.info('[TwilioVoice] ✅ Duration tracking started', {
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  private stopDurationTracking(): void {
+    logger.info('[TwilioVoice] ⏱️ Stopping duration tracking', {
+      timestamp: new Date().toISOString(),
+    });
+
+    if (this.durationInterval) {
+      clearInterval(this.durationInterval);
+      this.durationInterval = null;
+      logger.info('[TwilioVoice] ✅ Duration tracking stopped', {
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  // ✅ NEW: Per-minute billing (from CallScreen)
+  private startPerMinuteBilling(ratePerMinute: number): void {
+    logger.info('[TwilioVoice] 💰 Starting per-minute billing', {
+      ratePerMinute,
+      callId: this.currentDbCallId,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (this.perMinuteInterval) {
+      logger.warn('[TwilioVoice] ⚠️ Per-minute interval already running', {
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    this.lastChargedMinute = 0;
+
+    // Check every second for minute boundaries
+    this.perMinuteInterval = setInterval(async () => {
+      const currentMinute = Math.floor(this.state.duration / 60) + 1;
+      const isMinuteBoundary =
+        this.state.duration > 0 && this.state.duration % 60 === 0;
+
+      if (isMinuteBoundary && currentMinute > this.lastChargedMinute) {
+        this.lastChargedMinute = currentMinute;
+
+        logger.info('[TwilioVoice] 💰 Charging for minute', {
+          callId: this.currentDbCallId,
+          minute_number: currentMinute,
+          duration: this.state.duration,
+          timestamp: new Date().toISOString(),
+        });
+
+        try {
+          const { data, error } = await supabase.functions.invoke(
+            'charge-call-minute',
+            {
+              body: {
+                call_id: this.currentDbCallId,
+                minute_number: currentMinute,
+              },
+            }
+          );
+
+          if (error) {
+            logger.error('[TwilioVoice] ❌ Per-minute charge failed', error, {
+              callId: this.currentDbCallId,
+              minute_number: currentMinute,
+              errorMessage: error.message,
+              timestamp: new Date().toISOString(),
+            });
+            return;
+          }
+
+          logger.info('[TwilioVoice] ✅ Minute charged successfully', {
+            callId: this.currentDbCallId,
+            minute_number: currentMinute,
+            cost: data?.cost,
+            new_balance: data?.new_balance,
+            next_minute_affordable: data?.next_minute_affordable,
+            timestamp: new Date().toISOString(),
+          });
+
+          // Check if next minute is not affordable
+          if (!data?.next_minute_affordable) {
+            logger.warn('[TwilioVoice] ⚠️ Next minute not affordable', {
+              callId: this.currentDbCallId,
+              minute_number: currentMinute,
+              new_balance: data?.new_balance,
+              timestamp: new Date().toISOString(),
+            });
+
+            // BillingService will handle the low balance warning
+          }
+        } catch (err) {
+          logger.error('[TwilioVoice] ❌ Per-minute charge error', err, {
+            callId: this.currentDbCallId,
+            minute_number: currentMinute,
+            errorMessage: err instanceof Error ? err.message : String(err),
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+    }, 1000);
+
+    logger.info('[TwilioVoice] ✅ Per-minute billing started', {
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  private stopPerMinuteBilling(): void {
+    logger.info('[TwilioVoice] 💰 Stopping per-minute billing', {
+      timestamp: new Date().toISOString(),
+    });
+
+    if (this.perMinuteInterval) {
+      clearInterval(this.perMinuteInterval);
+      this.perMinuteInterval = null;
+      this.lastChargedMinute = 0;
+      logger.info('[TwilioVoice] ✅ Per-minute billing stopped', {
+        timestamp: new Date().toISOString(),
+      });
     }
   }
 
@@ -1289,9 +1462,12 @@ class TwilioVoiceService {
     });
 
     if (!this.voice) {
-      logger.warn('[TwilioVoice] ⚠️ No voice instance, skipping listener setup', {
-        timestamp: new Date().toISOString(),
-      });
+      logger.warn(
+        '[TwilioVoice] ⚠️ No voice instance, skipping listener setup',
+        {
+          timestamp: new Date().toISOString(),
+        }
+      );
       return;
     }
 
@@ -1312,6 +1488,8 @@ class TwilioVoiceService {
         timestamp: new Date().toISOString(),
       });
 
+      // ✅ IMPORTANT: Don't show Twilio native invitation UI
+      // IncomingCallHandler will show custom modal
       this.updateState({ status: 'ringing', callInvite });
 
       try {
@@ -1407,11 +1585,15 @@ class TwilioVoiceService {
   private setupCallListeners(
     call: Call,
     callId?: string,
-    debugId?: string
+    debugId?: string,
+    ratePerMinute?: number,
+    userBalance?: number
   ): void {
     logger.info('[TwilioVoice] 🔧 Setting up call listeners', {
       debugId,
       callId,
+      ratePerMinute,
+      userBalance,
       hasCall: !!call,
       timestamp: new Date().toISOString(),
     });
@@ -1428,7 +1610,9 @@ class TwilioVoiceService {
         callId,
         timestamp: new Date().toISOString(),
       });
+
       this.updateState({ status: 'connected' });
+
       if (callId) {
         logger.debug('[TwilioVoice] 📝 Updating call record on connect', {
           debugId,
@@ -1436,6 +1620,38 @@ class TwilioVoiceService {
           timestamp: new Date().toISOString(),
         });
         void this.updateCallOnConnect(callId, debugId);
+      }
+
+      // ✅ NEW: Start duration tracking
+      this.startDurationTracking();
+
+      // ✅ NEW: Start per-minute billing (if rate provided)
+      if (ratePerMinute && ratePerMinute > 0) {
+        this.startPerMinuteBilling(ratePerMinute);
+      }
+
+      // ✅ NEW: Start BillingService for notifications
+      if (ratePerMinute && userBalance !== undefined) {
+        logger.info('[TwilioVoice] 💰 Starting BillingService', {
+          debugId,
+          callId,
+          ratePerMinute,
+          userBalance,
+          timestamp: new Date().toISOString(),
+        });
+
+        BillingService.startTracking(call, ratePerMinute, userBalance);
+      } else {
+        logger.warn(
+          '[TwilioVoice] ⚠️ BillingService not started - missing rate or balance',
+          {
+            debugId,
+            callId,
+            hasRate: !!ratePerMinute,
+            hasBalance: userBalance !== undefined,
+            timestamp: new Date().toISOString(),
+          }
+        );
       }
     });
 
@@ -1496,7 +1712,11 @@ class TwilioVoiceService {
       logger.info('[TwilioVoice] 📞 Call disconnected event', {
         debugId,
         callId,
-        error: error ? (error instanceof Error ? error.message : String(error)) : null,
+        error: error
+          ? error instanceof Error
+            ? error.message
+            : String(error)
+          : null,
         wasConnected,
         previousStatus,
         timestamp: new Date().toISOString(),
@@ -1504,8 +1724,22 @@ class TwilioVoiceService {
 
       this.activeCall = null;
 
-      // ✅ FIX: Reset to 'idle' instead of 'disconnected'
-      // This allows making a second call immediately
+      // ✅ Stop duration tracking
+      this.stopDurationTracking();
+
+      // ✅ Stop per-minute billing
+      this.stopPerMinuteBilling();
+
+      // ✅ Stop BillingService
+      if (BillingService.isTracking()) {
+        logger.info('[TwilioVoice] 💰 Stopping BillingService', {
+          debugId,
+          callId,
+          timestamp: new Date().toISOString(),
+        });
+        BillingService.stopTracking();
+      }
+
       logger.debug('[TwilioVoice] 🔄 Resetting state to idle', {
         debugId,
         callId,
@@ -1513,11 +1747,12 @@ class TwilioVoiceService {
       });
 
       this.updateState({
-        status: 'idle', // ← Changed from 'disconnected'
+        status: 'idle',
         call: null,
         error: error || null,
         isMuted: false,
         isOnHold: false,
+        duration: 0,
       });
 
       logger.info(
@@ -1538,13 +1773,19 @@ class TwilioVoiceService {
         });
         void this.updateCallOnDisconnect(callId, debugId, wasConnected);
       }
+
+      // Clear DB call ID
+      this.currentDbCallId = null;
     });
 
-    logger.debug('[TwilioVoice] 📡 Registering QualityWarningsChanged listener', {
-      debugId,
-      callId,
-      timestamp: new Date().toISOString(),
-    });
+    logger.debug(
+      '[TwilioVoice] 📡 Registering QualityWarningsChanged listener',
+      {
+        debugId,
+        callId,
+        timestamp: new Date().toISOString(),
+      }
+    );
 
     call.on(Call.Event.QualityWarningsChanged, (warnings: any) => {
       logger.warn('[TwilioVoice] ⚠️ Quality warnings', {
@@ -1587,13 +1828,17 @@ class TwilioVoiceService {
       .eq('id', callId);
 
     if (startRes.error) {
-      logger.error('[TwilioVoice] ❌ Failed updating call start_time', startRes.error, {
-        debugId,
-        callId,
-        errorMessage: startRes.error.message,
-        errorCode: startRes.error.code,
-        timestamp: new Date().toISOString(),
-      });
+      logger.error(
+        '[TwilioVoice] ❌ Failed updating call start_time',
+        startRes.error,
+        {
+          debugId,
+          callId,
+          errorMessage: startRes.error.message,
+          errorCode: startRes.error.code,
+          timestamp: new Date().toISOString(),
+        }
+      );
     } else {
       logger.info('[TwilioVoice] ✅ Call start_time updated', {
         debugId,
@@ -1646,13 +1891,16 @@ class TwilioVoiceService {
     }
 
     const totalElapsed = Date.now() - updateStartTime;
-    logger.warn('[TwilioVoice] ⚠️ Failed to update call status (all candidates failed)', {
-      debugId,
-      callId,
-      candidates,
-      totalElapsed: `${totalElapsed}ms`,
-      timestamp: new Date().toISOString(),
-    });
+    logger.warn(
+      '[TwilioVoice] ⚠️ Failed to update call status (all candidates failed)',
+      {
+        debugId,
+        callId,
+        candidates,
+        totalElapsed: `${totalElapsed}ms`,
+        timestamp: new Date().toISOString(),
+      }
+    );
   }
 
   private async updateCallOnDisconnect(
@@ -1700,11 +1948,14 @@ class TwilioVoiceService {
         if (wasConnected === true) {
           startTime = 'connected';
           querySucceeded = false;
-          logger.debug('[TwilioVoice] ℹ️ Assuming connected (wasConnected=true)', {
-            debugId,
-            callId,
-            timestamp: new Date().toISOString(),
-          });
+          logger.debug(
+            '[TwilioVoice] ℹ️ Assuming connected (wasConnected=true)',
+            {
+              debugId,
+              callId,
+              timestamp: new Date().toISOString(),
+            }
+          );
         }
       } else {
         startTime = (row as any)?.start_time ?? null;
@@ -1729,11 +1980,14 @@ class TwilioVoiceService {
       if (wasConnected === true) {
         startTime = 'connected';
         querySucceeded = false;
-        logger.debug('[TwilioVoice] ℹ️ Assuming connected (wasConnected=true, exception)', {
-          debugId,
-          callId,
-          timestamp: new Date().toISOString(),
-        });
+        logger.debug(
+          '[TwilioVoice] ℹ️ Assuming connected (wasConnected=true, exception)',
+          {
+            debugId,
+            callId,
+            timestamp: new Date().toISOString(),
+          }
+        );
       }
     }
 
@@ -1804,10 +2058,29 @@ class TwilioVoiceService {
     const previousStatus = this.state.status;
     const previousState = { ...this.state };
 
+    // Sanitize updateDetails to avoid circular references in Call/CallInvite objects
+    const sanitizedUpdates: Record<string, unknown> = {};
+    for (const key in updates) {
+      const value = updates[key as keyof CallState];
+      if (key === 'call' || key === 'callInvite') {
+        // Only log presence, not the full object
+        sanitizedUpdates[key] = value ? '[Call Object]' : null;
+      } else if (key === 'error' && value instanceof Error) {
+        // Extract error properties safely
+        sanitizedUpdates[key] = {
+          name: value.name,
+          message: value.message,
+          stack: value.stack,
+        };
+      } else {
+        sanitizedUpdates[key] = value;
+      }
+    }
+
     logger.debug('[TwilioVoice] 🔄 updateState called', {
       previousStatus,
       updates: Object.keys(updates),
-      updateDetails: updates,
+      updateDetails: sanitizedUpdates,
       timestamp: new Date().toISOString(),
     });
 
@@ -1820,13 +2093,34 @@ class TwilioVoiceService {
       statusChanged: previousStatus !== newStatus,
       updates: Object.keys(updates),
       stateChanges: {
-        status: previousStatus !== newStatus ? { from: previousStatus, to: newStatus } : undefined,
-        call: previousState.call !== this.state.call ? { from: !!previousState.call, to: !!this.state.call } : undefined,
-        callInvite: previousState.callInvite !== this.state.callInvite ? { from: !!previousState.callInvite, to: !!this.state.callInvite } : undefined,
-        isMuted: previousState.isMuted !== this.state.isMuted ? { from: previousState.isMuted, to: this.state.isMuted } : undefined,
-        isOnHold: previousState.isOnHold !== this.state.isOnHold ? { from: previousState.isOnHold, to: this.state.isOnHold } : undefined,
-        duration: previousState.duration !== this.state.duration ? { from: previousState.duration, to: this.state.duration } : undefined,
-        error: previousState.error !== this.state.error ? { from: !!previousState.error, to: !!this.state.error } : undefined,
+        status:
+          previousStatus !== newStatus
+            ? { from: previousStatus, to: newStatus }
+            : undefined,
+        call:
+          previousState.call !== this.state.call
+            ? { from: !!previousState.call, to: !!this.state.call }
+            : undefined,
+        callInvite:
+          previousState.callInvite !== this.state.callInvite
+            ? { from: !!previousState.callInvite, to: !!this.state.callInvite }
+            : undefined,
+        isMuted:
+          previousState.isMuted !== this.state.isMuted
+            ? { from: previousState.isMuted, to: this.state.isMuted }
+            : undefined,
+        isOnHold:
+          previousState.isOnHold !== this.state.isOnHold
+            ? { from: previousState.isOnHold, to: this.state.isOnHold }
+            : undefined,
+        duration:
+          previousState.duration !== this.state.duration
+            ? { from: previousState.duration, to: this.state.duration }
+            : undefined,
+        error:
+          previousState.error !== this.state.error
+            ? { from: !!previousState.error, to: !!this.state.error }
+            : undefined,
       },
       timestamp: new Date().toISOString(),
     });
@@ -1864,13 +2158,18 @@ class TwilioVoiceService {
             timestamp: new Date().toISOString(),
           });
         } catch (error) {
-          logger.error('[TwilioVoice] ❌ Error in state change callback', error, {
-            index: index + 1,
-            total: listeners.length,
-            errorMessage: error instanceof Error ? error.message : String(error),
-            errorStack: error instanceof Error ? error.stack : undefined,
-            timestamp: new Date().toISOString(),
-          });
+          logger.error(
+            '[TwilioVoice] ❌ Error in state change callback',
+            error,
+            {
+              index: index + 1,
+              total: listeners.length,
+              errorMessage:
+                error instanceof Error ? error.message : String(error),
+              errorStack: error instanceof Error ? error.stack : undefined,
+              timestamp: new Date().toISOString(),
+            }
+          );
         }
       });
 
@@ -1911,6 +2210,19 @@ class TwilioVoiceService {
         });
       }
 
+      // ✅ Stop tracking
+      this.stopDurationTracking();
+      this.stopPerMinuteBilling();
+
+      // ✅ Stop AppState listener
+      if (this.appStateSubscription) {
+        logger.info('[TwilioVoice] 🔇 Removing AppState listener', {
+          timestamp: new Date().toISOString(),
+        });
+        this.appStateSubscription.remove();
+        this.appStateSubscription = null;
+      }
+
       if (this.voice) {
         logger.info('[TwilioVoice] 📱 Unregistering device', {
           timestamp: new Date().toISOString(),
@@ -1939,6 +2251,7 @@ class TwilioVoiceService {
         timestamp: new Date().toISOString(),
       });
       this.accessToken = null;
+      this.currentDbCallId = null;
 
       const totalElapsed = Date.now() - cleanupStartTime;
       logger.info('[TwilioVoice] ✅ Cleanup complete', {

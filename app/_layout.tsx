@@ -35,7 +35,12 @@ import {
   setSupabaseSession,
   ensureSupabaseSession,
 } from '../lib/supabase';
-import { IncomingCallHandler } from '@/components/call/IncomingCallHandler';
+import IncomingCallHandler from '../components/call/IncomingCallHandler';
+// ✅ NEW: Import notification setup
+import {
+  setupNotificationHandler,
+  requestNotificationPermissions,
+} from '@/lib/notificationSetup';
 
 // Initialize Sentry (make it idempotent)
 try {
@@ -156,12 +161,6 @@ function AutoAvailabilityWrapper({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// ============================================================================
-// ❌ REMOVED: TwilioVoiceInitializer component
-// ✅ Twilio initialization is now handled by useTwilioVoice hook
-//    which is used inside IncomingCallHandler
-// ============================================================================
-
 export default function RootLayout() {
   const mountTimeRef = useRef<number>(Date.now());
 
@@ -178,6 +177,42 @@ export default function RootLayout() {
     return () => {
       logger.info('[App] 🔚 RootLayout unmounting');
     };
+  }, []);
+
+  // ============================================================================
+  // ✅ NEW: NOTIFICATION SETUP FOR BILLING
+  // ============================================================================
+  useEffect(() => {
+    logger.info('[App] 🔧 Setting up billing notifications', {
+      timestamp: new Date().toISOString(),
+    });
+
+    // Setup notification handler
+    setupNotificationHandler();
+
+    // Request permissions
+    (async () => {
+      try {
+        const granted = await requestNotificationPermissions();
+        if (granted) {
+          logger.info('[App] ✅ Billing notification permissions granted', {
+            timestamp: new Date().toISOString(),
+          });
+        } else {
+          logger.warn('[App] ⚠️ Billing notification permissions denied', {
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } catch (error) {
+        logger.error(
+          '[App] ❌ Failed to request notification permissions',
+          error,
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+      }
+    })();
   }, []);
 
   // ============================================================================
@@ -413,7 +448,6 @@ export default function RootLayout() {
           urlScheme="talkee"
         >
           <ThemeProvider>
-            {/* ✅ NO TwilioVoiceInitializer wrapper - handled by IncomingCallHandler */}
             <AutoAvailabilityWrapper>
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="auth" />

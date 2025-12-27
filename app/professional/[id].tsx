@@ -11,6 +11,7 @@ import {
   Pressable,
   SafeAreaView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Href, router, useLocalSearchParams } from 'expo-router';
@@ -64,6 +65,8 @@ import {
   ProfessionalWithRelations,
   getDegreeLevelLabel,
 } from '@/types/database.types';
+import { supabase } from '@/lib/supabase';
+import { useTwilioVoice } from '@/hooks/useTwilioVoice';
 
 type TabType = 'feed' | 'about' | 'availability' | 'cv';
 
@@ -72,8 +75,10 @@ export default function ProfessionalProfileScreen() {
   const { theme } = useTheme();
   const isNetworkOnline = useIsOnline();
   const insets = useSafeAreaInsets();
+  const { makeCall, callState } = useTwilioVoice(); // ✅ EKLE
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [qrScannerVisible, setQrScannerVisible] = useState(false);
+  const [isCalling, setIsCalling] = useState(false);
   const [insufficientBalanceModalVisible, setInsufficientBalanceModalVisible] =
     useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('about'); // Start with 'about' since feed is not implemented yet
@@ -400,6 +405,13 @@ export default function ProfessionalProfileScreen() {
   // Check if user has sufficient balance
   const hasSufficientBalance = walletBalance >= minimumRequiredBalance;
 
+  // ✅ Listen to call state changes to reset isCalling
+  useEffect(() => {
+    if (callState.status === 'connected' || callState.status === 'idle') {
+      setIsCalling(false);
+    }
+  }, [callState.status]);
+
   const handleVoiceCall = async () => {
     // Check balance before making call
     if (!hasSufficientBalance) {
@@ -408,6 +420,8 @@ export default function ProfessionalProfileScreen() {
     }
 
     try {
+      setIsCalling(true); // ✅ Start calling state
+
       logger.info('[ProfessionalProfile] Initiating voice call', {
         professionalId: id,
       });
@@ -416,17 +430,38 @@ export default function ProfessionalProfileScreen() {
         ? currentAvailability.availability.price_per_minute
         : professional?.rate_per_minute || 0;
 
-      // Navigate to call screen first
-      router.push({
-        pathname: '/call/[id]',
-        params: {
-          id: id as string,
-          type: 'voice',
-          rate_per_minute: String(effectiveRatePerMinute),
-        },
+      // ✅ Get user data
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) {
+        setIsCalling(false); // ✅ Reset on error
+        Alert.alert('Error', 'You must be logged in to make a call');
+        return;
+      }
+
+      // ✅ Get user balance
+      const userBalance = walletBalance; // Already loaded via useWalletBalance
+
+      // ✅ Make call directly (Twilio native screen will open)
+      await makeCall({
+        professionalId: id as string,
+        professionalUserId: professional?.user_id || '',
+        type: 'voice',
+        urgent: false,
+        debugId: `voice-${Date.now()}`,
+        ratePerMinute: Number(effectiveRatePerMinute),
+        userBalance,
       });
+
+      logger.info('[ProfessionalProfile] ✅ Voice call initiated successfully');
+      // Note: isCalling will be reset by useEffect when callState changes
     } catch (error) {
+      setIsCalling(false); // ✅ Reset on error
       logger.error('[ProfessionalProfile] Voice call error:', error);
+      Alert.alert(
+        'Call Failed',
+        'Could not start the call. Please try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
@@ -438,6 +473,8 @@ export default function ProfessionalProfileScreen() {
     }
 
     try {
+      setIsCalling(true); // ✅ Start calling state
+
       logger.info('[ProfessionalProfile] Initiating video call', {
         professionalId: id,
       });
@@ -446,17 +483,38 @@ export default function ProfessionalProfileScreen() {
         ? currentAvailability.availability.price_per_minute
         : professional?.rate_per_minute || 0;
 
-      // Navigate to call screen first
-      router.push({
-        pathname: '/call/[id]',
-        params: {
-          id: id as string,
-          type: 'video',
-          rate_per_minute: String(effectiveRatePerMinute),
-        },
+      // ✅ Get user data
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) {
+        setIsCalling(false); // ✅ Reset on error
+        Alert.alert('Error', 'You must be logged in to make a call');
+        return;
+      }
+
+      // ✅ Get user balance
+      const userBalance = walletBalance; // Already loaded via useWalletBalance
+
+      // ✅ Make call directly (Twilio native screen will open)
+      await makeCall({
+        professionalId: id as string,
+        professionalUserId: professional?.user_id || '',
+        type: 'video',
+        urgent: false,
+        debugId: `video-${Date.now()}`,
+        ratePerMinute: Number(effectiveRatePerMinute),
+        userBalance,
       });
+
+      logger.info('[ProfessionalProfile] ✅ Video call initiated successfully');
+      // Note: isCalling will be reset by useEffect when callState changes
     } catch (error) {
+      setIsCalling(false); // ✅ Reset on error
       logger.error('[ProfessionalProfile] Video call error:', error);
+      Alert.alert(
+        'Call Failed',
+        'Could not start the call. Please try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
@@ -468,6 +526,8 @@ export default function ProfessionalProfileScreen() {
     }
 
     try {
+      setIsCalling(true); // ✅ Start calling state
+
       logger.info('[ProfessionalProfile] Initiating urgent call', {
         professionalId: id,
       });
@@ -484,6 +544,7 @@ export default function ProfessionalProfileScreen() {
 
       // Validate professional data before navigation
       if (!professional || !id) {
+        setIsCalling(false); // ✅ Reset on error
         logger.error(
           '[ProfessionalProfile] Missing professional data for urgent call',
           {
@@ -494,26 +555,42 @@ export default function ProfessionalProfileScreen() {
         return;
       }
 
-      // Navigate to call screen first
-      router.push({
-        pathname: '/call/[id]',
-        params: {
-          id: id as string,
-          type: 'voice',
-          urgent: 'true',
-          rate_per_minute: String(effectiveRatePerMinute),
-        },
-      });
-    } catch (error) {
-      logger.error('[ProfessionalProfile] Urgent call error:', error);
-      // Show error to user
-      if (error instanceof Error) {
-        Alert.alert(
-          'Call Failed',
-          error.message || 'Could not start the call. Please try again.',
-          [{ text: 'OK' }]
-        );
+      // ✅ Get user data
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) {
+        setIsCalling(false); // ✅ Reset on error
+        Alert.alert('Error', 'You must be logged in to make a call');
+        return;
       }
+
+      // ✅ Get user balance
+      const userBalance = walletBalance; // Already loaded via useWalletBalance
+
+      // ✅ Make call directly (Twilio native screen will open)
+      await makeCall({
+        professionalId: id as string,
+        professionalUserId: professional?.user_id || '',
+        type: 'voice',
+        urgent: true,
+        debugId: `urgent-${Date.now()}`,
+        ratePerMinute: Number(effectiveRatePerMinute),
+        userBalance,
+      });
+
+      logger.info(
+        '[ProfessionalProfile] ✅ Urgent call initiated successfully'
+      );
+      // Note: isCalling will be reset by useEffect when callState changes
+    } catch (error) {
+      setIsCalling(false); // ✅ Reset on error
+      logger.error('[ProfessionalProfile] Urgent call error:', error);
+      Alert.alert(
+        'Call Failed',
+        error instanceof Error
+          ? error.message
+          : 'Could not start the call. Please try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
@@ -2153,32 +2230,53 @@ export default function ProfessionalProfileScreen() {
                 style={[
                   styles.callTypeButton,
                   {
-                    backgroundColor: buttonsEnabled
-                      ? '#F59E0B'
-                      : theme.colors.border,
+                    backgroundColor:
+                      buttonsEnabled && !isCalling
+                        ? '#F59E0B'
+                        : theme.colors.border,
                     flex: 1,
-                    opacity: buttonsEnabled ? 1 : 0.5,
+                    opacity: buttonsEnabled && !isCalling ? 1 : 0.5,
                   },
                 ]}
                 onPress={handleUrgentCall}
-                disabled={!buttonsEnabled}
+                disabled={!buttonsEnabled || isCalling}
               >
-                <Zap
-                  size={20}
-                  color={buttonsEnabled ? '#FFFFFF' : theme.colors.textMuted}
-                />
-                <Text
-                  style={[
-                    styles.callTypeText,
-                    {
-                      color: buttonsEnabled
-                        ? '#FFFFFF'
-                        : theme.colors.textMuted,
-                    },
-                  ]}
-                >
-                  Urgent Call
-                </Text>
+                {isCalling ? (
+                  <>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text
+                      style={[
+                        styles.callTypeText,
+                        {
+                          color: '#FFFFFF',
+                        },
+                      ]}
+                    >
+                      Calling...
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Zap
+                      size={20}
+                      color={
+                        buttonsEnabled ? '#FFFFFF' : theme.colors.textMuted
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.callTypeText,
+                        {
+                          color: buttonsEnabled
+                            ? '#FFFFFF'
+                            : theme.colors.textMuted,
+                        },
+                      ]}
+                    >
+                      Urgent Call
+                    </Text>
+                  </>
+                )}
               </TouchableOpacity>
             ) : showVoiceVideo ? (
               // Available → Voice ve Video butonları
@@ -2187,63 +2285,105 @@ export default function ProfessionalProfileScreen() {
                   style={[
                     styles.callTypeButton,
                     {
-                      backgroundColor: buttonsEnabled
-                        ? theme.colors.primary
-                        : theme.colors.border,
+                      backgroundColor:
+                        buttonsEnabled && !isCalling
+                          ? theme.colors.primary
+                          : theme.colors.border,
                       flex: 1,
-                      opacity: buttonsEnabled ? 1 : 0.5,
+                      opacity: buttonsEnabled && !isCalling ? 1 : 0.5,
                     },
                   ]}
                   onPress={handleVoiceCall}
-                  disabled={!buttonsEnabled}
+                  disabled={!buttonsEnabled || isCalling}
                 >
-                  <Phone
-                    size={20}
-                    color={buttonsEnabled ? '#FFFFFF' : theme.colors.textMuted}
-                  />
-                  <Text
-                    style={[
-                      styles.callTypeText,
-                      {
-                        color: buttonsEnabled
-                          ? '#FFFFFF'
-                          : theme.colors.textMuted,
-                      },
-                    ]}
-                  >
-                    Voice
-                  </Text>
+                  {isCalling ? (
+                    <>
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <Text
+                        style={[
+                          styles.callTypeText,
+                          {
+                            color: '#FFFFFF',
+                          },
+                        ]}
+                      >
+                        Calling...
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Phone
+                        size={20}
+                        color={
+                          buttonsEnabled ? '#FFFFFF' : theme.colors.textMuted
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.callTypeText,
+                          {
+                            color: buttonsEnabled
+                              ? '#FFFFFF'
+                              : theme.colors.textMuted,
+                          },
+                        ]}
+                      >
+                        Voice
+                      </Text>
+                    </>
+                  )}
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
                     styles.callTypeButton,
                     {
-                      backgroundColor: buttonsEnabled
-                        ? theme.colors.primary
-                        : theme.colors.border,
+                      backgroundColor:
+                        buttonsEnabled && !isCalling
+                          ? theme.colors.primary
+                          : theme.colors.border,
                       flex: 1,
-                      opacity: buttonsEnabled ? 1 : 0.5,
+                      opacity: buttonsEnabled && !isCalling ? 1 : 0.5,
                     },
                   ]}
                   onPress={handleVideoCall}
-                  disabled={!buttonsEnabled}
+                  disabled={!buttonsEnabled || isCalling}
                 >
-                  <Video
-                    size={20}
-                    color={buttonsEnabled ? '#FFFFFF' : theme.colors.textMuted}
-                  />
-                  <Text
-                    style={[
-                      styles.callTypeText,
-                      {
-                        color: buttonsEnabled
-                          ? '#FFFFFF'
-                          : theme.colors.textMuted,
-                      },
-                    ]}
-                  >
-                    Video
-                  </Text>
+                  {isCalling ? (
+                    <>
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <Text
+                        style={[
+                          styles.callTypeText,
+                          {
+                            color: '#FFFFFF',
+                          },
+                        ]}
+                      >
+                        Calling...
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Video
+                        size={20}
+                        color={
+                          buttonsEnabled ? '#FFFFFF' : theme.colors.textMuted
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.callTypeText,
+                          {
+                            color: buttonsEnabled
+                              ? '#FFFFFF'
+                              : theme.colors.textMuted,
+                          },
+                        ]}
+                      >
+                        Video
+                      </Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </>
             ) : null}

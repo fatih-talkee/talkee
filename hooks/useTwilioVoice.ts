@@ -9,6 +9,7 @@ import { twilioVoiceService } from '@/services/twilioVoice.service';
 import type { CallState } from '@/services/twilioVoice.service';
 import { logger } from '@/lib/logger';
 import { useProfile } from './useProfile';
+import BillingService from '@/services/billingService';
 
 export function useTwilioVoice() {
   const mountTimeRef = useRef<number>(Date.now());
@@ -92,6 +93,17 @@ export function useTwilioVoice() {
         lifespan: `${Date.now() - mountTime}ms`,
         timestamp: new Date().toISOString(),
       });
+
+      // ✅ Stop billing tracking on unmount
+      if (BillingService.isTracking()) {
+        logger.warn(
+          '[useTwilioVoice] ⚠️ Stopping billing tracking on unmount',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+        BillingService.stopTracking();
+      }
     };
   }, []);
 
@@ -249,41 +261,68 @@ export function useTwilioVoice() {
     };
   }, [user, profileLoading]); // Re-register when user changes
 
+  // ✅ NEW: Monitor call state changes for billing
+  useEffect(() => {
+    // Start billing when call connects
+    if (
+      callState.status === 'connected' &&
+      callState.call &&
+      !BillingService.isTracking()
+    ) {
+      logger.info(
+        '[useTwilioVoice] 📞 Call connected - checking if billing should start',
+        {
+          status: callState.status,
+          hasCall: !!callState.call,
+          isTracking: BillingService.isTracking(),
+          timestamp: new Date().toISOString(),
+        }
+      );
+
+      // Note: Billing will be started by makeCall or acceptIncomingCall
+      // This is just a safety check
+    }
+
+    // Stop billing when call disconnects
+    if (callState.status === 'disconnected' && BillingService.isTracking()) {
+      logger.info('[useTwilioVoice] 📞 Call disconnected - stopping billing', {
+        status: callState.status,
+        isTracking: BillingService.isTracking(),
+        timestamp: new Date().toISOString(),
+      });
+      BillingService.stopTracking();
+    }
+  }, [callState.status, callState.call]);
+
+  // ✅ UPDATED: makeCall with object parameters
   const makeCall = useCallback(
-    async (
-      professionalId: string,
-      professionalUserId: string,
-      type: 'voice' | 'video' = 'voice',
-      urgent: boolean = false,
-      debugId?: string,
-      userOverride?: any
-    ) => {
+    async (params: {
+      professionalId: string;
+      professionalUserId: string;
+      type?: 'voice' | 'video';
+      urgent?: boolean;
+      debugId?: string;
+      ratePerMinute?: number;
+      userBalance?: number;
+    }) => {
       const makeCallStartTime = Date.now();
       logger.info('[useTwilioVoice] 📞 makeCall function called', {
-        professionalId,
-        professionalUserId,
-        type,
-        urgent,
-        debugId,
-        hasUserOverride: !!userOverride,
+        professionalId: params.professionalId,
+        professionalUserId: params.professionalUserId,
+        type: params.type || 'voice',
+        urgent: params.urgent || false,
+        debugId: params.debugId,
+        ratePerMinute: params.ratePerMinute,
+        userBalance: params.userBalance,
         timestamp: new Date().toISOString(),
       });
 
       try {
-        const effectiveUser = userOverride || user;
-        logger.debug('[useTwilioVoice] 🔍 Determining effective user', {
-          hasUserOverride: !!userOverride,
-          hasUser: !!user,
-          effectiveUserId: effectiveUser?.id,
-          timestamp: new Date().toISOString(),
-        });
-
-        if (!effectiveUser) {
+        if (!user) {
           logger.error(
             '[useTwilioVoice] ❌ User not authenticated',
             undefined,
             {
-              hasUserOverride: !!userOverride,
               hasUser: !!user,
               timestamp: new Date().toISOString(),
             }
@@ -310,41 +349,55 @@ export function useTwilioVoice() {
         }
 
         logger.info('[useTwilioVoice] 📞 Making call...', {
-          debugId,
-          professionalId,
-          professionalUserId,
-          callerId: effectiveUser.id,
-          callType: type,
-          urgent,
+          debugId: params.debugId,
+          professionalId: params.professionalId,
+          professionalUserId: params.professionalUserId,
+          callerId: user.id,
+          callType: params.type || 'voice',
+          urgent: params.urgent || false,
+          ratePerMinute: params.ratePerMinute,
+          userBalance: params.userBalance,
           timestamp: new Date().toISOString(),
         });
 
         const serviceCallStartTime = Date.now();
         await twilioVoiceService.makeCall({
-          professionalId,
-          professionalUserId,
-          callerId: effectiveUser.id,
-          type,
-          urgent,
-          debugId,
+          professionalId: params.professionalId,
+          professionalUserId: params.professionalUserId,
+          callerId: user.id,
+          type: params.type,
+          urgent: params.urgent,
+          debugId: params.debugId,
+          ratePerMinute: params.ratePerMinute,
+          userBalance: params.userBalance,
         });
 
         const serviceCallElapsed = Date.now() - serviceCallStartTime;
         const totalElapsed = Date.now() - makeCallStartTime;
         logger.info('[useTwilioVoice] ✅ Call initiated successfully', {
-          debugId,
-          professionalId,
-          professionalUserId,
+          debugId: params.debugId,
+          professionalId: params.professionalId,
+          professionalUserId: params.professionalUserId,
           serviceElapsed: `${serviceCallElapsed}ms`,
           totalElapsed: `${totalElapsed}ms`,
           timestamp: new Date().toISOString(),
         });
+
+        logger.info(
+          '[useTwilioVoice] 💰 Billing will be tracked once call connects',
+          {
+            debugId: params.debugId,
+            ratePerMinute: params.ratePerMinute,
+            userBalance: params.userBalance,
+            timestamp: new Date().toISOString(),
+          }
+        );
       } catch (error) {
         const totalElapsed = Date.now() - makeCallStartTime;
         logger.error('[useTwilioVoice] ❌ Make call error', error, {
-          debugId,
-          professionalId,
-          professionalUserId,
+          debugId: params.debugId,
+          professionalId: params.professionalId,
+          professionalUserId: params.professionalUserId,
           elapsed: `${totalElapsed}ms`,
           errorMessage: error instanceof Error ? error.message : String(error),
           errorStack: error instanceof Error ? error.stack : undefined,
@@ -356,12 +409,20 @@ export function useTwilioVoice() {
     [callState.status, user]
   );
 
+  // ✅ UPDATED: acceptIncomingCall with object parameters
   const acceptIncomingCall = useCallback(
-    async (callId: string, debugId?: string) => {
+    async (params: {
+      callId?: string;
+      debugId?: string;
+      ratePerMinute?: number;
+      userBalance?: number;
+    }) => {
       const acceptStartTime = Date.now();
       logger.info('[useTwilioVoice] 📞 acceptIncomingCall function called', {
-        debugId,
-        callId,
+        debugId: params.debugId,
+        callId: params.callId,
+        ratePerMinute: params.ratePerMinute,
+        userBalance: params.userBalance,
         currentStatus: callState.status,
         hasCallInvite: !!callState.callInvite,
         timestamp: new Date().toISOString(),
@@ -369,34 +430,44 @@ export function useTwilioVoice() {
 
       try {
         logger.info('[useTwilioVoice] 📞 Accepting incoming call...', {
-          debugId,
-          callId,
+          debugId: params.debugId,
+          callId: params.callId,
+          ratePerMinute: params.ratePerMinute,
+          userBalance: params.userBalance,
           currentStatus: callState.status,
           hasCallInvite: !!callState.callInvite,
           timestamp: new Date().toISOString(),
         });
 
         const serviceAcceptStartTime = Date.now();
-        await twilioVoiceService.acceptIncomingCall({
-          callId,
-          debugId,
-        });
+        await twilioVoiceService.acceptIncomingCall(params);
 
         const serviceAcceptElapsed = Date.now() - serviceAcceptStartTime;
         const totalElapsed = Date.now() - acceptStartTime;
         logger.info('[useTwilioVoice] ✅ Incoming call accepted successfully', {
-          debugId,
-          callId,
+          debugId: params.debugId,
+          callId: params.callId,
           serviceElapsed: `${serviceAcceptElapsed}ms`,
           totalElapsed: `${totalElapsed}ms`,
           newStatus: callState.status,
           timestamp: new Date().toISOString(),
         });
+
+        logger.info(
+          '[useTwilioVoice] 💰 Billing will be tracked once call connects',
+          {
+            debugId: params.debugId,
+            callId: params.callId,
+            ratePerMinute: params.ratePerMinute,
+            userBalance: params.userBalance,
+            timestamp: new Date().toISOString(),
+          }
+        );
       } catch (error) {
         const totalElapsed = Date.now() - acceptStartTime;
         logger.error('[useTwilioVoice] ❌ Accept call error', error, {
-          debugId,
-          callId,
+          debugId: params.debugId,
+          callId: params.callId,
           elapsed: `${totalElapsed}ms`,
           errorMessage: error instanceof Error ? error.message : String(error),
           errorStack: error instanceof Error ? error.stack : undefined,
@@ -409,12 +480,13 @@ export function useTwilioVoice() {
     [callState.status, callState.callInvite]
   );
 
+  // ✅ rejectIncomingCall - keep as is (object parameter)
   const rejectIncomingCall = useCallback(
-    async (callId: string, debugId?: string) => {
+    async (params?: { callId?: string; debugId?: string }) => {
       const rejectStartTime = Date.now();
       logger.info('[useTwilioVoice] 📞 rejectIncomingCall function called', {
-        debugId,
-        callId,
+        debugId: params?.debugId,
+        callId: params?.callId,
         currentStatus: callState.status,
         hasCallInvite: !!callState.callInvite,
         timestamp: new Date().toISOString(),
@@ -422,24 +494,21 @@ export function useTwilioVoice() {
 
       try {
         logger.info('[useTwilioVoice] 📞 Rejecting incoming call...', {
-          debugId,
-          callId,
+          debugId: params?.debugId,
+          callId: params?.callId,
           currentStatus: callState.status,
           hasCallInvite: !!callState.callInvite,
           timestamp: new Date().toISOString(),
         });
 
         const serviceRejectStartTime = Date.now();
-        await twilioVoiceService.rejectIncomingCall({
-          callId,
-          debugId,
-        });
+        await twilioVoiceService.rejectIncomingCall(params);
 
         const serviceRejectElapsed = Date.now() - serviceRejectStartTime;
         const totalElapsed = Date.now() - rejectStartTime;
         logger.info('[useTwilioVoice] ✅ Incoming call rejected successfully', {
-          debugId,
-          callId,
+          debugId: params?.debugId,
+          callId: params?.callId,
           serviceElapsed: `${serviceRejectElapsed}ms`,
           totalElapsed: `${totalElapsed}ms`,
           newStatus: callState.status,
@@ -448,8 +517,8 @@ export function useTwilioVoice() {
       } catch (error) {
         const totalElapsed = Date.now() - rejectStartTime;
         logger.error('[useTwilioVoice] ❌ Reject call error', error, {
-          debugId,
-          callId,
+          debugId: params?.debugId,
+          callId: params?.callId,
           elapsed: `${totalElapsed}ms`,
           errorMessage: error instanceof Error ? error.message : String(error),
           errorStack: error instanceof Error ? error.stack : undefined,
@@ -491,6 +560,17 @@ export function useTwilioVoice() {
         previousStatus: callState.status,
         timestamp: new Date().toISOString(),
       });
+
+      // ✅ Stop billing tracking
+      if (BillingService.isTracking()) {
+        logger.info(
+          '[useTwilioVoice] 💰 Stopping billing tracking after disconnect',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+        BillingService.stopTracking();
+      }
     } catch (error) {
       const totalElapsed = Date.now() - disconnectStartTime;
       logger.error('[useTwilioVoice] ❌ Disconnect error', error, {

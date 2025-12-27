@@ -327,6 +327,84 @@ class Logger {
   }
 
   /**
+   * Safe JSON stringify that handles circular references
+   */
+  private safeStringify(obj: unknown, space?: number): string {
+    const seen = new WeakSet();
+    return JSON.stringify(
+      obj,
+      (key, value) => {
+        // Handle circular references
+        if (typeof value === 'object' && value !== null) {
+          if (seen.has(value)) {
+            return '[Circular]';
+          }
+          seen.add(value);
+        }
+        // Handle non-serializable values
+        if (typeof value === 'function') {
+          return '[Function]';
+        }
+        if (value instanceof Error) {
+          return {
+            name: value.name,
+            message: value.message,
+            stack: value.stack,
+          };
+        }
+        // Handle objects with methods (like Twilio Call/CallInvite)
+        if (
+          value &&
+          typeof value === 'object' &&
+          !Array.isArray(value) &&
+          Object.getPrototypeOf(value) !== Object.prototype
+        ) {
+          // Try to extract serializable properties
+          const serializable: Record<string, unknown> = {};
+          try {
+            // Get own properties
+            for (const prop in value) {
+              if (Object.prototype.hasOwnProperty.call(value, prop)) {
+                const propValue = (value as Record<string, unknown>)[prop];
+                if (
+                  typeof propValue !== 'function' &&
+                  typeof propValue !== 'object'
+                ) {
+                  serializable[prop] = propValue;
+                }
+              }
+            }
+            // Try common methods that return values
+            const anyValue = value as any;
+            if (typeof anyValue.getCallSid === 'function') {
+              try {
+                serializable.callSid = anyValue.getCallSid();
+              } catch {}
+            }
+            if (typeof anyValue.getState === 'function') {
+              try {
+                serializable.state = anyValue.getState();
+              } catch {}
+            }
+            if (typeof anyValue.getSid === 'function') {
+              try {
+                serializable.sid = anyValue.getSid();
+              } catch {}
+            }
+            return Object.keys(serializable).length > 0
+              ? serializable
+              : `[${value.constructor?.name || 'Object'}]`;
+          } catch {
+            return `[${value.constructor?.name || 'Object'}]`;
+          }
+        }
+        return value;
+      },
+      space
+    );
+  }
+
+  /**
    * Log to console (development only)
    */
   private logToConsole(entry: LogEntry): void {
@@ -341,21 +419,33 @@ class Logger {
     switch (level) {
       case 'debug':
         if (context && Object.keys(context).length > 0) {
-          console.log(prefix, message, JSON.stringify(context, null, 2));
+          try {
+            console.log(prefix, message, this.safeStringify(context, 2));
+          } catch (e) {
+            console.log(prefix, message, '[Context serialization failed]');
+          }
         } else {
           console.log(prefix, message);
         }
         break;
       case 'info':
         if (context && Object.keys(context).length > 0) {
-          console.log(prefix, message, JSON.stringify(context, null, 2));
+          try {
+            console.log(prefix, message, this.safeStringify(context, 2));
+          } catch (e) {
+            console.log(prefix, message, '[Context serialization failed]');
+          }
         } else {
           console.log(prefix, message);
         }
         break;
       case 'warn':
         if (context && Object.keys(context).length > 0) {
-          console.warn(prefix, message, JSON.stringify(context, null, 2));
+          try {
+            console.warn(prefix, message, this.safeStringify(context, 2));
+          } catch (e) {
+            console.warn(prefix, message, '[Context serialization failed]');
+          }
         } else {
           console.warn(prefix, message);
         }
@@ -373,9 +463,9 @@ class Logger {
         }
         if (context && Object.keys(context).length > 0) {
           try {
-            console.error('Context:', JSON.stringify(context, null, 2));
+            console.error('Context:', this.safeStringify(context, 2));
           } catch (e) {
-            console.error('Context:', context);
+            console.error('Context:', '[Context serialization failed]');
           }
         }
         break;
