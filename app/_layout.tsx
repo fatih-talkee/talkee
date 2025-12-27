@@ -36,11 +36,14 @@ import {
   ensureSupabaseSession,
 } from '../lib/supabase';
 import IncomingCallHandler from '../components/call/IncomingCallHandler';
-// ✅ NEW: Import notification setup
+// ✅ NEW: Import notification setup with response listener
 import {
   setupNotificationHandler,
   requestNotificationPermissions,
+  setupNotificationResponseListener,
 } from '@/lib/notificationSetup';
+// ✅ NEW: Import ActiveCallOverlay
+import ActiveCallOverlay from '@/components/call/ActiveCallOverlay';
 
 // Initialize Sentry (make it idempotent)
 try {
@@ -180,10 +183,10 @@ export default function RootLayout() {
   }, []);
 
   // ============================================================================
-  // ✅ NEW: NOTIFICATION SETUP FOR BILLING
+  // ✅ UPDATED: NOTIFICATION SETUP WITH RESPONSE LISTENER
   // ============================================================================
   useEffect(() => {
-    logger.info('[App] 🔧 Setting up billing notifications', {
+    logger.info('[App] 🔧 Setting up notifications', {
       timestamp: new Date().toISOString(),
     });
 
@@ -195,11 +198,11 @@ export default function RootLayout() {
       try {
         const granted = await requestNotificationPermissions();
         if (granted) {
-          logger.info('[App] ✅ Billing notification permissions granted', {
+          logger.info('[App] ✅ Notification permissions granted', {
             timestamp: new Date().toISOString(),
           });
         } else {
-          logger.warn('[App] ⚠️ Billing notification permissions denied', {
+          logger.warn('[App] ⚠️ Notification permissions denied', {
             timestamp: new Date().toISOString(),
           });
         }
@@ -213,6 +216,37 @@ export default function RootLayout() {
         );
       }
     })();
+
+    // ✅ NEW: Setup notification response listener
+    const notificationSubscription = setupNotificationResponseListener(
+      // On Accept
+      async (callId: string) => {
+        logger.info('[App] ✅ User accepted call from notification', {
+          callId,
+          timestamp: new Date().toISOString(),
+        });
+
+        // IncomingCallHandler will automatically show when app opens
+        // because Voice.Event.CallInvite is still active
+      },
+      // On Decline
+      async (callId: string) => {
+        logger.info('[App] ❌ User declined call from notification', {
+          callId,
+          timestamp: new Date().toISOString(),
+        });
+
+        // TODO: Optionally reject call in database or via Twilio
+        // For now, just logging
+      }
+    );
+
+    return () => {
+      // Cleanup notification listener
+      if (notificationSubscription) {
+        notificationSubscription.remove();
+      }
+    };
   }, []);
 
   // ============================================================================
@@ -473,8 +507,12 @@ export default function RootLayout() {
               <StatusBar style="auto" translucent={false} />
               <OfflineBanner />
               <ToastStack />
-              {/* ✅ IncomingCallHandler uses useTwilioVoice hook internally */}
+
+              {/* ✅ Incoming Call Handler - Shows modal for incoming calls */}
               <IncomingCallHandler />
+
+              {/* ✅ Active Call Overlay - Shows custom UI during active call */}
+              <ActiveCallOverlay />
             </AutoAvailabilityWrapper>
           </ThemeProvider>
           {__DEV__ && Platform.OS === 'web' ? (

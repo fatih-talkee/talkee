@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { PermissionsAndroid, Platform, AppState } from 'react-native';
 import { callsService } from '@/services/calls.service';
+import { notificationsService } from '@/services/notifications.service';
 import { usersService } from '@/services/supabase/user.service';
 import { CallStatus as DbCallStatus } from '@/types/database.types';
 import BillingService from '@/services/billingService';
@@ -228,7 +229,27 @@ class TwilioVoiceService {
     }
   }
 
+  private isRegistered = false;
+  private isRegistering = false;
+  private registrationPromise: Promise<void> | null = null;
+
   async register(): Promise<void> {
+    // ✅ Guard: If already registered, skip
+    if (this.isRegistered) {
+      logger.info('[TwilioVoice] ℹ️ Already registered, skipping', {
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    // ✅ Guard: If currently registering, return the existing promise
+    if (this.isRegistering && this.registrationPromise) {
+      logger.info('[TwilioVoice] ⏳ Registration in progress, waiting...', {
+        timestamp: new Date().toISOString(),
+      });
+      return this.registrationPromise;
+    }
+
     const registerStartTime = Date.now();
     logger.info('[TwilioVoice] 📱 Registering device...', {
       hasVoice: !!this.voice,
@@ -236,44 +257,75 @@ class TwilioVoiceService {
       timestamp: new Date().toISOString(),
     });
 
-    try {
-      if (!this.voice) {
-        logger.error('[TwilioVoice] ❌ Voice SDK not initialized', undefined, {
+    this.isRegistering = true;
+
+    this.registrationPromise = (async () => {
+      try {
+        if (!this.voice) {
+          logger.error(
+            '[TwilioVoice] ❌ Voice SDK not initialized',
+            undefined,
+            {
+              timestamp: new Date().toISOString(),
+            }
+          );
+          throw new Error('Voice SDK not initialized');
+        }
+
+        const tokenStartTime = Date.now();
+        const token = await this.getAccessToken();
+        const tokenElapsed = Date.now() - tokenStartTime;
+
+        logger.info('[TwilioVoice] 🔧 Registering device with Twilio...', {
+          tokenLength: token.length,
+          tokenElapsed: `${tokenElapsed}ms`,
           timestamp: new Date().toISOString(),
         });
-        throw new Error('Voice SDK not initialized');
+
+        const registerCallStartTime = Date.now();
+        await this.voice.register(token);
+        const registerElapsed = Date.now() - registerCallStartTime;
+        const totalElapsed = Date.now() - registerStartTime;
+
+        this.isRegistered = true; // ✅ Mark as registered
+
+        logger.info('[TwilioVoice] ✅ Device registered successfully', {
+          registerElapsed: `${registerElapsed}ms`,
+          totalElapsed: `${totalElapsed}ms`,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        const totalElapsed = Date.now() - registerStartTime;
+
+        // ✅ If error is 31409 (Conflict), treat as already registered
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        if (
+          errorMessage.includes('31409') ||
+          errorMessage.includes('Conflict')
+        ) {
+          logger.warn('[TwilioVoice] ⚠️ Already registered (31409 Conflict)', {
+            elapsed: `${totalElapsed}ms`,
+            timestamp: new Date().toISOString(),
+          });
+          this.isRegistered = true; // ✅ Mark as registered anyway
+          return; // Don't throw
+        }
+
+        logger.error('[TwilioVoice] ❌ Registration error', error, {
+          elapsed: `${totalElapsed}ms`,
+          errorMessage,
+          errorStack: error instanceof Error ? error.stack : undefined,
+          timestamp: new Date().toISOString(),
+        });
+        throw error;
+      } finally {
+        this.isRegistering = false;
+        this.registrationPromise = null;
       }
+    })();
 
-      const tokenStartTime = Date.now();
-      const token = await this.getAccessToken();
-      const tokenElapsed = Date.now() - tokenStartTime;
-
-      logger.info('[TwilioVoice] 🔧 Registering device with Twilio...', {
-        tokenLength: token.length,
-        tokenElapsed: `${tokenElapsed}ms`,
-        timestamp: new Date().toISOString(),
-      });
-
-      const registerCallStartTime = Date.now();
-      await this.voice.register(token);
-      const registerElapsed = Date.now() - registerCallStartTime;
-      const totalElapsed = Date.now() - registerStartTime;
-
-      logger.info('[TwilioVoice] ✅ Device registered successfully', {
-        registerElapsed: `${registerElapsed}ms`,
-        totalElapsed: `${totalElapsed}ms`,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      const totalElapsed = Date.now() - registerStartTime;
-      logger.error('[TwilioVoice] ❌ Registration error', error, {
-        elapsed: `${totalElapsed}ms`,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined,
-        timestamp: new Date().toISOString(),
-      });
-      throw error;
-    }
+    return this.registrationPromise;
   }
 
   async unregister(): Promise<void> {
@@ -311,6 +363,8 @@ class TwilioVoiceService {
       await this.voice.unregister(this.accessToken!);
       const unregisterElapsed = Date.now() - unregisterCallStartTime;
       const totalElapsed = Date.now() - unregisterStartTime;
+
+      this.isRegistered = false; // ✅ Reset registration flag
 
       logger.info('[TwilioVoice] ✅ Device unregistered', {
         unregisterElapsed: `${unregisterElapsed}ms`,
@@ -437,23 +491,83 @@ class TwilioVoiceService {
         timestamp: new Date().toISOString(),
       });
 
-      // ✅ IncomingCallHandler will show custom modal automatically
-      // When voice.connect() is called, Twilio SDK triggers Voice.Event.CallInvite on receiver's device
-      // This event is caught by setupVoiceListeners() which updates callState.callInvite
-      // IncomingCallHandler listens to callState via useTwilioVoice() and shows modal when callInvite exists
-      // Modal displays: caller avatar, name, rate per minute, Accept/Decline buttons
-      // When user clicks Accept, modal closes immediately and acceptIncomingCall() is called
-      // This bypasses Twilio's native invitation screen and opens the active call screen directly
-      logger.info(
-        '[TwilioVoice] ✅ Call initiated - IncomingCallHandler will show custom modal',
-        {
-          debugId: params.debugId,
-          callId: callRecord.id,
-          professionalUserId: params.professionalUserId,
-          note: 'No push notification needed - modal triggered by Voice.Event.CallInvite',
-          timestamp: new Date().toISOString(),
+      // ✅ Send push notification ONLY if app is in background/closed
+      // If app is in foreground, IncomingCallHandler modal will show automatically
+      const currentAppState = AppState.currentState;
+      const isAppInForeground = currentAppState === 'active';
+
+      if (!isAppInForeground) {
+        // ✅ App is in background/closed - send push notification
+        try {
+          logger.info(
+            '[TwilioVoice] 🔔 Sending incoming call notification (app is background)',
+            {
+              debugId: params.debugId,
+              callId: callRecord.id,
+              professionalUserId: params.professionalUserId,
+              appState: currentAppState,
+              timestamp: new Date().toISOString(),
+            }
+          );
+
+          const currentUser = await usersService.getCurrentUser();
+          const callerName = currentUser?.name || 'Someone';
+          const callerAvatar = currentUser?.avatar_url || null;
+
+          logger.debug('[TwilioVoice] 👤 Caller info', {
+            debugId: params.debugId,
+            callerName,
+            hasAvatar: !!callerAvatar,
+            timestamp: new Date().toISOString(),
+          });
+
+          const pushResult = await notificationsService.sendPushNotification(
+            params.professionalUserId,
+            '📞 Incoming Call',
+            `${callerName} is calling you`,
+            {
+              type: 'incoming_call',
+              call_id: callRecord.id,
+              caller_id: params.callerId,
+              caller_name: callerName,
+              caller_avatar: callerAvatar,
+              call_type: params.type || 'voice',
+              urgent: params.urgent || false,
+              sent_at: new Date().toISOString(),
+            },
+            'INCOMING_CALL' // ✅ Category with Accept/Decline buttons
+          );
+
+          logger.info('[TwilioVoice] ✅ Push notification sent', {
+            debugId: params.debugId,
+            callId: callRecord.id,
+            success: pushResult,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (pushError) {
+          logger.error('[TwilioVoice] ❌ Push notification error', pushError, {
+            debugId: params.debugId,
+            callId: callRecord.id,
+            errorMessage:
+              pushError instanceof Error
+                ? pushError.message
+                : String(pushError),
+            timestamp: new Date().toISOString(),
+          });
         }
-      );
+      } else {
+        // ✅ App is in foreground - IncomingCallHandler modal will show
+        logger.info(
+          '[TwilioVoice] ℹ️ Skipping push notification (app is foreground)',
+          {
+            debugId: params.debugId,
+            callId: callRecord.id,
+            note: 'IncomingCallHandler modal will show instead',
+            appState: currentAppState,
+            timestamp: new Date().toISOString(),
+          }
+        );
+      }
 
       if (!this.voice) {
         logger.error(
@@ -468,10 +582,20 @@ class TwilioVoiceService {
         throw new Error('Voice SDK was cleaned up before call could be made');
       }
 
+      // Get caller info for display name
+      const { data: callerUser } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', params.callerId)
+        .single();
+
+      const callerDisplayName = callerUser?.name || 'Talkee User';
+
       logger.info('[TwilioVoice] 📡 Connecting via Twilio SDK...', {
         debugId: params.debugId,
         to: params.professionalUserId,
         from: params.callerId,
+        callerDisplayName,
         callId: callRecord.id,
         callType: params.type || 'voice',
         urgent: params.urgent || false,
@@ -488,11 +612,13 @@ class TwilioVoiceService {
           CallType: params.type || 'voice',
           Urgent: params.urgent ? 'true' : 'false',
         },
+        contactHandle: callerDisplayName, // ✅ Display name for CallKit/ConnectionService
       };
 
       logger.debug('[TwilioVoice] 🔧 Calling voice.connect', {
         debugId: params.debugId,
         connectParams,
+        callerDisplayName,
         timestamp: new Date().toISOString(),
       });
 
@@ -805,8 +931,44 @@ class TwilioVoiceService {
       timestamp: new Date().toISOString(),
     });
 
+    // ✅ Get caller info from CallInvite
+    const callInviteAny = callInvite as any;
+    const fromField = callInviteAny._from || callInviteAny.from;
+    const callerId = fromField?.replace('client:', '');
+
+    // Get caller name for display
+    let callerDisplayName = 'Talkee User';
+    if (callerId) {
+      try {
+        const { data: callerUser } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', callerId)
+          .single();
+
+        if (callerUser?.name) {
+          callerDisplayName = callerUser.name;
+        }
+      } catch (error) {
+        logger.warn('[TwilioVoice] ⚠️ Could not fetch caller name', {
+          callerId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    logger.debug('[TwilioVoice] 📱 Accepting call with display name', {
+      debugId: params?.debugId,
+      callId: params?.callId,
+      callerDisplayName,
+      timestamp: new Date().toISOString(),
+    });
+
     const acceptCallStartTime = Date.now();
-    const call = await (callInvite as any).accept();
+    // ✅ Accept with contact handle for proper display name
+    const call = await (callInvite as any).accept({
+      contactHandle: callerDisplayName,
+    });
     const acceptElapsed = Date.now() - acceptCallStartTime;
 
     logger.info('[TwilioVoice] ✅ Call invite accepted', {
@@ -2058,29 +2220,10 @@ class TwilioVoiceService {
     const previousStatus = this.state.status;
     const previousState = { ...this.state };
 
-    // Sanitize updateDetails to avoid circular references in Call/CallInvite objects
-    const sanitizedUpdates: Record<string, unknown> = {};
-    for (const key in updates) {
-      const value = updates[key as keyof CallState];
-      if (key === 'call' || key === 'callInvite') {
-        // Only log presence, not the full object
-        sanitizedUpdates[key] = value ? '[Call Object]' : null;
-      } else if (key === 'error' && value instanceof Error) {
-        // Extract error properties safely
-        sanitizedUpdates[key] = {
-          name: value.name,
-          message: value.message,
-          stack: value.stack,
-        };
-      } else {
-        sanitizedUpdates[key] = value;
-      }
-    }
-
     logger.debug('[TwilioVoice] 🔄 updateState called', {
       previousStatus,
       updates: Object.keys(updates),
-      updateDetails: sanitizedUpdates,
+      updateDetails: updates,
       timestamp: new Date().toISOString(),
     });
 

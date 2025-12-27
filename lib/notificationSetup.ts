@@ -1,155 +1,278 @@
-/**
- * Notification Configuration
- *
- * Setup for expo-notifications to handle in-call billing notifications
- */
+// lib/notificationSetup.ts - UPDATED VERSION
 
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { Platform, AppState } from 'react-native';
 import { logger } from '@/lib/logger';
 
 /**
- * Configure notification handler
- * This allows notifications to show even when app is in foreground (during calls)
+ * Setup notification handler
+ * ✅ Foreground: Don't show incoming call notifications (IncomingCallHandler modal handles it)
+ * ✅ Background/Closed: Show incoming call notifications with action buttons
  */
-export const setupNotificationHandler = () => {
-  Notifications.setNotificationHandler({
-    handleNotification: async (notification: Notifications.Notification) => {
-      const notificationType =
-        (notification.request.content.data?.type as string) ?? '';
+export function setupNotificationHandler() {
+  logger.info('[NotificationSetup] 🔧 Setting up notification handler', {
+    timestamp: new Date().toISOString(),
+  });
 
-      logger.debug('[Notifications] 🔔 Handling notification', {
-        type: notificationType,
-        title: notification.request.content.title,
+  Notifications.setNotificationHandler({
+    handleNotification: async (notification) => {
+      const data = notification.request.content.data;
+      const isIncomingCall = data?.type === 'incoming_call';
+
+      // ✅ Check if app is in foreground
+      const appState = AppState.currentState;
+      const isAppInForeground = appState === 'active';
+
+      logger.debug('[NotificationSetup] 📨 Notification received', {
+        type: data?.type,
+        isIncomingCall,
+        appState,
+        isAppInForeground,
         timestamp: new Date().toISOString(),
       });
 
-      // Show alert even when app is in foreground
-      // This is crucial for displaying billing updates during active calls
+      // ✅ If incoming call and app is in FOREGROUND
+      if (isIncomingCall && isAppInForeground) {
+        logger.info(
+          '[NotificationSetup] 🚫 Suppressing incoming call notification (app is foreground)',
+          {
+            note: 'IncomingCallHandler modal will show instead',
+            timestamp: new Date().toISOString(),
+          }
+        );
+
+        // ❌ Don't show notification - IncomingCallHandler modal will handle it
+        return {
+          shouldShowAlert: false,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+          shouldShowBanner: false,
+          shouldShowList: false,
+        };
+      }
+
+      // ✅ If incoming call and app is in BACKGROUND/CLOSED
+      if (isIncomingCall && !isAppInForeground) {
+        logger.info(
+          '[NotificationSetup] ✅ Showing incoming call notification (app is background)',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+
+        // ✅ Show notification with sound and alert
+        return {
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+          shouldShowBanner: true,
+          shouldShowList: true,
+          priority: Notifications.AndroidNotificationPriority.MAX,
+        };
+      }
+
+      // ✅ For all other notifications (billing, etc)
+      logger.debug('[NotificationSetup] ✅ Showing regular notification', {
+        type: data?.type,
+        timestamp: new Date().toISOString(),
+      });
+
       return {
         shouldShowAlert: true,
-        shouldPlaySound: notificationType !== 'billing_update', // Silent for regular updates
-        shouldSetBadge: false,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
         shouldShowBanner: true,
         shouldShowList: true,
       };
     },
   });
 
-  logger.info('[Notifications] ✅ Notification handler configured', {
+  logger.info('[NotificationSetup] ✅ Notification handler configured', {
     timestamp: new Date().toISOString(),
   });
-};
+}
 
 /**
  * Request notification permissions
  */
-export const requestNotificationPermissions = async () => {
+export async function requestNotificationPermissions(): Promise<boolean> {
+  logger.info('[NotificationSetup] 🔔 Requesting notification permissions', {
+    platform: Platform.OS,
+    timestamp: new Date().toISOString(),
+  });
+
   try {
-    logger.info('[Notifications] 🔧 Requesting notification permissions', {
+    const { status: existingStatus } =
+      await Notifications.getPermissionsAsync();
+
+    logger.debug('[NotificationSetup] 📊 Existing permission status', {
+      status: existingStatus,
       timestamp: new Date().toISOString(),
     });
 
-    const { status: existingStatus } =
-      await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
-    // Request permission if not already granted
     if (existingStatus !== 'granted') {
+      logger.info('[NotificationSetup] 🙏 Requesting permissions...', {
+        timestamp: new Date().toISOString(),
+      });
+
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
+
+      logger.info('[NotificationSetup] 📋 Permission request result', {
+        status: finalStatus,
+        granted: finalStatus === 'granted',
+        timestamp: new Date().toISOString(),
+      });
     }
 
     if (finalStatus !== 'granted') {
-      logger.warn('[Notifications] ⚠️ Notification permission not granted', {
+      logger.warn('[NotificationSetup] ⚠️ Notification permissions denied', {
         status: finalStatus,
         timestamp: new Date().toISOString(),
       });
       return false;
     }
 
-    logger.info('[Notifications] ✅ Notification permission granted', {
+    // ✅ Configure notification categories with action buttons
+    await configureNotificationCategories();
+
+    logger.info('[NotificationSetup] ✅ Notification permissions granted', {
       timestamp: new Date().toISOString(),
     });
-
-    // Configure notification channel for Android
-    if (Platform.OS === 'android') {
-      await setupAndroidNotificationChannels();
-    }
 
     return true;
   } catch (error) {
-    logger.error('[Notifications] ❌ Error requesting permissions', error, {
-      timestamp: new Date().toISOString(),
-    });
+    logger.error(
+      '[NotificationSetup] ❌ Failed to request permissions',
+      error,
+      {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+      }
+    );
     return false;
   }
-};
+}
 
 /**
- * Setup Android notification channels
+ * Configure notification categories with action buttons
+ * ✅ This makes Accept/Decline buttons work on notifications
  */
-const setupAndroidNotificationChannels = async () => {
-  if (Platform.OS !== 'android') return;
+async function configureNotificationCategories() {
+  logger.info('[NotificationSetup] 🔧 Configuring notification categories', {
+    timestamp: new Date().toISOString(),
+  });
 
   try {
-    // Billing updates channel (low priority, silent)
-    await Notifications.setNotificationChannelAsync('billing_updates', {
-      name: 'Billing Updates',
-      description: 'Real-time call billing information',
-      importance: Notifications.AndroidImportance.LOW,
-      sound: null,
-      vibrationPattern: null,
-      showBadge: false,
-    });
+    // ✅ INCOMING_CALL category with Accept/Decline actions
+    await Notifications.setNotificationCategoryAsync('INCOMING_CALL', [
+      {
+        identifier: 'ACCEPT_CALL',
+        buttonTitle: 'Accept',
+        options: {
+          opensAppToForeground: true,
+        },
+      },
+      {
+        identifier: 'DECLINE_CALL',
+        buttonTitle: 'Decline',
+        options: {
+          opensAppToForeground: false,
+        },
+      },
+    ]);
 
-    // Balance warnings channel (high priority, with sound)
-    await Notifications.setNotificationChannelAsync('balance_warnings', {
-      name: 'Balance Warnings',
-      description: 'Low balance and critical warnings',
-      importance: Notifications.AndroidImportance.HIGH,
-      sound: 'default',
-      vibrationPattern: [0, 250, 250, 250],
-      showBadge: false,
-      enableLights: true,
-      lightColor: '#FF9500',
-    });
-
-    logger.info('[Notifications] ✅ Android notification channels created', {
+    logger.info('[NotificationSetup] ✅ Notification categories configured', {
+      categories: ['INCOMING_CALL'],
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error('[Notifications] ❌ Error creating Android channels', error, {
-      timestamp: new Date().toISOString(),
-    });
-  }
-};
-
-/**
- * Clear all billing notifications
- */
-export const clearBillingNotifications = async () => {
-  try {
-    const notifications = await Notifications.getPresentedNotificationsAsync();
-    const billingNotifications = notifications.filter(
-      (n) =>
-        (n.request.content.data?.type as string)?.includes('billing') ||
-        (n.request.content.data?.type as string)?.includes('balance')
+    logger.error(
+      '[NotificationSetup] ❌ Failed to configure categories',
+      error,
+      {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+      }
     );
-
-    for (const notification of billingNotifications) {
-      await Notifications.dismissNotificationAsync(
-        notification.request.identifier
-      );
-    }
-
-    logger.info('[Notifications] 🧹 Cleared billing notifications', {
-      count: billingNotifications.length,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    logger.error('[Notifications] ❌ Error clearing notifications', error, {
-      timestamp: new Date().toISOString(),
-    });
   }
-};
+}
+
+/**
+ * Setup notification response listener
+ * Handles when user taps notification or action buttons
+ */
+export function setupNotificationResponseListener(
+  onAccept: (callId: string) => void,
+  onDecline: (callId: string) => void
+) {
+  logger.info(
+    '[NotificationSetup] 🔧 Setting up notification response listener',
+    {
+      timestamp: new Date().toISOString(),
+    }
+  );
+
+  const subscription = Notifications.addNotificationResponseReceivedListener(
+    (response) => {
+      const { notification, actionIdentifier } = response;
+      const data = notification.request.content.data;
+      const callId = data?.call_id as string | undefined;
+
+      logger.info('[NotificationSetup] 📲 Notification response received', {
+        actionIdentifier,
+        hasCallId: !!callId,
+        dataType: data?.type,
+        timestamp: new Date().toISOString(),
+      });
+
+      if (!callId || data?.type !== 'incoming_call') {
+        logger.warn('[NotificationSetup] ⚠️ Invalid notification response', {
+          hasCallId: !!callId,
+          dataType: data?.type,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      // Handle action buttons
+      if (actionIdentifier === 'ACCEPT_CALL') {
+        logger.info(
+          '[NotificationSetup] ✅ User accepted call from notification',
+          {
+            callId,
+            timestamp: new Date().toISOString(),
+          }
+        );
+        onAccept(callId);
+      } else if (actionIdentifier === 'DECLINE_CALL') {
+        logger.info(
+          '[NotificationSetup] ❌ User declined call from notification',
+          {
+            callId,
+            timestamp: new Date().toISOString(),
+          }
+        );
+        onDecline(callId);
+      } else {
+        // Default tap (no action button)
+        logger.info('[NotificationSetup] 👆 User tapped notification', {
+          callId,
+          timestamp: new Date().toISOString(),
+        });
+        onAccept(callId); // Default to opening the call
+      }
+    }
+  );
+
+  logger.info(
+    '[NotificationSetup] ✅ Notification response listener registered',
+    {
+      timestamp: new Date().toISOString(),
+    }
+  );
+
+  return subscription;
+}

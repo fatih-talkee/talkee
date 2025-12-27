@@ -94,15 +94,39 @@ export class AvatarService {
         );
       } else {
         // Mobile: Use FileSystem
+        // Read file as base64 string (Expo FileSystem accepts string 'base64')
         const base64 = await FileSystem.readAsStringAsync(imageUri, {
-          encoding: FileSystem.EncodingType.Base64,
+          encoding: 'base64' as any, // TypeScript workaround - Expo accepts string 'base64'
         });
 
-        // Convert base64 to Uint8Array
-        const binaryString = atob(base64);
-        imageData = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          imageData[i] = binaryString.charCodeAt(i);
+        // Convert base64 to Uint8Array (React Native compatible)
+        // React Native doesn't have atob, so we decode manually
+        const base64Chars =
+          'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+        const base64Lookup = new Uint8Array(256);
+        for (let i = 0; i < base64Chars.length; i++) {
+          base64Lookup[base64Chars.charCodeAt(i)] = i;
+        }
+        base64Lookup['='.charCodeAt(0)] = 0;
+
+        const padding = (base64.match(/=/g) || []).length;
+        const binaryLength = (base64.length * 3) / 4 - padding;
+        imageData = new Uint8Array(binaryLength);
+
+        let j = 0;
+        for (let i = 0; i < base64.length; i += 4) {
+          const encoded1 = base64Lookup[base64.charCodeAt(i)];
+          const encoded2 = base64Lookup[base64.charCodeAt(i + 1)];
+          const encoded3 = base64Lookup[base64.charCodeAt(i + 2)];
+          const encoded4 = base64Lookup[base64.charCodeAt(i + 3)];
+
+          imageData[j++] = (encoded1 << 2) | (encoded2 >> 4);
+          if (j < binaryLength) {
+            imageData[j++] = ((encoded2 & 15) << 4) | (encoded3 >> 2);
+          }
+          if (j < binaryLength) {
+            imageData[j++] = ((encoded3 & 3) << 6) | encoded4;
+          }
         }
 
         // Determine content type from file extension
