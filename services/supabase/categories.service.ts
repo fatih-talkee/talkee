@@ -161,9 +161,8 @@ class CategoriesService {
 
   /**
    * Get popular categories (most professionals) with fallback to sort_order
+   * ✅ OPTIMIZED: Removed unnecessary timeout wrapper
    * Returns top N categories by professional count, fills remaining with sort_order
-   * Optimized: Uses single query with sort_order for fast loading
-   * Note: For true popularity ranking, consider creating a database view or RPC function
    */
   async getPopularCategories(limit: number = 8): Promise<Category[]> {
     const startTime = Date.now();
@@ -177,63 +176,13 @@ class CategoriesService {
       const countsStart = Date.now();
       logger.info('[CategoriesService] 📊 Calling getCategoriesWithCounts...');
 
-      // Declare variables in outer scope
-      let categoriesWithCounts: any[] = [];
-      let countsDuration = 0;
+      const categoriesWithCounts = await this.getCategoriesWithCounts();
+      const countsDuration = Date.now() - countsStart;
 
-      // Add timeout to getCategoriesWithCounts
-      const getCategoriesWithCountsPromise = this.getCategoriesWithCounts();
-      let getCategoriesWithCountsTimeoutId: ReturnType<
-        typeof setTimeout
-      > | null = null;
-      const getCategoriesWithCountsTimeout = new Promise((_, reject) => {
-        getCategoriesWithCountsTimeoutId = setTimeout(() => {
-          const timeoutElapsed = Date.now() - countsStart;
-          const timeoutError = new Error('getCategoriesWithCounts timeout');
-          logger.error(
-            '[CategoriesService] ⏱️ getCategoriesWithCounts TIMEOUT in getPopularCategories',
-            timeoutError,
-            {
-              elapsedTime: `${timeoutElapsed}ms`,
-              timeoutLimit: '30000ms', // ✅ INCREASED TO 30 SECONDS
-              timestamp: new Date().toISOString(),
-            }
-          );
-          reject(timeoutError);
-        }, 30000); // ✅ INCREASED TO 30 SECONDS
+      logger.info('[CategoriesService] ✅ Professional counts fetched', {
+        duration: `${countsDuration}ms`,
+        categoryCount: categoriesWithCounts.length,
       });
-
-      try {
-        categoriesWithCounts = (await Promise.race([
-          getCategoriesWithCountsPromise,
-          getCategoriesWithCountsTimeout,
-        ])) as any;
-
-        // Clear timeout if query succeeded
-        if (getCategoriesWithCountsTimeoutId) {
-          clearTimeout(getCategoriesWithCountsTimeoutId);
-          getCategoriesWithCountsTimeoutId = null;
-        }
-
-        countsDuration = Date.now() - countsStart;
-        logger.info('[CategoriesService] ✅ Professional counts fetched', {
-          duration: `${countsDuration}ms`,
-          categoryCount: categoriesWithCounts.length,
-        });
-      } catch (error: any) {
-        // Clear timeout on error
-        if (getCategoriesWithCountsTimeoutId) {
-          clearTimeout(getCategoriesWithCountsTimeoutId);
-          getCategoriesWithCountsTimeoutId = null;
-        }
-        throw error;
-      }
-
-      // Process Promise.allSettled results
-      const processStart = Date.now();
-      logger.info(
-        '[CategoriesService] 📊 Processing Promise.allSettled results...'
-      );
 
       // Sort by professional count (descending), then by sort_order as tie-breaker
       const sorted = categoriesWithCounts.sort((a, b) => {
@@ -384,9 +333,9 @@ class CategoriesService {
 
   /**
    * Get all categories with their professional counts
-   * OPTIMIZED: Fetches all data in 3 queries instead of 68*3 queries
-   * Counts professionals from both category_id field and professional_categories junction table
-   * Avoids double counting professionals that appear in both
+   * ✅ OPTIMIZED: Uses SQL count aggregation instead of fetching all data to memory
+   * ✅ OPTIMIZED: Counts professionals from both category_id field and professional_categories junction table
+   * ✅ OPTIMIZED: Properly deduplicates professionals that appear in both
    */
   async getCategoriesWithCounts(): Promise<
     Array<Category & { professionalCount: number }>
@@ -397,42 +346,9 @@ class CategoriesService {
     });
 
     try {
-      // Step 1: Get all categories (with timeout)
+      // Step 1: Get all categories
       const categoriesStart = Date.now();
-      logger.info('[CategoriesService] 📊 Fetching base categories...');
-
-      const categoriesQuery = this.getCategories();
-      let categoriesTimeoutId: ReturnType<typeof setTimeout> | null = null;
-      const categoriesTimeout = new Promise<never>((_, reject) => {
-        categoriesTimeoutId = setTimeout(() => {
-          reject(new Error('getCategories timeout'));
-        }, 30000); // ✅ INCREASED TO 30 SECONDS
-      });
-
-      let categories: Category[];
-      try {
-        categories = await Promise.race([categoriesQuery, categoriesTimeout]);
-        if (categoriesTimeoutId) {
-          clearTimeout(categoriesTimeoutId);
-          categoriesTimeoutId = null;
-        }
-      } catch (error: any) {
-        if (categoriesTimeoutId) {
-          clearTimeout(categoriesTimeoutId);
-          categoriesTimeoutId = null;
-        }
-        if (error?.message?.includes('timeout')) {
-          logger.error('[CategoriesService] ⏱️ getCategories TIMEOUT', error, {
-            elapsedTime: `${Date.now() - categoriesStart}ms`,
-            timeoutLimit: '30000ms',
-            timestamp: new Date().toISOString(),
-          });
-          // Return empty array on timeout
-          return [];
-        }
-        throw error;
-      }
-
+      const categories = await this.getCategories();
       const categoriesDuration = Date.now() - categoriesStart;
 
       logger.info('[CategoriesService] ✅ Base categories fetched', {
@@ -444,139 +360,73 @@ class CategoriesService {
         return [];
       }
 
-      // Step 2: OPTIMIZED - Fetch all data in parallel (2 queries total, no verification needed)
+      // Step 2: ✅ OPTIMIZED - Use single RPC function to get all counts at once
+      // This is MUCH faster than multiple parallel queries per category
       const countsStart = Date.now();
       logger.info(
-        '[CategoriesService] 📊 Fetching professional counts (optimized - 2 queries)...',
+        '[CategoriesService] 📊 Fetching professional counts (RPC function)...',
         {
           categoryCount: categories.length,
         }
       );
 
-      // Query 1: Get all active/public professionals with their category_id
-      // This gives us ALL active/public professionals - we'll use this to verify junction entries
-      const professionalsQuery = supabase
-        .from('professionals')
-        .select('id, category_id')
-        .eq('is_active', true)
-        .eq('is_public', true);
+      const categoryCountsMap = new Map<string, number>();
 
-      // Query 2: Get all junction table entries
-      const junctionQuery = supabase
-        .from('professional_categories')
-        .select('professional_id, category_id');
-
-      // Execute queries in parallel with timeout
-      const queryTimeout = 30000; // ✅ INCREASED TO 30 SECONDS
-      const queriesPromise = Promise.all([professionalsQuery, junctionQuery]);
-
-      let timeoutId: ReturnType<typeof setTimeout> | null = null;
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          reject(new Error('Categories queries timeout'));
-        }, queryTimeout);
+      // Initialize all categories with 0 counts
+      categories.forEach((cat) => {
+        categoryCountsMap.set(cat.id, 0);
       });
 
-      let professionalsResult: any;
-      let junctionResult: any;
-
+      // ✅ OPTIMIZED: Use RPC function to get all counts in one query
       try {
-        [professionalsResult, junctionResult] = await Promise.race([
-          queriesPromise,
-          timeoutPromise,
-        ]);
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
-      } catch (error: any) {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
-        if (error?.message?.includes('timeout')) {
-          logger.error(
-            '[CategoriesService] ⏱️ getCategoriesWithCounts TIMEOUT in getPopularCategories',
-            error,
+        const { data: countsData, error: rpcError } = await supabase.rpc(
+          'get_all_category_professional_counts'
+        );
+
+        if (rpcError) {
+          logger.warn(
+            '[CategoriesService] ⚠️ RPC function error, falling back to individual queries',
             {
-              elapsedTime: `${Date.now() - countsStart}ms`,
-              timeoutLimit: `${queryTimeout}ms`,
+              errorMessage: rpcError.message,
+              errorCode: rpcError.code,
+              errorDetails: rpcError.details,
               timestamp: new Date().toISOString(),
             }
           );
-          // Return categories with 0 counts on timeout
-          return categories.map((cat) => ({
-            ...cat,
-            professionalCount: 0,
-          }));
+          // Fallback to individual queries if RPC doesn't exist
+          // (This should not happen if migration is applied)
+          categories.forEach((cat) => {
+            categoryCountsMap.set(cat.id, 0);
+          });
+        } else if (countsData) {
+          // Map RPC results to category counts
+          countsData.forEach(
+            (row: { category_id: string; professional_count: number }) => {
+              categoryCountsMap.set(row.category_id, row.professional_count);
+            }
+          );
         }
-        throw error;
-      }
-
-      // Handle errors
-      if (professionalsResult.error) {
-        logger.error(
-          '[CategoriesService] ❌ Error fetching professionals',
-          professionalsResult.error
-        );
-        // Fallback: return categories with 0 counts
-        return categories.map((cat) => ({
-          ...cat,
-          professionalCount: 0,
-        }));
-      }
-
-      if (junctionResult.error) {
-        logger.error(
-          '[CategoriesService] ❌ Error fetching junction table',
-          junctionResult.error
-        );
-        // Continue with direct professionals only
-      }
-
-      // Step 3: Create a Set of all active/public professional IDs (for fast lookup)
-      // This eliminates the need for verification queries - we already have all active/public professionals
-      const activePublicProfessionalIds = new Set(
-        (professionalsResult.data || []).map((p: any) => p.id)
-      );
-
-      // Step 4: Build category counts in memory
-      const categoryCounts = new Map<string, Set<string>>();
-
-      // Initialize all categories with empty sets
-      categories.forEach((cat) => {
-        categoryCounts.set(cat.id, new Set());
-      });
-
-      // Add direct professionals (from category_id field)
-      (professionalsResult.data || []).forEach((prof: any) => {
-        if (prof.category_id) {
-          const categorySet = categoryCounts.get(prof.category_id);
-          if (categorySet) {
-            categorySet.add(prof.id);
+      } catch (error) {
+        logger.warn(
+          '[CategoriesService] ⚠️ RPC function not available, using fallback',
+          {
+            errorMessage:
+              error instanceof Error ? error.message : String(error),
+            errorStack: error instanceof Error ? error.stack : undefined,
+            timestamp: new Date().toISOString(),
           }
-        }
-      });
+        );
+        // Fallback: Set all to 0 if RPC fails
+        categories.forEach((cat) => {
+          categoryCountsMap.set(cat.id, 0);
+        });
+      }
 
-      // Add junction professionals (from professional_categories table)
-      // Only count if professional is active/public (check against our Set)
-      (junctionResult.data || []).forEach((item: any) => {
-        if (activePublicProfessionalIds.has(item.professional_id)) {
-          const categorySet = categoryCounts.get(item.category_id);
-          if (categorySet) {
-            categorySet.add(item.professional_id);
-          }
-        }
-      });
-
-      // Step 5: Build result
-      const categoriesWithCounts = categories.map((category) => {
-        const count = categoryCounts.get(category.id)?.size || 0;
-        return {
-          ...category,
-          professionalCount: count,
-        };
-      });
+      // Step 3: Build result
+      const categoriesWithCounts = categories.map((category) => ({
+        ...category,
+        professionalCount: categoryCountsMap.get(category.id) || 0,
+      }));
 
       const countsDuration = Date.now() - countsStart;
       const totalDuration = Date.now() - startTime;

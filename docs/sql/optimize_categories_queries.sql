@@ -50,10 +50,14 @@ SELECT EXISTS (
   WHERE indexname = 'idx_professional_categories_category_professional'
 ) AS index_exists;
 
--- Create index if it doesn't exist (composite index for the query)
--- This index covers: category_id, professional_id (for efficient lookups)
+-- Create composite index for category_id lookups (most common query pattern)
 CREATE INDEX IF NOT EXISTS idx_professional_categories_category_professional
 ON professional_categories (category_id, professional_id);
+
+-- Create index for professional_id lookups (used in verification queries)
+-- This prevents sequential scans when filtering by professional_id
+CREATE INDEX IF NOT EXISTS idx_professional_categories_professional_id
+ON professional_categories (professional_id);
 
 -- =====================================================
 -- 4. Recommended indexes for professionals verification query
@@ -89,13 +93,13 @@ ANALYZE categories;
 -- This query shows which indexes are being used
 SELECT
   schemaname,
-  tablename,
-  indexname,
+  relname AS tablename,
+  indexrelname AS indexname,
   idx_scan AS index_scans,
   idx_tup_read AS tuples_read,
   idx_tup_fetch AS tuples_fetched
 FROM pg_stat_user_indexes
-WHERE tablename IN ('professionals', 'professional_categories', 'categories')
+WHERE relname IN ('professionals', 'professional_categories', 'categories')
 ORDER BY idx_scan DESC;
 
 -- =====================================================

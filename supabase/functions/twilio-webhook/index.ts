@@ -415,12 +415,11 @@ serve(async (req: Request) => {
     // IMPORTANT: Never upsert here. If the call row doesn't exist, we skip DB writes.
     if (callId) {
       const nowIso = new Date().toISOString();
-      const durationMinutes = Math.max(0, Math.ceil(duration / 60));
 
       // Verify call exists. If it doesn't, DO NOT create a new calls row here (caller_id/professional_id are required).
       const { data: existingCall, error: existingErr } = await supabase
         .from('calls')
-        .select('id')
+        .select('id, start_time, end_time')
         .eq('id', callId)
         .maybeSingle();
 
@@ -463,7 +462,35 @@ serve(async (req: Request) => {
         }
         if (isEnded) {
           updatePayload.end_time = nowIso;
+          
+          // Calculate duration: use Twilio duration if available, otherwise calculate from start_time/end_time
+          let calculatedDuration = duration;
+          if (calculatedDuration <= 0 && existingCall.start_time) {
+            const startTime = new Date(existingCall.start_time);
+            const endTime = new Date(nowIso);
+            calculatedDuration = Math.max(0, Math.floor((endTime.getTime() - startTime.getTime()) / 1000));
+            console.log('📊 [twilio-webhook] Calculated duration from timestamps', {
+              CallId: callId,
+              startTime: existingCall.start_time,
+              endTime: nowIso,
+              calculatedDurationSeconds: calculatedDuration,
+            });
+          }
+          
+          // Convert to minutes, minimum 1 minute for completed calls
+          const durationMinutes = isEnded && dbStatus === 'completed' 
+            ? Math.max(1, Math.ceil(calculatedDuration / 60))
+            : Math.max(0, Math.ceil(calculatedDuration / 60));
+          
           updatePayload.duration_minutes = durationMinutes;
+          
+          console.log('📊 [twilio-webhook] Duration calculation', {
+            CallId: callId,
+            twilioDuration: duration,
+            calculatedDuration,
+            durationMinutes,
+            dbStatus,
+          });
         }
 
         const { error: updateErr } = await supabase
@@ -501,10 +528,9 @@ serve(async (req: Request) => {
     }
 
     // Handle billing for completed calls (best-effort + idempotent via transactions table)
-    if (status === 'completed' && duration > 0 && callId) {
+    if (status === 'completed' && callId) {
       try {
         const nowIso = new Date().toISOString();
-        const durationMinutes = Math.max(1, Math.ceil(duration / 60));
 
         const { data: callRow, error: callErr } = await supabase
           .from('calls')
@@ -515,6 +541,9 @@ serve(async (req: Request) => {
             professional_id,
             rate_per_minute,
             total_cost,
+            start_time,
+            end_time,
+            duration_minutes,
             caller:users!caller_id(name),
             professional:professionals!professional_id(
               user_id,
@@ -531,22 +560,74 @@ serve(async (req: Request) => {
             message: callErr?.message,
           });
         } else {
+          // Calculate duration: use DB duration_minutes if available, otherwise calculate from timestamps
+          let durationMinutes = (callRow as any).duration_minutes || 0;
+          
+          if (durationMinutes <= 0 && (callRow as any).start_time && (callRow as any).end_time) {
+            const startTime = new Date((callRow as any).start_time);
+            const endTime = new Date((callRow as any).end_time);
+            const calculatedDurationSeconds = Math.max(0, Math.floor((endTime.getTime() - startTime.getTime()) / 1000));
+            // Use same logic as per-minute billing: Math.floor(duration / 60) + 1
+            // This ensures consistency with upfront per-minute billing
+            // Example: 60 seconds = 2 minutes (1st + 2nd minute entered)
+            durationMinutes = Math.max(1, Math.floor(calculatedDurationSeconds / 60) + 1);
+            
+            console.log('📊 [twilio-webhook] Billing: Calculated duration from DB timestamps', {
+              CallId: callId,
+              startTime: (callRow as any).start_time,
+              endTime: (callRow as any).end_time,
+              calculatedDurationSeconds,
+              durationMinutes,
+            });
+          } else if (durationMinutes <= 0 && duration > 0) {
+            // Fallback to Twilio duration if DB doesn't have it
+            // Use same logic as per-minute billing: Math.floor(duration / 60) + 1
+            durationMinutes = Math.max(1, Math.floor(duration / 60) + 1);
+            console.log('📊 [twilio-webhook] Billing: Using Twilio duration', {
+              CallId: callId,
+              twilioDuration: duration,
+              durationMinutes,
+            });
+          }
+          
+          // Ensure minimum 1 minute for completed calls
+          // Use same logic as per-minute billing: each new minute entered charges the full minute
+          // This matches the upfront per-minute billing logic (industry standard)
+          // Example: 2 min 1 sec = 3 minutes charged (1st + 2nd + 3rd minute)
+          durationMinutes = Math.max(1, durationMinutes);
+          
           const ratePerMinute = Number((callRow as any).rate_per_minute || 0);
+          // Calculate total cost based on per-minute billing logic
+          // This should match what was actually charged via per-minute billing
           const computedTotalCost = Number(
             (durationMinutes * ratePerMinute).toFixed(2)
           );
+          
+          console.log('💰 [twilio-webhook] Billing calculation', {
+            CallId: callId,
+            durationMinutes,
+            ratePerMinute,
+            computedTotalCost,
+          });
 
           // Persist duration + total_cost for user stats/history.
           // (We do this even if we end up skipping billing due to missing users, etc.)
+          // Update duration_minutes if it was calculated (might be 0 in DB)
+          const updatePayload: Record<string, unknown> = {
+            status: 'completed',
+            end_time: nowIso,
+            total_cost: computedTotalCost,
+            updated_at: nowIso,
+          };
+          
+          // Only update duration_minutes if it's better than what's in DB
+          if (durationMinutes > ((callRow as any).duration_minutes || 0)) {
+            updatePayload.duration_minutes = durationMinutes;
+          }
+          
           const { error: callUpdateErr } = await supabase
             .from('calls')
-            .update({
-              status: 'completed',
-              end_time: nowIso,
-              duration_minutes: durationMinutes,
-              total_cost: computedTotalCost,
-              updated_at: nowIso,
-            })
+            .update(updatePayload)
             .eq('id', callId);
 
           if (callUpdateErr) {

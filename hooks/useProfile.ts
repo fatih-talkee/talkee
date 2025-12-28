@@ -87,8 +87,16 @@ export function useProfile() {
       }, 0);
 
       // Handle cache operations
+      // ✅ Don't invalidate cache on TOKEN_REFRESHED - it's just a token renewal
+      // Only invalidate on actual user changes (login, logout, switch)
       setTimeout(() => {
         if (!isMountedRef.current) return;
+
+        // Skip cache operations for TOKEN_REFRESHED - user hasn't changed
+        if (event === 'TOKEN_REFRESHED') {
+          logger.debug('[useProfile] ⏭️ Skipping cache operations on TOKEN_REFRESHED');
+          return;
+        }
 
         if (previousUserId !== newUserId) {
           if (previousUserId && !newUserId) {

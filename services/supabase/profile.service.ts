@@ -67,28 +67,36 @@ export class ProfileService {
         userName: user.name,
       });
 
-      // Get stats from function using user.id (not auth_id!)
-      const statsQueryStart = Date.now();
-      logger.info('[ProfileService] 📊 Querying user stats...', {
-        userId: user.id,
-      });
-
-      const { data: statsData, error: statsError } = await supabase.rpc(
-        'get_user_profile_stats',
-        { p_user_id: user.id }
+      // ✅ OPTIMIZED: Get stats and professional data in parallel
+      // Both queries depend on user.id but are independent of each other
+      const parallelQueryStart = Date.now();
+      logger.info(
+        '[ProfileService] 📊 Querying stats and professionals in parallel...',
+        {
+          userId: user.id,
+        }
       );
 
-      const statsQueryDuration = Date.now() - statsQueryStart;
-      logger.info('[ProfileService] ✅ Stats query completed', {
-        duration: `${statsQueryDuration}ms`,
-        hasData: !!statsData,
+      const [statsResult, profResult] = await Promise.all([
+        supabase.rpc('get_user_profile_stats', { p_user_id: user.id }),
+        supabase
+          .from('professionals')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+      ]);
+
+      const parallelQueryDuration = Date.now() - parallelQueryStart;
+      logger.info('[ProfileService] ✅ Parallel queries completed', {
+        duration: `${parallelQueryDuration}ms`,
       });
 
+      // Handle stats result
+      const { data: statsData, error: statsError } = statsResult;
       if (statsError) {
         logger.error('[ProfileService] ❌ Stats query error', {
           error: statsError.message,
           code: statsError.code,
-          duration: `${statsQueryDuration}ms`,
         });
         throw statsError;
       }
@@ -102,24 +110,8 @@ export class ProfileService {
         member_since: user.created_at,
       };
 
-      // Check if professional - query professionals table directly
-      const profQueryStart = Date.now();
-      logger.info('[ProfileService] 📊 Querying professionals table...', {
-        userId: user.id,
-      });
-
-      const { data: profData } = await supabase
-        .from('professionals')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      const profQueryDuration = Date.now() - profQueryStart;
-      logger.info('[ProfileService] ✅ Professionals query completed', {
-        duration: `${profQueryDuration}ms`,
-        isProfessional: !!profData,
-      });
-
+      // Handle professional result
+      const { data: profData } = profResult;
       const professional = profData || null;
       const is_professional = !!profData;
 
@@ -130,8 +122,7 @@ export class ProfileService {
         isProfessional: is_professional,
         breakdown: {
           userQuery: `${userQueryDuration}ms`,
-          statsQuery: `${statsQueryDuration}ms`,
-          profQuery: `${profQueryDuration}ms`,
+          parallelQueries: `${parallelQueryDuration}ms`,
         },
       });
 

@@ -127,6 +127,7 @@ class ProfessionalFeedsService {
 
   /**
    * Get all feeds (for home page feed)
+   * ✅ OPTIMIZED: Filter order matches index structure for better performance
    */
   async getFeeds(params?: FeedQueryParams): Promise<FeedResponse> {
     try {
@@ -151,26 +152,31 @@ class ProfessionalFeedsService {
         { count: 'exact' }
       );
 
-      // Apply filters
+      // ✅ OPTIMIZED: Apply filters in order that matches index structure
+      // 1. professional_id (if provided) - uses idx_professional_feeds_professional_active
       if (params?.professional_id) {
         query = query.eq('professional_id', params.professional_id);
       }
 
+      // 2. is_active filter - always applied
+      query = query.eq('is_active', true);
+
+      // 3. deleted_at filter - always applied (unless include_deleted)
       if (!params?.include_deleted) {
         query = query.is('deleted_at', null);
       }
 
+      // 4. is_pinned filter (if only_pinned)
       if (params?.only_pinned) {
         query = query.eq('is_pinned', true);
       }
 
-      // Only show active posts from active, public professionals
+      // 5. Professional filters (applied after feed filters for better join performance)
       query = query
-        .eq('is_active', true)
         .eq('professional.is_active', true)
         .eq('professional.is_public', true);
 
-      // Ordering: pinned first, then by created_at
+      // ✅ OPTIMIZED: Ordering matches index structure (is_pinned DESC, created_at DESC)
       query = query.order('is_pinned', { ascending: false });
       query = query.order('created_at', { ascending: false });
 
@@ -410,12 +416,14 @@ class ProfessionalFeedsService {
 
   /**
    * Get trending feeds (most viewed in last 7 days)
+   * ✅ OPTIMIZED: Filter order matches index structure for better performance
    */
   async getTrendingFeeds(limit: number = 10): Promise<FeedResponse> {
     try {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
+      // ✅ OPTIMIZED: Apply filters in order that matches idx_professional_feeds_trending index
       const { data: feeds, error } = await supabase
         .from('professional_feeds')
         .select(

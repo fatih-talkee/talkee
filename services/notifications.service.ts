@@ -1180,22 +1180,13 @@ class NotificationsService {
             count: professionalIds.size,
           });
 
-          // Add timeout for professional data fetch
-          const professionalsPromise = Promise.race([
-            supabase
+          // ✅ OPTIMIZED: Use Supabase client's built-in timeout mechanism
+          // Remove Promise.race as it doesn't properly cancel the request
+          const { data: professionalsData, error: professionalsError } =
+            await supabase
               .from('professionals')
               .select('id, users!inner(id, name, avatar_url)')
-              .in('id', Array.from(professionalIds)),
-            new Promise((_, reject) =>
-              setTimeout(
-                () => reject(new Error('Professional fetch timeout')),
-                5000
-              )
-            ),
-          ]) as Promise<any>;
-
-          const { data: professionalsData, error: professionalsError } =
-            await professionalsPromise;
+              .in('id', Array.from(professionalIds));
 
           logger.info('📬 Professional data fetched', {
             duration: `${Date.now() - profStart}ms`,
@@ -1357,6 +1348,7 @@ class NotificationsService {
 
   /**
    * Mark notification as read
+   * ✅ FIX: Added user_id validation to prevent unauthorized access
    */
   async markAsRead(notificationId: string): Promise<boolean> {
     const markStartTime = Date.now();
@@ -1366,16 +1358,40 @@ class NotificationsService {
     });
 
     try {
-      const updateStartTime = Date.now();
-      logger.debug('[NotificationService] 🔄 Updating notification as read', {
-        notificationId,
+      const userStartTime = Date.now();
+      const currentUser = await usersService.getCurrentUser();
+      const userElapsed = Date.now() - userStartTime;
+
+      logger.debug('[NotificationService] 👤 Current user fetched', {
+        hasUser: !!currentUser,
+        userId: currentUser?.id,
+        elapsed: `${userElapsed}ms`,
         timestamp: new Date().toISOString(),
       });
 
-      const { error } = await supabase
+      if (!currentUser) {
+        logger.error('[NotificationService] ❌ Not authenticated', undefined, {
+          notificationId,
+          timestamp: new Date().toISOString(),
+        });
+        throw new Error('Not authenticated');
+      }
+
+      const updateStartTime = Date.now();
+      logger.debug('[NotificationService] 🔄 Updating notification as read', {
+        notificationId,
+        userId: currentUser.id,
+        timestamp: new Date().toISOString(),
+      });
+
+      // ✅ FIX: Add user_id validation to prevent unauthorized access
+      const { error, data } = await supabase
         .from('notifications')
         .update({ is_read: true })
-        .eq('id', notificationId);
+        .eq('id', notificationId)
+        .eq('user_id', currentUser.id)
+        .select('id')
+        .single();
 
       const updateElapsed = Date.now() - updateStartTime;
       const totalElapsed = Date.now() - markStartTime;
@@ -1386,6 +1402,7 @@ class NotificationsService {
           error,
           {
             notificationId,
+            userId: currentUser.id,
             elapsed: `${updateElapsed}ms`,
             totalElapsed: `${totalElapsed}ms`,
             errorMessage: error.message,
@@ -1396,8 +1413,24 @@ class NotificationsService {
         throw new Error(`Failed to mark as read: ${error.message}`);
       }
 
+      // ✅ FIX: Check if notification was actually updated (might not exist or belong to another user)
+      if (!data) {
+        logger.warn(
+          '[NotificationService] ⚠️ Notification not found or doesn\'t belong to user',
+          {
+            notificationId,
+            userId: currentUser.id,
+            elapsed: `${updateElapsed}ms`,
+            totalElapsed: `${totalElapsed}ms`,
+            timestamp: new Date().toISOString(),
+          }
+        );
+        throw new Error('Notification not found or access denied');
+      }
+
       logger.info('[NotificationService] ✅ Notification marked as read', {
         notificationId,
+        userId: currentUser.id,
         updateElapsed: `${updateElapsed}ms`,
         totalElapsed: `${totalElapsed}ms`,
         timestamp: new Date().toISOString(),

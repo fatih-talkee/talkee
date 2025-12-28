@@ -44,6 +44,8 @@ import {
 } from '@/lib/notificationSetup';
 // ✅ NEW: Import ActiveCallOverlay
 import ActiveCallOverlay from '@/components/call/ActiveCallOverlay';
+// ✅ NEW: Import TwilioVoiceService for accept/decline
+import { twilioVoiceService } from '@/services/twilioVoice.service';
 
 // Initialize Sentry (make it idempotent)
 try {
@@ -226,8 +228,42 @@ export default function RootLayout() {
           timestamp: new Date().toISOString(),
         });
 
-        // IncomingCallHandler will automatically show when app opens
-        // because Voice.Event.CallInvite is still active
+        try {
+          // Get current call state
+          const currentState = twilioVoiceService.getState();
+          
+          // If there's an active callInvite, accept it
+          if (currentState.callInvite) {
+            logger.info('[App] 📞 Accepting incoming call from notification', {
+              callId,
+              hasCallInvite: !!currentState.callInvite,
+              timestamp: new Date().toISOString(),
+            });
+
+            // Accept the call - this will automatically open the app and show ActiveCallOverlay
+            await twilioVoiceService.acceptIncomingCall({
+              callId: callId || undefined,
+              debugId: `notification-accept-${Date.now()}`,
+            });
+
+            logger.info('[App] ✅ Call accepted successfully from notification', {
+              callId,
+              timestamp: new Date().toISOString(),
+            });
+          } else {
+            logger.warn('[App] ⚠️ No active callInvite to accept', {
+              callId,
+              status: currentState.status,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } catch (error) {
+          logger.error('[App] ❌ Failed to accept call from notification', error, {
+            callId,
+            errorMessage: error instanceof Error ? error.message : String(error),
+            timestamp: new Date().toISOString(),
+          });
+        }
       },
       // On Decline
       async (callId: string) => {
@@ -236,8 +272,42 @@ export default function RootLayout() {
           timestamp: new Date().toISOString(),
         });
 
-        // TODO: Optionally reject call in database or via Twilio
-        // For now, just logging
+        try {
+          // Get current call state
+          const currentState = twilioVoiceService.getState();
+          
+          // If there's an active callInvite, reject it
+          if (currentState.callInvite) {
+            logger.info('[App] 📞 Rejecting incoming call from notification', {
+              callId,
+              hasCallInvite: !!currentState.callInvite,
+              timestamp: new Date().toISOString(),
+            });
+
+            // Reject the call
+            await twilioVoiceService.rejectIncomingCall({
+              callId: callId || undefined,
+              debugId: `notification-decline-${Date.now()}`,
+            });
+
+            logger.info('[App] ✅ Call rejected successfully from notification', {
+              callId,
+              timestamp: new Date().toISOString(),
+            });
+          } else {
+            logger.warn('[App] ⚠️ No active callInvite to reject', {
+              callId,
+              status: currentState.status,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } catch (error) {
+          logger.error('[App] ❌ Failed to reject call from notification', error, {
+            callId,
+            errorMessage: error instanceof Error ? error.message : String(error),
+            timestamp: new Date().toISOString(),
+          });
+        }
       }
     );
 
@@ -267,6 +337,7 @@ export default function RootLayout() {
           if (session) {
             logger.info('[App] 🔧 Ensuring session is set', {
               userId: session.user.id,
+              event,
             });
 
             // Session'ı force set et
@@ -279,9 +350,14 @@ export default function RootLayout() {
               // Session'ı kontrol et
               await ensureSupabaseSession();
 
-              // Query cache'i invalidate et
-              logger.info('[App] 🔄 Invalidating queries after session update');
-              queryClient.invalidateQueries();
+              // ✅ Only invalidate cache on SIGNED_IN, not on TOKEN_REFRESHED
+              // TOKEN_REFRESHED is just a token renewal, user data hasn't changed
+              if (event === 'SIGNED_IN') {
+                logger.info('[App] 🔄 Invalidating queries after sign in');
+                queryClient.invalidateQueries();
+              } else {
+                logger.debug('[App] ⏭️ Skipping cache invalidation on TOKEN_REFRESHED (token renewal only)');
+              }
             }
           }
         }

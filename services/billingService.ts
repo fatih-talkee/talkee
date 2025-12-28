@@ -30,13 +30,48 @@ class BillingService {
 
   /**
    * Start tracking billing for an active call
+   * ✅ OPTIMIZED: Added race condition guard, input validation, better error handling
    */
   startTracking(call: Call, ratePerMinute: number, userBalance: number) {
     logger.info('[BillingService] 🔧 Starting billing tracking', {
       ratePerMinute,
       userBalance,
+      isAlreadyTracking: this.isTracking(),
       timestamp: new Date().toISOString(),
     });
+
+    // ✅ FIX: Race condition guard - stop existing tracking if any
+    if (this.isTracking()) {
+      logger.warn('[BillingService] ⚠️ Already tracking, stopping previous tracking', {
+        timestamp: new Date().toISOString(),
+      });
+      this.stopTracking();
+    }
+
+    // ✅ Input validation
+    if (!call) {
+      const error = new Error('Invalid call: call cannot be null');
+      logger.error('[BillingService] ❌ Invalid call', error, {
+        timestamp: new Date().toISOString(),
+      });
+      throw error;
+    }
+
+    if (!ratePerMinute || ratePerMinute <= 0) {
+      const error = new Error('Invalid ratePerMinute: must be greater than 0');
+      logger.error('[BillingService] ❌ Invalid ratePerMinute', error, {
+        ratePerMinute,
+        timestamp: new Date().toISOString(),
+      });
+      throw error;
+    }
+
+    if (userBalance < 0) {
+      logger.warn('[BillingService] ⚠️ Negative user balance', {
+        userBalance,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     this.currentCall = call;
     this.ratePerMinute = ratePerMinute;
@@ -48,7 +83,16 @@ class BillingService {
 
     // Update every 10 seconds
     this.billingInterval = setInterval(async () => {
-      await this.updateBilling();
+      try {
+        await this.updateBilling();
+      } catch (error) {
+        logger.error('[BillingService] ❌ Error in billing update', error, {
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
+          timestamp: new Date().toISOString(),
+        });
+        // Don't stop tracking on error - continue trying
+      }
     }, 10000);
 
     logger.info('[BillingService] ✅ Billing tracking started', {
@@ -103,13 +147,18 @@ class BillingService {
 
   /**
    * Calculate current billing state
+   * ✅ FIX: Aligned with per-minute billing logic (charge full minute upon entering)
    */
   private calculateBillingState(): BillingState {
     const durationSeconds = Math.floor(
       (Date.now() - this.callStartTime) / 1000
     );
     const durationMinutes = durationSeconds / 60;
-    const currentCost = durationMinutes * this.ratePerMinute;
+    
+    // ✅ FIX: Per-minute billing logic - charge full minute upon entering
+    // Example: 0-59s = 1 minute, 60-119s = 2 minutes, etc.
+    const chargedMinutes = Math.floor(durationMinutes) + 1;
+    const currentCost = chargedMinutes * this.ratePerMinute;
     const remainingBalance = this.userBalance - currentCost;
     const remainingMinutes = remainingBalance / this.ratePerMinute;
 
@@ -124,6 +173,7 @@ class BillingService {
 
   /**
    * Send billing update notification every minute
+   * ✅ OPTIMIZED: Added error handling for notification failures
    */
   private async sendMinutelyUpdate(state: BillingState) {
     const currentMinute = Math.floor(state.durationMinutes);
@@ -132,38 +182,52 @@ class BillingService {
     if (currentMinute > this.lastNotificationMinute && currentMinute > 0) {
       this.lastNotificationMinute = currentMinute;
 
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: '📞 Call in Progress',
-          body: `⏱ ${this.formatDuration(
-            state.durationSeconds
-          )} | 💰 $${state.currentCost.toFixed(
-            2
-          )} | 💵 Balance: $${state.remainingBalance.toFixed(2)}`,
-          data: {
-            type: 'billing_update',
-            duration: state.durationSeconds,
-            cost: state.currentCost,
-            balance: state.remainingBalance,
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: '📞 Call in Progress',
+            body: `⏱ ${this.formatDuration(
+              state.durationSeconds
+            )} | 💰 $${state.currentCost.toFixed(
+              2
+            )} | 💵 Balance: $${state.remainingBalance.toFixed(2)}`,
+            data: {
+              type: 'billing_update',
+              duration: state.durationSeconds,
+              cost: state.currentCost,
+              balance: state.remainingBalance,
+            },
+            sound: false, // Silent - don't interrupt call
+            priority: Notifications.AndroidNotificationPriority.LOW,
           },
-          sound: false, // Silent - don't interrupt call
-          priority: Notifications.AndroidNotificationPriority.LOW,
-        },
-        trigger: null, // Send immediately
-      });
+          trigger: null, // Send immediately
+        });
 
-      logger.info('[BillingService] 🔔 Minutely billing notification sent', {
-        minute: currentMinute,
-        duration: this.formatDuration(state.durationSeconds),
-        cost: state.currentCost.toFixed(2),
-        balance: state.remainingBalance.toFixed(2),
-        timestamp: new Date().toISOString(),
-      });
+        logger.info('[BillingService] 🔔 Minutely billing notification sent', {
+          minute: currentMinute,
+          duration: this.formatDuration(state.durationSeconds),
+          cost: state.currentCost.toFixed(2),
+          balance: state.remainingBalance.toFixed(2),
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        logger.error(
+          '[BillingService] ❌ Failed to send minutely notification',
+          error,
+          {
+            minute: currentMinute,
+            errorMessage: error instanceof Error ? error.message : String(error),
+            timestamp: new Date().toISOString(),
+          }
+        );
+        // Don't throw - continue tracking even if notification fails
+      }
     }
   }
 
   /**
    * Check and send balance warnings
+   * ✅ OPTIMIZED: Added error handling for notification failures
    */
   private async checkBalanceWarnings(state: BillingState) {
     // Low balance warning (5 minutes remaining)
@@ -174,26 +238,40 @@ class BillingService {
     ) {
       this.lowBalanceWarningShown = true;
 
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: '⚠️ Low Balance Warning',
-          body: `Only ${Math.floor(
-            state.remainingMinutes
-          )} minute(s) of call time remaining. Add credits to continue.`,
-          data: {
-            type: 'low_balance',
-            remainingMinutes: state.remainingMinutes,
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: '⚠️ Low Balance Warning',
+            body: `Only ${Math.floor(
+              state.remainingMinutes
+            )} minute(s) of call time remaining. Add credits to continue.`,
+            data: {
+              type: 'low_balance',
+              remainingMinutes: state.remainingMinutes,
+            },
+            sound: true, // Alert sound
+            priority: Notifications.AndroidNotificationPriority.HIGH,
           },
-          sound: true, // Alert sound
-          priority: Notifications.AndroidNotificationPriority.HIGH,
-        },
-        trigger: null,
-      });
+          trigger: null,
+        });
 
-      logger.warn('[BillingService] 🔔 Low balance warning sent', {
-        remainingMinutes: Math.floor(state.remainingMinutes),
-        timestamp: new Date().toISOString(),
-      });
+        logger.warn('[BillingService] 🔔 Low balance warning sent', {
+          remainingMinutes: Math.floor(state.remainingMinutes),
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        logger.error(
+          '[BillingService] ❌ Failed to send low balance warning',
+          error,
+          {
+            remainingMinutes: Math.floor(state.remainingMinutes),
+            errorMessage: error instanceof Error ? error.message : String(error),
+            timestamp: new Date().toISOString(),
+          }
+        );
+        // Reset flag so we can try again next time
+        this.lowBalanceWarningShown = false;
+      }
     }
 
     // Critical balance warning (1 minute remaining)
@@ -204,31 +282,46 @@ class BillingService {
     ) {
       this.criticalWarningShown = true;
 
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: '🚨 Balance Critical',
-          body: `Call ending in ${Math.floor(
-            state.remainingMinutes
-          )} minute! Please add credits immediately.`,
-          data: {
-            type: 'critical_balance',
-            remainingMinutes: state.remainingMinutes,
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: '🚨 Balance Critical',
+            body: `Call ending in ${Math.floor(
+              state.remainingMinutes
+            )} minute! Please add credits immediately.`,
+            data: {
+              type: 'critical_balance',
+              remainingMinutes: state.remainingMinutes,
+            },
+            sound: true, // Alert sound
+            priority: Notifications.AndroidNotificationPriority.MAX,
           },
-          sound: true, // Alert sound
-          priority: Notifications.AndroidNotificationPriority.MAX,
-        },
-        trigger: null,
-      });
+          trigger: null,
+        });
 
-      logger.error('[BillingService] 🔔 Critical balance warning sent', {
-        remainingMinutes: Math.floor(state.remainingMinutes),
-        timestamp: new Date().toISOString(),
-      });
+        logger.error('[BillingService] 🔔 Critical balance warning sent', {
+          remainingMinutes: Math.floor(state.remainingMinutes),
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        logger.error(
+          '[BillingService] ❌ Failed to send critical balance warning',
+          error,
+          {
+            remainingMinutes: Math.floor(state.remainingMinutes),
+            errorMessage: error instanceof Error ? error.message : String(error),
+            timestamp: new Date().toISOString(),
+          }
+        );
+        // Reset flag so we can try again next time
+        this.criticalWarningShown = false;
+      }
     }
   }
 
   /**
    * Handle balance depletion - end call
+   * ✅ OPTIMIZED: Added error handling for notification failures
    */
   private async handleBalanceDepleted() {
     logger.error('[BillingService] ❌ Balance depleted - ending call', {
@@ -236,18 +329,34 @@ class BillingService {
     });
 
     // Send final notification
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: '❌ Call Ended',
-        body: 'Your balance has been depleted. Please add credits to make more calls.',
-        data: {
-          type: 'balance_depleted',
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '❌ Call Ended',
+          body: 'Your balance has been depleted. Please add credits to make more calls.',
+          data: {
+            type: 'balance_depleted',
+          },
+          sound: true,
+          priority: Notifications.AndroidNotificationPriority.MAX,
         },
-        sound: true,
-        priority: Notifications.AndroidNotificationPriority.MAX,
-      },
-      trigger: null,
-    });
+        trigger: null,
+      });
+
+      logger.info('[BillingService] 🔔 Balance depleted notification sent', {
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error(
+        '[BillingService] ❌ Failed to send balance depleted notification',
+        error,
+        {
+          errorMessage: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString(),
+        }
+      );
+      // Continue with disconnect even if notification fails
+    }
 
     // Disconnect call
     try {
@@ -262,6 +371,8 @@ class BillingService {
       }
     } catch (error) {
       logger.error('[BillingService] ❌ Error disconnecting call', error, {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
         timestamp: new Date().toISOString(),
       });
     } finally {

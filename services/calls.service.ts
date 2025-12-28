@@ -188,14 +188,28 @@ class CallsService {
     });
 
     try {
-      const userStartTime = Date.now();
-      const currentUser = await usersService.getCurrentUser();
-      const userElapsed = Date.now() - userStartTime;
+      // ✅ OPTIMIZED: Parallelize user and professional fetches
+      logger.info('[CallsService] 🔍 Fetching user and professional in parallel', {
+        professionalId,
+        timestamp: new Date().toISOString(),
+      });
 
-      logger.debug('[CallsService] 👤 Current user fetched', {
+      const parallelStartTime = Date.now();
+      const [currentUser, { data: professional, error: profError }] = await Promise.all([
+        usersService.getCurrentUser(),
+        supabase
+          .from('professionals')
+          .select('id, user_id, rate_per_minute, is_available') // ✅ Restored is_available
+          .eq('id', professionalId)
+          .single(),
+      ]);
+      const parallelElapsed = Date.now() - parallelStartTime;
+
+      logger.debug('[CallsService] 👤 User and professional fetched', {
         hasUser: !!currentUser,
         userId: currentUser?.id,
-        elapsed: `${userElapsed}ms`,
+        hasProfessional: !!professional,
+        elapsed: `${parallelElapsed}ms`,
         timestamp: new Date().toISOString(),
       });
 
@@ -206,20 +220,6 @@ class CallsService {
         });
         throw new Error('Not authenticated');
       }
-
-      // Get professional details to get rate
-      logger.info('[CallsService] 🔍 Fetching professional details', {
-        professionalId,
-        timestamp: new Date().toISOString(),
-      });
-
-      const profStartTime = Date.now();
-      const { data: professional, error: profError } = await supabase
-        .from('professionals')
-        .select('id, user_id, rate_per_minute, is_available') // ✅ Restored is_available
-        .eq('id', professionalId)
-        .single();
-      const profElapsed = Date.now() - profStartTime;
 
       if (profError || !professional) {
         logger.error('[CallsService] ❌ Professional not found', profError, {
@@ -899,6 +899,7 @@ class CallsService {
 
   /**
    * Get call statistics for user
+   * ✅ OPTIMIZED: Uses count queries and aggregation instead of fetching all calls
    */
   async getCallStats(): Promise<CallStats> {
     const statsStartTime = Date.now();
@@ -930,34 +931,77 @@ class CallsService {
         timestamp: new Date().toISOString(),
       });
 
+      // ✅ OPTIMIZED: Use count queries and aggregation instead of fetching all calls
       const queryStartTime = Date.now();
-      const { data, error } = await supabase
-        .from('calls')
-        .select('status, duration_minutes, total_cost, rating')
-        .eq('caller_id', currentUser.id);
+      
+      // Fetch aggregated data in parallel
+      const [
+        { count: totalCalls, error: countError },
+        { data: aggregatedData, error: aggError },
+        { count: completedCount, error: completedError },
+        { count: missedCount, error: missedError },
+        { count: cancelledCount, error: cancelledError },
+      ] = await Promise.all([
+        // Total calls count
+        supabase
+          .from('calls')
+          .select('*', { count: 'exact', head: true })
+          .eq('caller_id', currentUser.id),
+        
+        // Aggregated stats (duration, cost, rating)
+        supabase
+          .from('calls')
+          .select('duration_minutes, total_cost, rating')
+          .eq('caller_id', currentUser.id),
+        
+        // Completed calls count
+        supabase
+          .from('calls')
+          .select('*', { count: 'exact', head: true })
+          .eq('caller_id', currentUser.id)
+          .eq('status', 'completed'),
+        
+        // Missed calls count
+        supabase
+          .from('calls')
+          .select('*', { count: 'exact', head: true })
+          .eq('caller_id', currentUser.id)
+          .eq('status', 'missed'),
+        
+        // Cancelled calls count
+        supabase
+          .from('calls')
+          .select('*', { count: 'exact', head: true })
+          .eq('caller_id', currentUser.id)
+          .eq('status', 'cancelled'),
+      ]);
+      
       const queryElapsed = Date.now() - queryStartTime;
 
-      if (error) {
-        logger.error('[CallsService] ❌ Error fetching call stats', error, {
+      if (countError || aggError || completedError || missedError || cancelledError) {
+        const errors = [countError, aggError, completedError, missedError, cancelledError].filter(Boolean);
+        logger.error('[CallsService] ❌ Error fetching call stats', errors[0], {
           userId: currentUser.id,
-          errorMessage: error.message,
-          errorCode: error.code,
+          errorMessage: errors[0]?.message,
+          errorCode: errors[0]?.code,
+          errorsCount: errors.length,
           elapsed: `${queryElapsed}ms`,
           timestamp: new Date().toISOString(),
         });
-        throw new Error(`Failed to fetch call stats: ${error.message}`);
+        throw new Error(`Failed to fetch call stats: ${errors[0]?.message || 'Unknown error'}`);
       }
 
-      const calls = data || [];
+      const calls = (aggregatedData || []);
 
       logger.debug('[CallsService] 📊 Calculating statistics', {
         userId: currentUser.id,
-        callsCount: calls.length,
+        totalCalls: totalCalls || 0,
+        callsDataCount: calls.length,
         timestamp: new Date().toISOString(),
       });
 
       const stats: CallStats = {
-        totalCalls: calls.length,
+        totalCalls: totalCalls || 0,
         totalMinutes: calls.reduce(
           (sum, call) => sum + (call.duration_minutes || 0),
           0
@@ -971,10 +1015,9 @@ class CallsService {
             ? calls.reduce((sum, call) => sum + (call.rating || 0), 0) /
               calls.filter((c) => c.rating).length
             : 0,
-        // ✅ FIXED: lowercase status values
-        completedCalls: calls.filter((c) => c.status === 'completed').length,
-        missedCalls: calls.filter((c) => c.status === 'missed').length,
-        cancelledCalls: calls.filter((c) => c.status === 'cancelled').length,
+        completedCalls: completedCount || 0,
+        missedCalls: missedCount || 0,
+        cancelledCalls: cancelledCount || 0,
       };
 
       const totalElapsed = Date.now() - statsStartTime;

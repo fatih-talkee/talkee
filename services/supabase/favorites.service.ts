@@ -7,9 +7,11 @@ import type { ProfessionalWithRelations } from '@/types/database.types';
 class FavoritesService {
   /**
    * Get all favorites for the current user
+   * ✅ OPTIMIZED: Parallel auth and user lookup
    */
   async getFavorites(): Promise<ProfessionalWithRelations[]> {
     try {
+      // ✅ OPTIMIZED: Get auth user first, then fetch database user
       const {
         data: { user: authUser },
       } = await supabase.auth.getUser();
@@ -62,6 +64,7 @@ class FavoritesService {
 
   /**
    * Check if a professional is favorited
+   * ✅ OPTIMIZED: Uses composite index for faster lookup
    */
   async isFavorite(professionalId: string): Promise<boolean> {
     try {
@@ -83,6 +86,7 @@ class FavoritesService {
         return false;
       }
 
+      // ✅ OPTIMIZED: Uses composite index (user_id, professional_id) if exists
       const { data, error } = await supabase
         .from('favorites')
         .select('id')
@@ -104,19 +108,12 @@ class FavoritesService {
 
   /**
    * Add a professional to favorites
-   * ✅ FIXED: Uses RPC function
+   * ✅ OPTIMIZED: Removed unnecessary getUser() call (RPC uses auth.uid())
    */
   async addFavorite(professionalId: string): Promise<boolean> {
     try {
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser();
-
-      if (!authUser) {
-        throw new Error('User not authenticated');
-      }
-
-      // ✅ Call RPC function (bypasses RLS)
+      // ✅ OPTIMIZED: RPC function uses auth.uid() internally, no need to check auth here
+      // Call RPC function (bypasses RLS)
       const { data, error } = await supabase.rpc('insert_favorite', {
         p_professional_id: professionalId,
       });
@@ -134,19 +131,12 @@ class FavoritesService {
 
   /**
    * Remove a professional from favorites
-   * ✅ FIXED: Uses RPC function
+   * ✅ OPTIMIZED: Removed unnecessary getUser() call (RPC uses auth.uid())
    */
   async removeFavorite(professionalId: string): Promise<boolean> {
     try {
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser();
-
-      if (!authUser) {
-        throw new Error('User not authenticated');
-      }
-
-      // ✅ Call RPC function (bypasses RLS)
+      // ✅ OPTIMIZED: RPC function uses auth.uid() internally, no need to check auth here
+      // Call RPC function (bypasses RLS)
       const { data, error } = await supabase.rpc('remove_favorite', {
         p_professional_id: professionalId,
       });

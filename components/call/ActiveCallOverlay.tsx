@@ -26,6 +26,7 @@ import { useTwilioVoice } from '@/hooks/useTwilioVoice';
 import { useTheme } from '@/contexts/ThemeContext';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
+import { useProfile } from '@/hooks/useProfile';
 
 const { width, height } = Dimensions.get('window');
 
@@ -51,6 +52,7 @@ interface CallDetails {
 export default function ActiveCallOverlay() {
   const { theme } = useTheme();
   const { callState, toggleMute, disconnect } = useTwilioVoice();
+  const { user: currentUser } = useProfile();
   const [showOverlay, setShowOverlay] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [callDetails, setCallDetails] = useState<CallDetails | null>(null);
@@ -61,20 +63,54 @@ export default function ActiveCallOverlay() {
   // Show overlay when call is connected
   useEffect(() => {
     const isConnected = callState.status === 'connected';
+
+    logger.debug('[ActiveCallOverlay] 🔍 Call state changed', {
+      status: callState.status,
+      isConnected,
+      hasCallDetails: !!callDetails,
+      timestamp: new Date().toISOString(),
+    });
+
     setShowOverlay(isConnected);
 
-    if (isConnected && !callDetails) {
-      loadCallDetails();
+    if (isConnected) {
+      // ✅ FIX: Show overlay immediately, load details in background
+      // This ensures overlay appears even if details loading fails
+
       // Fade in animation
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 300,
         useNativeDriver: true,
       }).start();
-    }
 
-    // Reset state when call ends
-    if (!isConnected) {
+      // Load call details if not already loaded
+      if (!callDetails) {
+        logger.info(
+          '[ActiveCallOverlay] 📞 Loading call details (overlay already shown)',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+
+        // Load call details immediately
+        loadCallDetails();
+
+        // Retry after 2 seconds if details are still missing (call record might not be created yet)
+        const retryTimeout = setTimeout(() => {
+          logger.info(
+            '[ActiveCallOverlay] 🔄 Retrying call details load after delay',
+            {
+              timestamp: new Date().toISOString(),
+            }
+          );
+          loadCallDetails();
+        }, 2000);
+
+        return () => clearTimeout(retryTimeout);
+      }
+    } else {
+      // Reset state when call ends
       setMinimized(false);
       setCallDetails(null);
       fadeAnim.setValue(0);
@@ -109,39 +145,240 @@ export default function ActiveCallOverlay() {
     });
 
     try {
-      // ✅ Get call details from current call state
-      const call = callState.call as any;
-
-      // Try to get the other party's user ID
-      let otherUserId: string | null = null;
-
-      // For incoming calls: get from CallInvite
-      if (callState.callInvite) {
-        const invite = callState.callInvite as any;
-        const fromField = invite._from || invite.from;
-        otherUserId = fromField?.replace('client:', '') || null;
-
-        logger.debug('[ActiveCallOverlay] 📥 Incoming call - caller ID', {
-          otherUserId,
+      if (!currentUser) {
+        logger.warn('[ActiveCallOverlay] ⚠️ No current user', {
           timestamp: new Date().toISOString(),
         });
+        setCallDetails({
+          callerName: 'User',
+          callerAvatar: null,
+          category: null,
+          ratePerMinute: 0,
+        });
+        return;
       }
 
-      // For outgoing calls: get from call parameters
-      if (!otherUserId && call) {
-        const customParams =
-          call._customParameters || call.customParameters || {};
-        const toParam = customParams.To || customParams.to || null;
+      // ✅ OPTIMIZED: Get call record from database using call SID
+      const call = callState.call as any;
+      const callSid =
+        call?.callSid ??
+        call?.sid ??
+        (typeof call?.getSid === 'function' ? call.getSid() : null);
 
-        if (toParam) {
-          otherUserId = toParam.replace('client:', '');
-        }
+      let otherUserId: string | null = null;
+      let isIncomingCall = false;
+      let callRecordRatePerMinute: number | null = null; // ✅ Get rate from call record
 
-        logger.debug('[ActiveCallOverlay] 📤 Outgoing call - callee ID', {
-          toParam,
-          otherUserId,
+      // Try to get call record from database first (most reliable)
+      if (callSid) {
+        logger.debug('[ActiveCallOverlay] 🔍 Looking up call record by SID', {
+          callSid: callSid.substring(0, 20) + '...',
           timestamp: new Date().toISOString(),
         });
+
+        // Try to fetch call record by call_sid
+        // Note: call_sid column might not exist in all databases
+        let callRecord: any = null;
+        let callRecordError: any = null;
+
+        try {
+          const result = await supabase
+            .from('calls')
+            .select(
+              'caller_id, professional_id, rate_per_minute, professional:professionals!professional_id(user_id)'
+            )
+            .eq('call_sid', callSid)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          callRecord = result.data;
+          callRecordError = result.error;
+        } catch (err: any) {
+          // Handle case where call_sid column doesn't exist
+          if (
+            err?.message?.includes('column') &&
+            err?.message?.includes('call_sid')
+          ) {
+            logger.debug(
+              '[ActiveCallOverlay] ℹ️ call_sid column does not exist, will use fallback',
+              {
+                timestamp: new Date().toISOString(),
+              }
+            );
+            callRecordError = null; // Reset error to continue with fallback
+          } else {
+            callRecordError = err;
+          }
+        }
+
+        if (callRecordError) {
+          logger.warn(
+            '[ActiveCallOverlay] ⚠️ Failed to fetch call record from DB',
+            {
+              error: callRecordError.message,
+              code: callRecordError.code,
+              callSid: callSid.substring(0, 20) + '...',
+              timestamp: new Date().toISOString(),
+            }
+          );
+        } else if (callRecord) {
+          // ✅ Get rate_per_minute from call record (most reliable - this is the rate charged for this specific call)
+          callRecordRatePerMinute = callRecord.rate_per_minute
+            ? Number(callRecord.rate_per_minute)
+            : null;
+
+          logger.debug('[ActiveCallOverlay] 💰 Rate from call record', {
+            ratePerMinute: callRecordRatePerMinute,
+            timestamp: new Date().toISOString(),
+          });
+
+          // Determine if this is incoming or outgoing call
+          isIncomingCall = callRecord.caller_id !== currentUser.id;
+
+          if (isIncomingCall) {
+            // Incoming call: other party is the caller
+            otherUserId = callRecord.caller_id;
+            logger.debug('[ActiveCallOverlay] 📥 Incoming call from database', {
+              callerId: otherUserId,
+              ratePerMinute: callRecordRatePerMinute,
+              timestamp: new Date().toISOString(),
+            });
+          } else {
+            // Outgoing call: other party is the professional
+            // Get professional's user_id
+            const professional = callRecord.professional as any;
+            otherUserId = professional?.user_id || callRecord.professional_id;
+            logger.debug('[ActiveCallOverlay] 📤 Outgoing call from database', {
+              professionalId: callRecord.professional_id,
+              professionalUserId: otherUserId,
+              ratePerMinute: callRecordRatePerMinute,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } else {
+          logger.debug(
+            '[ActiveCallOverlay] ℹ️ No call record found by SID (will try caller/professional lookup)',
+            {
+              callSid: callSid.substring(0, 20) + '...',
+              timestamp: new Date().toISOString(),
+            }
+          );
+        }
+      }
+
+      // ✅ FALLBACK: If call_sid lookup failed, try to find call by caller_id and professional_id
+      // This is useful if call_sid column doesn't exist or hasn't been set yet
+      if (!callRecordRatePerMinute && currentUser) {
+        logger.debug(
+          '[ActiveCallOverlay] 🔍 Fallback: Looking up call by caller/professional',
+          {
+            currentUserId: currentUser.id,
+            timestamp: new Date().toISOString(),
+          }
+        );
+
+        // Try to determine professional_id from call state
+        let professionalId: string | null = null;
+        const call = callState.call as any;
+        if (call) {
+          const customParams =
+            call._customParameters || call.customParameters || {};
+          const toParam = customParams.To || customParams.to || null;
+          if (toParam) {
+            const toUserId = toParam.replace('client:', '');
+            // Try to get professional_id from user_id
+            const { data: prof } = await supabase
+              .from('professionals')
+              .select('id')
+              .eq('user_id', toUserId)
+              .maybeSingle();
+            if (prof) {
+              professionalId = prof.id;
+            }
+          }
+        }
+
+        if (professionalId) {
+          const { data: recentCall } = await supabase
+            .from('calls')
+            .select('rate_per_minute, caller_id, professional_id')
+            .eq('caller_id', currentUser.id)
+            .eq('professional_id', professionalId)
+            .in('status', ['pending', 'active', 'connected'])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (recentCall?.rate_per_minute) {
+            callRecordRatePerMinute = Number(recentCall.rate_per_minute);
+            logger.info(
+              '[ActiveCallOverlay] ✅ Found rate from recent call record',
+              {
+                ratePerMinute: callRecordRatePerMinute,
+                professionalId,
+                timestamp: new Date().toISOString(),
+              }
+            );
+          }
+        }
+      }
+
+      if (!callSid) {
+        logger.debug(
+          '[ActiveCallOverlay] ℹ️ No call SID available (will use fallback)',
+          {
+            hasCall: !!call,
+            timestamp: new Date().toISOString(),
+          }
+        );
+      }
+
+      // Fallback: Try to get from call state if database lookup failed
+      if (!otherUserId) {
+        logger.debug(
+          '[ActiveCallOverlay] 🔍 Fallback: Getting user ID from call state',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+
+        // For incoming calls: get from CallInvite
+        if (callState.callInvite) {
+          const invite = callState.callInvite as any;
+          const fromField = invite._from || invite.from;
+          otherUserId = fromField?.replace('client:', '') || null;
+          isIncomingCall = true;
+
+          logger.debug(
+            '[ActiveCallOverlay] 📥 Incoming call - caller ID from invite',
+            {
+              otherUserId,
+              timestamp: new Date().toISOString(),
+            }
+          );
+        }
+
+        // For outgoing calls: get from call parameters
+        if (!otherUserId && call) {
+          const customParams =
+            call._customParameters || call.customParameters || {};
+          const toParam = customParams.To || customParams.to || null;
+
+          if (toParam) {
+            otherUserId = toParam.replace('client:', '');
+            isIncomingCall = false;
+          }
+
+          logger.debug(
+            '[ActiveCallOverlay] 📤 Outgoing call - callee ID from params',
+            {
+              toParam,
+              otherUserId,
+              timestamp: new Date().toISOString(),
+            }
+          );
+        }
       }
 
       if (!otherUserId) {
@@ -150,6 +387,8 @@ export default function ActiveCallOverlay() {
           {
             hasCall: !!call,
             hasCallInvite: !!callState.callInvite,
+            hasCallSid: !!callSid,
+            currentUserId: currentUser.id,
             timestamp: new Date().toISOString(),
           }
         );
@@ -164,44 +403,108 @@ export default function ActiveCallOverlay() {
         return;
       }
 
-      logger.debug('[ActiveCallOverlay] 🔍 Fetching user details', {
-        userId: otherUserId,
+      logger.debug(
+        '[ActiveCallOverlay] 🔍 Fetching user and professional details',
+        {
+          userId: otherUserId,
+          isIncomingCall,
+          timestamp: new Date().toISOString(),
+        }
+      );
+
+      // ✅ OPTIMIZED: Fetch user and professional data in parallel
+      const [userResult, professionalResult] = await Promise.all([
+        supabase
+          .from('users')
+          .select('name, avatar_url')
+          .eq('id', otherUserId)
+          .single(),
+        supabase
+          .from('professionals')
+          .select(
+            `
+          rate_per_minute,
+            category_id,
+            categories(id, name)
+          `
+          )
+          .eq('user_id', otherUserId)
+          .maybeSingle(),
+      ]);
+
+      const user = userResult.data;
+      const userError = userResult.error;
+      const professional = professionalResult.data;
+      const professionalError = professionalResult.error;
+
+      // Log errors
+      if (userError) {
+        if (userError.code === 'PGRST116') {
+          logger.warn('[ActiveCallOverlay] ⚠️ User not found in database', {
+            userId: otherUserId,
+            timestamp: new Date().toISOString(),
+          });
+        } else {
+          logger.error('[ActiveCallOverlay] ❌ Failed to load user', {
+            error: userError.message,
+            code: userError.code,
+            userId: otherUserId,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+
+      if (professionalError && professionalError.code !== 'PGRST116') {
+        // PGRST116 = not found, which is OK if user is not a professional
+        logger.warn(
+          '[ActiveCallOverlay] ⚠️ Failed to load professional (expected if not professional)',
+          {
+            error: professionalError.message,
+            code: professionalError.code,
+            userId: otherUserId,
+            timestamp: new Date().toISOString(),
+          }
+        );
+      }
+
+      // ✅ PRIORITY: Use rate from call record if available (this is the rate charged for this call)
+      // Otherwise, fallback to professional's current rate
+      const ratePerMinute =
+        callRecordRatePerMinute !== null
+          ? callRecordRatePerMinute
+          : professional?.rate_per_minute
+          ? Number(professional.rate_per_minute)
+          : 0;
+
+      logger.info('[ActiveCallOverlay] 💰 Final rate per minute', {
+        ratePerMinute,
+        source:
+          callRecordRatePerMinute !== null ? 'call_record' : 'professional',
+        callRecordRate: callRecordRatePerMinute,
+        professionalRate: professional?.rate_per_minute
+          ? Number(professional.rate_per_minute)
+          : null,
         timestamp: new Date().toISOString(),
       });
 
-      // ✅ Load user info
-      const { data: user, error: userError } = await supabase
-        .from('users')
-        .select('name, avatar_url')
-        .eq('id', otherUserId)
-        .single();
+      // ✅ FIX: Get category name from categories relation
+      // Supabase returns categories as array even for foreign key relations
+      const categoryData = professional?.categories;
+      const category = Array.isArray(categoryData)
+        ? categoryData[0]?.name || null
+        : (categoryData as any)?.name || null;
 
-      if (userError) {
-        logger.error('[ActiveCallOverlay] ❌ Failed to load user', userError, {
-          userId: otherUserId,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // ✅ Load professional info (if other party is professional)
-      const { data: professional } = await supabase
-        .from('professionals')
-        .select(
-          `
-          rate_per_minute,
-          categories (
-            name
-          )
-        `
-        )
-        .eq('user_id', otherUserId)
-        .single();
-
-      const ratePerMinute = professional?.rate_per_minute
-        ? Number(professional.rate_per_minute)
-        : 0;
-
-      const category = professional?.categories?.[0]?.name || null;
+      logger.info('[ActiveCallOverlay] 📊 Fetched data summary', {
+        hasUser: !!user,
+        userName: user?.name || 'N/A',
+        hasAvatar: !!user?.avatar_url,
+        avatarUrl: user?.avatar_url ? 'present' : 'missing',
+        isProfessional: !!professional,
+        ratePerMinute,
+        category,
+        userId: otherUserId,
+        timestamp: new Date().toISOString(),
+      });
 
       setCallDetails({
         callerName: user?.name || 'User',
@@ -210,11 +513,12 @@ export default function ActiveCallOverlay() {
         ratePerMinute,
       });
 
-      logger.info('[ActiveCallOverlay] ✅ Call details loaded', {
-        name: user?.name,
+      logger.info('[ActiveCallOverlay] ✅ Call details loaded and set', {
+        name: user?.name || 'User',
         hasAvatar: !!user?.avatar_url,
         category,
         ratePerMinute,
+        isProfessional: !!professional,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
@@ -290,14 +594,51 @@ export default function ActiveCallOverlay() {
   };
 
   const calculateCost = (duration: number, rate: number): string => {
-    const minutes = duration / 60;
+    // ✅ Per-minute billing logic:
+    // - 0 seconds = 1 minute charged (first minute charged immediately when call starts)
+    // - 1-60 seconds = 1 minute charged (still in first minute)
+    // - 61-120 seconds = 2 minutes charged (entered 2nd minute)
+    // - 121-180 seconds = 3 minutes charged (entered 3rd minute)
+    // Formula: Math.floor(duration / 60) + 1
+    // This ensures we charge for the current minute as soon as we enter it
+
+    if (rate <= 0) {
+      logger.warn('[ActiveCallOverlay] ⚠️ Invalid rate for cost calculation', {
+        rate,
+        duration,
+        timestamp: new Date().toISOString(),
+      });
+      return '0.00';
+    }
+
+    // Calculate minutes: 0s = 1 min, 60s = 2 min, 120s = 3 min, etc.
+    const minutes = Math.floor(duration / 60) + 1;
     const cost = minutes * rate;
+
+    logger.debug('[ActiveCallOverlay] 💰 Cost calculation', {
+      duration,
+      rate,
+      minutes,
+      cost: cost.toFixed(2),
+      timestamp: new Date().toISOString(),
+    });
+
     return cost.toFixed(2);
   };
 
-  if (!showOverlay || !callDetails) {
+  // ✅ FIX: Show overlay even if callDetails is not loaded yet
+  // This ensures overlay appears immediately when call connects
+  if (!showOverlay) {
     return null;
   }
+
+  // Use fallback details if not loaded yet
+  const displayDetails: CallDetails = callDetails || {
+    callerName: 'Calling...',
+    callerAvatar: null,
+    category: null,
+    ratePerMinute: 0,
+  };
 
   // Minimized view - modern floating bubble
   if (minimized) {
@@ -317,9 +658,9 @@ export default function ActiveCallOverlay() {
         >
           <View style={styles.minimizedContent}>
             <View style={styles.minimizedAvatarContainer}>
-              {callDetails?.callerAvatar ? (
+              {displayDetails.callerAvatar ? (
                 <Image
-                  source={{ uri: callDetails.callerAvatar }}
+                  source={{ uri: displayDetails.callerAvatar }}
                   style={[
                     styles.minimizedAvatar,
                     { borderColor: theme.colors.border },
@@ -341,7 +682,7 @@ export default function ActiveCallOverlay() {
                       { color: theme.colors.text },
                     ]}
                   >
-                    {callDetails?.callerName?.charAt(0).toUpperCase() || 'U'}
+                    {displayDetails.callerName?.charAt(0).toUpperCase() || 'U'}
                   </Text>
                 </View>
               )}
@@ -360,7 +701,7 @@ export default function ActiveCallOverlay() {
                 style={[styles.minimizedName, { color: theme.colors.text }]}
                 numberOfLines={1}
               >
-                {callDetails?.callerName || 'Call'}
+                {displayDetails.callerName || 'Call'}
               </Text>
               <Text
                 style={[
@@ -445,9 +786,9 @@ export default function ActiveCallOverlay() {
                     },
                   ]}
                 >
-                  {callDetails.callerAvatar ? (
+                  {displayDetails.callerAvatar ? (
                     <Image
-                      source={{ uri: callDetails.callerAvatar }}
+                      source={{ uri: displayDetails.callerAvatar }}
                       style={[
                         styles.avatar,
                         { borderColor: theme.colors.border },
@@ -455,7 +796,10 @@ export default function ActiveCallOverlay() {
                     />
                   ) : (
                     <LinearGradient
-                      colors={[theme.colors.primary, theme.colors.primary + 'DD']}
+                      colors={[
+                        theme.colors.primary,
+                        theme.colors.primary + 'DD',
+                      ]}
                       style={[
                         styles.avatarPlaceholder,
                         { borderColor: theme.colors.border },
@@ -464,19 +808,22 @@ export default function ActiveCallOverlay() {
                       end={{ x: 1, y: 1 }}
                     >
                       <Text
-                        style={[styles.avatarText, { color: theme.colors.text }]}
+                        style={[
+                          styles.avatarText,
+                          { color: theme.colors.text },
+                        ]}
                       >
-                        {callDetails.callerName.charAt(0).toUpperCase()}
+                        {displayDetails.callerName.charAt(0).toUpperCase()}
                       </Text>
                     </LinearGradient>
                   )}
                 </Animated.View>
 
                 <Text style={[styles.callerName, { color: theme.colors.text }]}>
-                  {callDetails.callerName}
+                  {displayDetails.callerName}
                 </Text>
 
-                {callDetails.category && (
+                {displayDetails.category && (
                   <View
                     style={[
                       styles.categoryBadge,
@@ -486,20 +833,23 @@ export default function ActiveCallOverlay() {
                     <Text
                       style={[styles.category, { color: theme.colors.primary }]}
                     >
-                      {callDetails.category}
+                      {displayDetails.category}
                     </Text>
                   </View>
                 )}
 
-                {callDetails.ratePerMinute > 0 && (
+                {displayDetails.ratePerMinute > 0 && (
                   <View style={styles.rateContainer}>
                     <Text
                       style={[styles.rate, { color: theme.colors.textMuted }]}
                     >
-                      ${callDetails.ratePerMinute}
+                      ${displayDetails.ratePerMinute}
                     </Text>
                     <Text
-                      style={[styles.rateUnit, { color: theme.colors.textMuted }]}
+                      style={[
+                        styles.rateUnit,
+                        { color: theme.colors.textMuted },
+                      ]}
                     >
                       /min
                     </Text>
@@ -530,9 +880,10 @@ export default function ActiveCallOverlay() {
                   |{' '}
                 </Text>
                 <Text style={[styles.statText, { color: theme.colors.text }]}>
-                  ${calculateCost(
+                  $
+                  {calculateCost(
                     callState.duration,
-                    callDetails.ratePerMinute
+                    displayDetails.ratePerMinute
                   )}
                 </Text>
               </View>

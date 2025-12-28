@@ -109,49 +109,49 @@ class ProfessionalsService {
 
   /**
    * Get a single professional by ID
-   * ✅ UPDATED: Includes educations and experiences
+   * ✅ OPTIMIZED: Fetches educations and experiences in parallel
    */
   async getProfessional(id: string): Promise<ProfessionalWithRelations | null> {
     try {
-      const { data, error } = await supabase
-        .from('professionals')
-        .select(
-          `
-          *,
-          users!inner(id, name, avatar_url, is_verified),
-          categories!inner(id, name, slug, icon_name)
-        `
-        )
-        .eq('id', id)
-        .single();
+      // ✅ OPTIMIZED: Fetch all data in parallel instead of sequential
+      const [professionalResult, educationsResult, experiencesResult] =
+        await Promise.all([
+          supabase
+            .from('professionals')
+            .select(
+              `
+              *,
+              users!inner(id, name, avatar_url, is_verified),
+              categories!inner(id, name, slug, icon_name)
+            `
+            )
+            .eq('id', id)
+            .single(),
+          supabase
+            .from('professional_educations')
+            .select('*')
+            .eq('professional_id', id)
+            .order('sort_order', { ascending: true })
+            .order('end_year', { ascending: false, nullsFirst: false })
+            .order('start_year', { ascending: false }),
+          supabase
+            .from('professional_experiences')
+            .select('*')
+            .eq('professional_id', id)
+            .order('sort_order', { ascending: true })
+            .order('end_date', { ascending: false, nullsFirst: false })
+            .order('start_date', { ascending: false }),
+        ]);
 
-      if (error) {
-        console.error('Error fetching professional:', error);
-        throw error;
+      if (professionalResult.error) {
+        console.error('Error fetching professional:', professionalResult.error);
+        throw professionalResult.error;
       }
 
-      // Fetch educations
-      const { data: educations } = await supabase
-        .from('professional_educations')
-        .select('*')
-        .eq('professional_id', id)
-        .order('sort_order', { ascending: true })
-        .order('end_year', { ascending: false, nullsFirst: false })
-        .order('start_year', { ascending: false });
-
-      // Fetch experiences
-      const { data: experiences } = await supabase
-        .from('professional_experiences')
-        .select('*')
-        .eq('professional_id', id)
-        .order('sort_order', { ascending: true })
-        .order('end_date', { ascending: false, nullsFirst: false })
-        .order('start_date', { ascending: false });
-
       return {
-        ...data,
-        educations: educations || [],
-        experiences: experiences || [],
+        ...professionalResult.data,
+        educations: educationsResult.data || [],
+        experiences: experiencesResult.data || [],
       } as ProfessionalWithRelations;
     } catch (error) {
       console.error('Error in getProfessional:', error);
@@ -161,8 +161,8 @@ class ProfessionalsService {
 
   /**
    * Search professionals by name or title
-   * ✅ UPDATED: Orders by is_featured first, then total_calls
-   * ✅ UPDATED: Supports pagination with limit and offset
+   * ✅ OPTIMIZED: Parallel queries instead of sequential
+   * ✅ OPTIMIZED: Supports pagination with limit and offset
    */
   async searchProfessionals(
     query: string,
@@ -174,12 +174,9 @@ class ProfessionalsService {
       const escapedQuery = query.replace(/%/g, '\\%').replace(/_/g, '\\_');
       const searchPattern = `%${escapedQuery}%`;
 
-      // PostgREST or filter syntax issue: % wildcards in ilike patterns within or() filters
-      // Workaround: Make two separate queries and combine results (removing duplicates)
-      // This is less efficient but works reliably
-
+      // ✅ OPTIMIZED: Execute queries in parallel instead of sequential
       // Query 1: Search by title
-      const { data: titleData, error: titleError } = await supabase
+      const titleQuery = supabase
         .from('professionals')
         .select(
           `
@@ -189,31 +186,37 @@ class ProfessionalsService {
         `
         )
         .eq('is_active', true)
-        .eq('is_public', true) // ✅ Only show public profiles
+        .eq('is_public', true)
         .ilike('title', searchPattern)
         .order('is_featured', { ascending: false })
         .order('total_calls', { ascending: false });
 
-      if (titleError) {
-        console.error('Error searching professionals by title:', titleError);
-        throw titleError;
-      }
-
-      // Query 2: Search by user name
-      // First, find users with matching names
-      const { data: matchingUsers, error: usersError } = await supabase
+      // Query 2: Search by user name (find matching users first)
+      const usersQuery = supabase
         .from('users')
         .select('id')
         .ilike('name', searchPattern);
 
-      if (usersError) {
-        console.error('Error searching users by name:', usersError);
-        throw usersError;
+      // ✅ Execute both queries in parallel
+      const [titleResult, usersResult] = await Promise.all([
+        titleQuery,
+        usersQuery,
+      ]);
+
+      if (titleResult.error) {
+        console.error('Error searching professionals by title:', titleResult.error);
+        throw titleResult.error;
       }
 
-      const matchingUserIds = (matchingUsers || []).map((u) => u.id);
+      if (usersResult.error) {
+        console.error('Error searching users by name:', usersResult.error);
+        throw usersResult.error;
+      }
 
-      // Then, get professionals for those users
+      const matchingUserIds = (usersResult.data || []).map((u) => u.id);
+      const titleResults = titleResult.data || [];
+
+      // Query 3: Get professionals for matching users (only if we have matches)
       let nameResults: any[] = [];
       if (matchingUserIds.length > 0) {
         const { data: nameData, error: nameError } = await supabase
@@ -226,7 +229,7 @@ class ProfessionalsService {
           `
           )
           .eq('is_active', true)
-          .eq('is_public', true) // ✅ Only show public profiles
+          .eq('is_public', true)
           .in('user_id', matchingUserIds)
           .order('is_featured', { ascending: false })
           .order('total_calls', { ascending: false });
@@ -241,8 +244,6 @@ class ProfessionalsService {
 
         nameResults = nameData || [];
       }
-
-      const titleResults = titleData || [];
 
       // Combine results and remove duplicates by professional id
       const combinedResults = [...titleResults, ...nameResults];
@@ -277,16 +278,14 @@ class ProfessionalsService {
 
   /**
    * Get featured professionals from database
-   * ✅ UPDATED: Uses database is_featured flag
-   * ✅ FIXED: timeoutId scope issue
-   * ✅ FIXED: Increased timeout to 30 seconds
+   * ✅ OPTIMIZED: Removed timeout wrapper (Supabase client already has timeout)
+   * ✅ OPTIMIZED: Uses proper indexes (requires migration)
    */
   async getFeaturedProfessionals(
     limit: number = 10,
     categoryId?: string
   ): Promise<ProfessionalWithRelations[]> {
     const startTime = Date.now();
-    let timeoutId: ReturnType<typeof setTimeout> | null = null; // ✅ MOVED TO OUTER SCOPE
 
     logger.info('[ProfessionalsService] 🔍 getFeaturedProfessionals started', {
       limit,
@@ -295,6 +294,7 @@ class ProfessionalsService {
     });
 
     try {
+      // ✅ OPTIMIZED: Build query with proper filter order (matches index)
       let query = supabase
         .from('professionals')
         .select(
@@ -305,9 +305,9 @@ class ProfessionalsService {
         `
         )
         .eq('is_active', true)
-        .eq('is_public', true) // ✅ Only show public profiles
-        .eq('is_featured', true) // ✅ Only featured
-        .order('total_calls', { ascending: false }) // ✅ Order by popularity
+        .eq('is_public', true)
+        .eq('is_featured', true)
+        .order('total_calls', { ascending: false })
         .limit(limit);
 
       if (categoryId) {
@@ -318,36 +318,7 @@ class ProfessionalsService {
         '[ProfessionalsService] 📊 Executing featured professionals query...'
       );
 
-      // Add timeout to prevent hanging queries
-      const queryTimeout = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => {
-          const timeoutElapsed = Date.now() - startTime;
-          const timeoutError = new Error(
-            'Featured professionals query timeout'
-          );
-          logger.error(
-            '[ProfessionalsService] ⏱️ Featured professionals query TIMEOUT',
-            timeoutError,
-            {
-              elapsedTime: `${timeoutElapsed}ms`,
-              timeoutLimit: '30000ms',
-              timestamp: new Date().toISOString(),
-            }
-          );
-          reject(timeoutError);
-        }, 30000); // ✅ INCREASED TO 30 SECONDS
-      });
-
-      const { data, error } = (await Promise.race([
-        query,
-        queryTimeout,
-      ])) as any;
-
-      // Clear timeout if query succeeded
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
+      const { data, error } = await query;
 
       const duration = Date.now() - startTime;
 
@@ -376,12 +347,6 @@ class ProfessionalsService {
 
       return (data || []) as ProfessionalWithRelations[];
     } catch (error: any) {
-      // Clear timeout on error
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-
       const duration = Date.now() - startTime;
       logger.error(
         '[ProfessionalsService] ❌ Error in getFeaturedProfessionals',
@@ -506,49 +471,51 @@ class ProfessionalsService {
         return { success: false, error: 'Professional not found' };
       }
 
-      // Fetch educations
-      const { data: educations } = await supabase
-        .from('professional_educations')
-        .select('*')
-        .eq('professional_id', data.id)
-        .order('sort_order', { ascending: true })
-        .order('end_year', { ascending: false, nullsFirst: false })
-        .order('start_year', { ascending: false });
-
-      // Fetch experiences
-      const { data: experiences } = await supabase
-        .from('professional_experiences')
-        .select('*')
-        .eq('professional_id', data.id)
-        .order('sort_order', { ascending: true })
-        .order('end_date', { ascending: false, nullsFirst: false })
-        .order('start_date', { ascending: false });
-
-      // Fetch categories
-      const { data: categoryLinks } = await supabase
-        .from('professional_categories')
-        .select('category_id, categories(id, name, slug, icon_name)')
-        .eq('professional_id', data.id);
+      // ✅ OPTIMIZED: Fetch all related data in parallel instead of sequential
+      const [
+        educationsResult,
+        experiencesResult,
+        categoryLinksResult,
+        availabilitiesResult,
+      ] = await Promise.all([
+        supabase
+          .from('professional_educations')
+          .select('*')
+          .eq('professional_id', data.id)
+          .order('sort_order', { ascending: true })
+          .order('end_year', { ascending: false, nullsFirst: false })
+          .order('start_year', { ascending: false }),
+        supabase
+          .from('professional_experiences')
+          .select('*')
+          .eq('professional_id', data.id)
+          .order('sort_order', { ascending: true })
+          .order('end_date', { ascending: false, nullsFirst: false })
+          .order('start_date', { ascending: false }),
+        supabase
+          .from('professional_categories')
+          .select('category_id, categories(id, name, slug, icon_name)')
+          .eq('professional_id', data.id),
+        supabase
+          .from('availabilities')
+          .select('*')
+          .eq('professional_id', data.id)
+          .order('created_at', { ascending: true }),
+      ]);
 
       const categories =
-        categoryLinks?.map((link: any) => link.categories).filter(Boolean) ||
-        [];
-
-      // Fetch availabilities
-      const { data: availabilities } = await supabase
-        .from('availabilities')
-        .select('*')
-        .eq('professional_id', data.id)
-        .order('created_at', { ascending: true });
+        categoryLinksResult.data
+          ?.map((link: any) => link.categories)
+          .filter(Boolean) || [];
 
       const professional: ProfessionalWithRelations & {
         availabilities?: Availability[];
       } = {
         ...data,
-        educations: educations || [],
-        experiences: experiences || [],
+        educations: educationsResult.data || [],
+        experiences: experiencesResult.data || [],
         categories: categories,
-        availabilities: availabilities || [],
+        availabilities: availabilitiesResult.data || [],
       };
 
       return { success: true, professional };
