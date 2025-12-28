@@ -28,6 +28,7 @@ import {
   Camera,
   BookOpen,
   TestTube,
+  Phone,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
@@ -444,7 +445,7 @@ export default function ProfileScreen() {
 
                 return hasValidAvatar ? (
                   <Image
-                    source={{ uri: user.avatar_url }}
+                    source={{ uri: user.avatar_url || '' }}
                     style={styles.avatar}
                     onError={() => {
                       setAvatarError(true);

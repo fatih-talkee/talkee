@@ -7,6 +7,22 @@ import { notificationsService } from '@/services/notifications.service';
 import { usersService } from '@/services/supabase/user.service';
 import { CallStatus as DbCallStatus } from '@/types/database.types';
 import BillingService from '@/services/billingService';
+import { Audio } from 'expo-av';
+
+// 🔔 Ringtone configuration
+const RINGTONE_CONFIG = {
+  // ✅ Custom ringtone path (place your MP3 in assets/sounds/)
+  customRingtone: require('@/assets/sounds/incoming_call.mp3'),
+
+  // ✅ Volume (0.0 to 1.0)
+  volume: 1.0, // Maximum volume
+
+  // ✅ Loop
+  shouldLoop: true,
+
+  // ✅ Duration before auto-stop (milliseconds)
+  maxDuration: 30000, // 30 seconds
+};
 
 export type CallStatus =
   | 'idle'
@@ -36,6 +52,10 @@ class TwilioVoiceService {
   private currentDbCallId: string | null = null;
   private lastChargedMinute: number = 0;
   private appStateSubscription: any = null;
+
+  // 🔔 Ringtone player
+  private ringtoneSound: Audio.Sound | null = null;
+  private ringtoneTimeout: ReturnType<typeof setTimeout> | null = null;
 
   private state: CallState = {
     status: 'idle',
@@ -153,6 +173,99 @@ class TwilioVoiceService {
     });
     return isInitialized;
   }
+
+  // 🔔 ================================
+  // RINGTONE METHODS
+  // 🔔 ================================
+
+  private async playRingtone(): Promise<void> {
+    try {
+      logger.info('[TwilioVoice] 🔔 Playing custom ringtone', {
+        volume: RINGTONE_CONFIG.volume,
+        shouldLoop: RINGTONE_CONFIG.shouldLoop,
+        maxDuration: RINGTONE_CONFIG.maxDuration,
+        timestamp: new Date().toISOString(),
+      });
+
+      // ✅ Stop any existing ringtone first
+      await this.stopRingtone();
+
+      // ✅ Configure audio mode for ringtone
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true, // ✅ Play even in silent mode
+        staysActiveInBackground: true,
+        shouldDuckAndroid: true,
+      });
+
+      // ✅ Create and play ringtone
+      const { sound } = await Audio.Sound.createAsync(
+        RINGTONE_CONFIG.customRingtone,
+        {
+          volume: RINGTONE_CONFIG.volume,
+          isLooping: RINGTONE_CONFIG.shouldLoop,
+          shouldPlay: true, // ✅ Auto-play
+        }
+      );
+
+      this.ringtoneSound = sound;
+
+      logger.info('[TwilioVoice] ✅ Ringtone started', {
+        timestamp: new Date().toISOString(),
+      });
+
+      // ✅ Auto-stop after max duration
+      this.ringtoneTimeout = setTimeout(() => {
+        logger.warn(
+          '[TwilioVoice] ⏱️ Ringtone max duration reached, stopping',
+          {
+            maxDuration: RINGTONE_CONFIG.maxDuration,
+            timestamp: new Date().toISOString(),
+          }
+        );
+        void this.stopRingtone();
+      }, RINGTONE_CONFIG.maxDuration);
+    } catch (error) {
+      logger.error('[TwilioVoice] ❌ Ringtone playback error', error, {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  private async stopRingtone(): Promise<void> {
+    try {
+      // ✅ Clear timeout
+      if (this.ringtoneTimeout) {
+        clearTimeout(this.ringtoneTimeout);
+        this.ringtoneTimeout = null;
+      }
+
+      // ✅ Stop and unload sound
+      if (this.ringtoneSound) {
+        logger.info('[TwilioVoice] 🔕 Stopping ringtone', {
+          timestamp: new Date().toISOString(),
+        });
+
+        await this.ringtoneSound.stopAsync();
+        await this.ringtoneSound.unloadAsync();
+        this.ringtoneSound = null;
+
+        logger.info('[TwilioVoice] ✅ Ringtone stopped', {
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } catch (error) {
+      logger.error('[TwilioVoice] ❌ Ringtone stop error', error, {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  // 🔔 ================================
+  // END RINGTONE METHODS
+  // 🔔 ================================
 
   async getAccessToken(): Promise<string> {
     const tokenStartTime = Date.now();
@@ -925,6 +1038,9 @@ class TwilioVoiceService {
     });
     await this.ensureMicrophonePermission(params?.debugId);
 
+    // 🔔 STOP RINGTONE when accepting call
+    await this.stopRingtone();
+
     logger.debug('[TwilioVoice] 🔧 Calling callInvite.accept()', {
       debugId: params?.debugId,
       callId: params?.callId,
@@ -1093,6 +1209,9 @@ class TwilioVoiceService {
       inviteSid: callInvite.getCallSid?.(),
       timestamp: new Date().toISOString(),
     });
+
+    // 🔔 STOP RINGTONE when rejecting call
+    await this.stopRingtone();
 
     try {
       logger.debug('[TwilioVoice] 🔧 Calling callInvite.reject()', {
@@ -1654,6 +1773,9 @@ class TwilioVoiceService {
       // IncomingCallHandler will show custom modal
       this.updateState({ status: 'ringing', callInvite });
 
+      // 🔔 START RINGTONE
+      void this.playRingtone();
+
       try {
         logger.debug('[TwilioVoice] 🔧 Setting up CallInvite event listeners', {
           callSid: inviteSid,
@@ -1667,6 +1789,10 @@ class TwilioVoiceService {
             callSid: inviteSid,
             timestamp: new Date().toISOString(),
           });
+
+          // 🔔 STOP RINGTONE when call ends
+          void this.stopRingtone();
+
           this.updateState({ status: 'idle', callInvite: null });
         };
         const typedEvents = (CallInvite as any)?.Event ?? {};
@@ -2356,6 +2482,9 @@ class TwilioVoiceService {
       // ✅ Stop tracking
       this.stopDurationTracking();
       this.stopPerMinuteBilling();
+
+      // 🔔 Stop ringtone
+      await this.stopRingtone();
 
       // ✅ Stop AppState listener
       if (this.appStateSubscription) {

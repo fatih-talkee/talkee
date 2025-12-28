@@ -2,12 +2,15 @@ import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  Modal,
   StyleSheet,
   Pressable,
   ActivityIndicator,
   Image,
+  Animated,
+  Platform,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { Phone, PhoneOff } from 'lucide-react-native';
 import { useTwilioVoice } from '@/hooks/useTwilioVoice';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -29,16 +32,59 @@ export default function IncomingCallHandler() {
   const [callDetails, setCallDetails] = useState<CallDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [userBalance, setUserBalance] = useState<number | undefined>(undefined);
+  const [fadeAnim] = useState(new Animated.Value(0));
+  const [scaleAnim] = useState(new Animated.Value(0.8));
+  const [pulseAnim] = useState(new Animated.Value(1));
 
   useEffect(() => {
     if (callState.status === 'ringing' && callState.callInvite) {
       setShowModal(true);
       loadIncomingCallDetails();
+      // Animate in
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 50,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+      ]).start();
     } else {
       setShowModal(false);
       setCallDetails(null);
+      fadeAnim.setValue(0);
+      scaleAnim.setValue(0.8);
     }
   }, [callState.status, callState.callInvite]);
+
+  // Pulse animation for incoming call
+  useEffect(() => {
+    if (showModal && callDetails) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.15,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [showModal, callDetails]);
 
   const loadIncomingCallDetails = async () => {
     if (!callState.callInvite) return;
@@ -187,8 +233,9 @@ export default function IncomingCallHandler() {
   };
 
   const handleAccept = async () => {
-    if (!callState.callInvite) return;
+    if (!callState.callInvite || loading) return;
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     logger.info('[IncomingCallHandler] ✅ User accepted call', {
       callerName: callDetails?.callerName,
@@ -225,8 +272,9 @@ export default function IncomingCallHandler() {
   };
 
   const handleDecline = async () => {
-    if (!callState.callInvite) return;
+    if (!callState.callInvite || loading) return;
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     logger.info('[IncomingCallHandler] ❌ User declined call', {
       callerName: callDetails?.callerName,
@@ -258,52 +306,91 @@ export default function IncomingCallHandler() {
   }
 
   return (
-    <Modal
-      visible={showModal}
-      transparent
-      animationType="slide"
-      onRequestClose={handleDecline}
+    <View
+      style={[styles.overlay, { backgroundColor: theme.colors.background }]}
     >
-      <View style={styles.overlay}>
-        <View
-          style={[styles.modalContent, { backgroundColor: theme.colors.card }]}
-        >
+      <Animated.View
+        style={[
+          styles.container,
+          {
+            opacity: fadeAnim,
+            transform: [{ scale: scaleAnim }],
+          },
+        ]}
+      >
+        <View style={styles.content}>
           {/* Caller Avatar */}
-          {callDetails.callerAvatar ? (
-            <Image
-              source={{ uri: callDetails.callerAvatar }}
-              style={styles.avatar}
-            />
-          ) : (
+          <Animated.View
+            style={[
+              styles.avatarContainer,
+              {
+                transform: [{ scale: pulseAnim }],
+              },
+            ]}
+          >
+            {callDetails.callerAvatar ? (
+              <Image
+                source={{ uri: callDetails.callerAvatar }}
+                style={[styles.avatar, { borderColor: theme.colors.border }]}
+              />
+            ) : (
+              <LinearGradient
+                colors={[theme.colors.primary, theme.colors.primary + 'DD']}
+                style={[
+                  styles.avatarPlaceholder,
+                  { borderColor: theme.colors.border },
+                ]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Text style={[styles.avatarText, { color: theme.colors.text }]}>
+                  {callDetails.callerName.charAt(0).toUpperCase()}
+                </Text>
+              </LinearGradient>
+            )}
             <View
               style={[
-                styles.avatarPlaceholder,
-                { backgroundColor: theme.colors.primary + '20' },
+                styles.avatarRing,
+                { borderColor: theme.colors.primary + '40' },
               ]}
-            >
-              <Text
-                style={[styles.avatarText, { color: theme.colors.primary }]}
-              >
-                {callDetails.callerName.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
+            />
+            <View
+              style={[
+                styles.avatarRingOuter,
+                { borderColor: theme.colors.primary + '20' },
+              ]}
+            />
+          </Animated.View>
 
           {/* Caller Name */}
           <Text style={[styles.callerName, { color: theme.colors.text }]}>
             {callDetails.callerName}
           </Text>
 
-          {/* Call Type */}
-          <Text style={[styles.callType, { color: theme.colors.textMuted }]}>
-            Incoming Call
-          </Text>
+          {/* Call Type Badge */}
+          <View
+            style={[
+              styles.callTypeBadge,
+              { backgroundColor: theme.colors.card + '80' },
+            ]}
+          >
+            <Text style={[styles.callType, { color: theme.colors.textMuted }]}>
+              📞 Incoming Call
+            </Text>
+          </View>
 
           {/* Rate */}
           {callDetails.ratePerMinute > 0 && (
-            <Text style={[styles.rate, { color: theme.colors.textMuted }]}>
-              ${callDetails.ratePerMinute.toFixed(2)}/min
-            </Text>
+            <View style={styles.rateContainer}>
+              <Text style={[styles.rate, { color: theme.colors.textMuted }]}>
+                ${callDetails.ratePerMinute.toFixed(2)}
+              </Text>
+              <Text
+                style={[styles.rateUnit, { color: theme.colors.textMuted }]}
+              >
+                /min
+              </Text>
+            </View>
           )}
 
           {/* Action Buttons */}
@@ -312,101 +399,161 @@ export default function IncomingCallHandler() {
             <Pressable
               onPress={handleDecline}
               disabled={loading}
-              style={[
+              style={({ pressed }) => [
                 styles.button,
-                styles.declineButton,
-                { backgroundColor: theme.colors.error },
+                pressed && styles.buttonPressed,
               ]}
             >
-              {loading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <PhoneOff size={24} color="#FFFFFF" />
-                  <Text style={styles.buttonText}>Decline</Text>
-                </>
-              )}
+              <LinearGradient
+                colors={[theme.colors.error, theme.colors.error + 'DD']}
+                style={styles.buttonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color={theme.colors.text} />
+                ) : (
+                  <>
+                    <PhoneOff size={20} color={theme.colors.text} />
+                    <Text
+                      style={[styles.buttonText, { color: theme.colors.text }]}
+                    >
+                      Decline
+                    </Text>
+                  </>
+                )}
+              </LinearGradient>
             </Pressable>
 
             {/* Accept Button */}
             <Pressable
               onPress={handleAccept}
               disabled={loading}
-              style={[
+              style={({ pressed }) => [
                 styles.button,
                 styles.acceptButton,
-                { backgroundColor: theme.colors.success },
+                pressed && styles.buttonPressed,
               ]}
             >
-              {loading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Phone size={24} color="#FFFFFF" />
-                  <Text style={styles.buttonText}>Accept</Text>
-                </>
-              )}
+              <LinearGradient
+                colors={[theme.colors.success, theme.colors.success + 'DD']}
+                style={styles.buttonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color={theme.colors.text} />
+                ) : (
+                  <>
+                    <Phone size={20} color={theme.colors.text} />
+                    <Text
+                      style={[styles.buttonText, { color: theme.colors.text }]}
+                    >
+                      Accept
+                    </Text>
+                  </>
+                )}
+              </LinearGradient>
             </Pressable>
           </View>
         </View>
-      </View>
-    </Modal>
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9999,
   },
-  modalContent: {
-    width: '100%',
-    maxWidth: 400,
-    borderRadius: 24,
-    padding: 32,
+  container: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+    paddingBottom: 40,
+    paddingHorizontal: 40,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 20,
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 16,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 4,
   },
   avatarPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 16,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 4,
   },
   avatarText: {
-    fontSize: 40,
+    fontSize: 56,
     fontFamily: 'Inter-Bold',
+  },
+  avatarRing: {
+    position: 'absolute',
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 2,
+    top: -10,
+    left: -10,
+  },
+  avatarRingOuter: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    borderWidth: 2,
+    top: -20,
+    left: -20,
   },
   callerName: {
-    fontSize: 24,
+    fontSize: 32,
     fontFamily: 'Inter-Bold',
-    marginBottom: 8,
+    marginBottom: 12,
     textAlign: 'center',
+    letterSpacing: -0.5,
+  },
+  callTypeBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 12,
   },
   callType: {
-    fontSize: 16,
-    fontFamily: 'Inter-Regular',
-    marginBottom: 4,
+    fontSize: 15,
+    fontFamily: 'Inter-Medium',
+  },
+  rateContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+    marginBottom: 40,
   },
   rate: {
+    fontSize: 20,
+    fontFamily: 'Inter-Bold',
+  },
+  rateUnit: {
     fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    marginBottom: 32,
+    fontFamily: 'Inter-Regular',
   },
   buttons: {
     flexDirection: 'row',
@@ -415,19 +562,35 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  buttonPressed: {
+    transform: [{ scale: 0.97 }],
+  },
+  acceptButton: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  buttonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
-  declineButton: {},
-  acceptButton: {},
   buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'Inter-Bold',
+    letterSpacing: 0.5,
   },
 });
