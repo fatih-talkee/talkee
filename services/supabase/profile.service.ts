@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import type {
   User,
+  Professional,
   UserProfileStats,
   UserProfileData,
   Invoice,
@@ -26,23 +27,24 @@ export class ProfileService {
         return null;
       }
 
+      // ✅ OPTIMIZED: Only select fields needed for profile summary page
       // Get user data by auth_id
       const userQueryStart = Date.now();
       logger.info('[ProfileService] 📊 Querying users table...', {
         authId: authId?.substring(0, 8) + '...',
       });
 
-      const { data: users, error: userError } = await supabase
+      const { data: user, error: userError } = await supabase
         .from('users')
-        .select('*')
+        .select('id, name, avatar_url, created_at, primary_email')
         .eq('auth_id', authId)
-        .is('deleted_at', null); // Only get non-deleted users
+        .is('deleted_at', null) // Only get non-deleted users
+        .single();
 
       const userQueryDuration = Date.now() - userQueryStart;
       logger.info('[ProfileService] ✅ Users query completed', {
         duration: `${userQueryDuration}ms`,
-        found: !!users && users.length > 0,
-        count: users?.length || 0,
+        found: !!user,
       });
 
       if (userError) {
@@ -54,14 +56,13 @@ export class ProfileService {
         throw userError;
       }
 
-      if (!users || users.length === 0) {
+      if (!user) {
         logger.info('[ProfileService] ℹ️ No user found', {
           authId: authId?.substring(0, 8) + '...',
         });
         return null;
       }
 
-      const user = users[0];
       logger.info('[ProfileService] ✅ User found', {
         userId: user.id,
         userName: user.name,
@@ -77,11 +78,14 @@ export class ProfileService {
         }
       );
 
+      // ✅ OPTIMIZED: Only select fields needed for profile summary page
       const [statsResult, profResult] = await Promise.all([
         supabase.rpc('get_user_profile_stats', { p_user_id: user.id }),
         supabase
           .from('professionals')
-          .select('*')
+          .select(
+            'id, title, total_calls, is_verified, rate_per_minute, specialties'
+          )
           .eq('user_id', user.id)
           .maybeSingle(),
       ]);
@@ -127,11 +131,16 @@ export class ProfileService {
       });
 
       try {
-        const result = {
-          user,
+        // ✅ Type cast: We only select necessary fields for profile summary,
+        // but UserProfileData expects full User and Professional types. This is safe because
+        // the profile summary page only uses the selected fields.
+        const result: UserProfileData = {
+          user: user as unknown as User,
           stats,
           is_professional,
-          professional,
+          professional: professional
+            ? (professional as unknown as Professional)
+            : undefined,
         };
         logger.info('[ProfileService] ✅ Returning profile data', {
           hasUser: !!result.user,

@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase';
+import { logger } from '../../lib/logger';
 import type {
   User,
   UserUpdate,
@@ -391,13 +392,10 @@ class UsersService {
 
       // Get aggregated stats using RPC function or separate aggregation queries
       // For now, we'll use a more efficient approach: fetch only aggregated data
-      const { data: aggregatedData, error: aggError } = await supabase.rpc(
-        'get_user_call_stats',
-        { p_user_id: currentUser.id }
-      ).catch(() => {
-        // If RPC doesn't exist, fall back to manual aggregation
-        return { data: null, error: null };
-      });
+      const { data: aggregatedData, error: aggError } = await supabase
+        .rpc('get_user_call_stats', { p_user_id: currentUser.id })
+        .match({ error: null })
+        .single();
 
       if (aggError || !aggregatedData) {
         // Fallback: Fetch minimal data and aggregate in memory
@@ -410,13 +408,18 @@ class UsersService {
 
         if (callsError) {
           console.error('Error fetching call stats:', callsError);
-          return { totalCalls: totalCalls || 0, totalSpent: 0, totalMinutes: 0 };
+          return {
+            totalCalls: totalCalls || 0,
+            totalSpent: 0,
+            totalMinutes: 0,
+          };
         }
 
         const totalSpent =
           calls?.reduce((sum, call) => sum + (call.total_cost || 0), 0) || 0;
         const totalMinutes =
-          calls?.reduce((sum, call) => sum + (call.duration_minutes || 0), 0) || 0;
+          calls?.reduce((sum, call) => sum + (call.duration_minutes || 0), 0) ||
+          0;
 
         return {
           totalCalls: totalCalls || 0,
@@ -426,7 +429,11 @@ class UsersService {
       }
 
       // Use RPC result if available
-      const stats = aggregatedData?.[0] || {};
+      const stats = aggregatedData as {
+        total_calls: number;
+        total_spent: number;
+        total_minutes: number;
+      };
       return {
         totalCalls: totalCalls || stats.total_calls || 0,
         totalSpent: Number((stats.total_spent || 0).toFixed(2)),
@@ -758,6 +765,11 @@ class UsersService {
       professional: ProfessionalWithRelations | null;
     }>
   > {
+    const startTime = Date.now();
+    logger.info('[UsersService] 🔍 getBlockedUsers started', {
+      timestamp: new Date().toISOString(),
+    });
+
     try {
       const currentUser = await this.getCurrentUser();
 
@@ -766,6 +778,7 @@ class UsersService {
       }
 
       // ✅ OPTIMIZED: Fetch blocked users first (needed to get blocked_user_ids)
+      const blockedQueryStartTime = Date.now();
       const { data: blockedData, error } = await supabase
         .from('blocked_users')
         .select(
@@ -783,13 +796,25 @@ class UsersService {
         )
         .eq('blocker_id', currentUser.id)
         .order('created_at', { ascending: false });
+      const blockedQueryElapsed = Date.now() - blockedQueryStartTime;
 
       if (error) {
-        console.error('Error fetching blocked users:', error);
+        logger.error('[UsersService] ❌ Error fetching blocked users', error, {
+          userId: currentUser.id,
+          duration: `${Date.now() - startTime}ms`,
+          blockedQueryElapsed: `${blockedQueryElapsed}ms`,
+          timestamp: new Date().toISOString(),
+        });
         throw new Error(`Failed to fetch blocked users: ${error.message}`);
       }
 
       if (!blockedData || blockedData.length === 0) {
+        logger.info('[UsersService] ✅ getBlockedUsers completed (empty)', {
+          userId: currentUser.id,
+          duration: `${Date.now() - startTime}ms`,
+          count: 0,
+          timestamp: new Date().toISOString(),
+        });
         return [];
       }
 
@@ -797,24 +822,42 @@ class UsersService {
       // Note: We need blockedUserIds from blockedData, so we can't fully parallelize
       // But we can optimize the professionals query
       const blockedUserIds = blockedData.map((b) => b.blocked_id);
-      
-      // Only fetch professionals if we have blocked users
+
+      // ✅ OPTIMIZED: Only fetch professionals if we have blocked users
+      // ✅ OPTIMIZED: Only select fields needed for list display (not all professional data)
+      const professionalsQueryStartTime = Date.now();
       const { data: professionalsData, error: professionalsError } =
         await supabase
           .from('professionals')
           .select(
             `
-          *,
+          id,
+          title,
+          profession,
+          rate_per_minute,
+          is_featured,
+          is_active,
+          is_available,
+          total_calls,
+          specialties,
+          user_id,
           users(id, name, avatar_url, is_verified),
           categories(id, name, slug, icon_name)
         `
           )
           .in('user_id', blockedUserIds);
+      const professionalsQueryElapsed =
+        Date.now() - professionalsQueryStartTime;
 
       if (professionalsError) {
-        console.error(
-          'Error fetching professionals for blocked users:',
-          professionalsError
+        logger.warn(
+          '[UsersService] ⚠️ Error fetching professionals for blocked users',
+          {
+            error: professionalsError.message,
+            blockedUserIdsCount: blockedUserIds.length,
+            professionalsQueryElapsed: `${professionalsQueryElapsed}ms`,
+            timestamp: new Date().toISOString(),
+          }
         );
         // Don't throw - just continue without professional data
       }
@@ -823,12 +866,12 @@ class UsersService {
       const professionalMap = new Map(
         (professionalsData || []).map((p) => [
           p.user_id,
-          p as ProfessionalWithRelations,
+          p as unknown as ProfessionalWithRelations,
         ])
       );
 
       // Transform the data to include full professional info
-      return blockedData.map((block) => {
+      const result = blockedData.map((block) => {
         const professional = professionalMap.get(block.blocked_id);
         return {
           id: block.id,
@@ -837,8 +880,25 @@ class UsersService {
           professional: professional || null,
         };
       });
+
+      const totalDuration = Date.now() - startTime;
+      logger.info('[UsersService] ✅ getBlockedUsers completed', {
+        userId: currentUser.id,
+        duration: `${totalDuration}ms`,
+        professionalsQueryElapsed: `${professionalsQueryElapsed}ms`,
+        blockedCount: blockedData.length,
+        professionalsCount: professionalsData?.length || 0,
+        resultCount: result.length,
+        timestamp: new Date().toISOString(),
+      });
+
+      return result;
     } catch (error) {
-      console.error('Error in getBlockedUsers:', error);
+      const totalDuration = Date.now() - startTime;
+      logger.error('[UsersService] ❌ Error in getBlockedUsers', error, {
+        duration: `${totalDuration}ms`,
+        timestamp: new Date().toISOString(),
+      });
       throw error;
     }
   }

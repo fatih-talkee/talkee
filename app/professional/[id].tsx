@@ -104,14 +104,17 @@ export default function ProfessionalProfileScreen() {
   const feedsData = feedsResponse?.feeds || [];
   const feedCountData = feedsResponse?.total_count || 0;
 
-  // ✅ Fetch availabilities
-  const { data: availabilitiesData = [] } = useQuery<Availability[]>({
+  // ✅ Get availabilities from professional data (optimized - included in getProfessional)
+  // Fallback to separate query if not included in professional data
+  const availabilitiesFromProfessional = professionalData?.availabilities;
+  const { data: availabilitiesFromQuery = [] } = useQuery<Availability[]>({
     queryKey: ['professionals', id, 'availabilities'],
     queryFn: () =>
       professionalsService.getProfessionalAvailabilities(id as string),
-    enabled: !!id,
+    enabled: !!id && !availabilitiesFromProfessional, // Only fetch if not in professional data
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
+  const availabilitiesData = availabilitiesFromProfessional || availabilitiesFromQuery;
 
   // ✅ Check if professional has blocked current user
   const professionalUserId = professionalData?.user_id;
@@ -622,11 +625,13 @@ export default function ProfessionalProfileScreen() {
   }, [currentUser?.id, professional?.user_id]);
 
   // Buttons enabled if:
-  // 1. NOT viewing own profile (can't call yourself)
-  // 2. Professional has NOT blocked us
-  // 3. Scheduled availability + online, OR
-  // 4. Urgent call availability + online
+  // 1. User is logged in (currentUser exists)
+  // 2. NOT viewing own profile (can't call yourself)
+  // 3. Professional has NOT blocked us
+  // 4. Scheduled availability + online, OR
+  // 5. Urgent call availability + online
   const buttonsEnabled =
+    !!currentUser &&
     !isOwnProfile &&
     !isBlockedByProfessional &&
     ((isAvailable && isOnline && !isUrgentCallAvailability) ||

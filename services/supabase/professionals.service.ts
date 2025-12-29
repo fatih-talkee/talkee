@@ -24,12 +24,29 @@ class ProfessionalsService {
     limit?: number,
     offset?: number
   ): Promise<ProfessionalWithRelations[]> {
+    const startTime = Date.now();
+    logger.info('[ProfessionalsService] 🔍 getProfessionals started', {
+      categoryId,
+      limit,
+      offset,
+      timestamp: new Date().toISOString(),
+    });
+
     try {
+      // ✅ OPTIMIZED: Only select fields needed for list display (not all professional data)
       let query = supabase
         .from('professionals')
         .select(
           `
-          *,
+          id,
+          title,
+          profession,
+          rate_per_minute,
+          is_featured,
+          is_active,
+          is_available,
+          total_calls,
+          specialties,
           users(id, name, avatar_url, is_verified),
           categories(id, name, slug, icon_name)
         `
@@ -52,16 +69,51 @@ class ProfessionalsService {
         }
       }
 
+      const queryStartTime = Date.now();
       const { data, error } = await query;
+      const queryElapsed = Date.now() - queryStartTime;
+      const totalDuration = Date.now() - startTime;
 
       if (error) {
-        console.error('Error fetching professionals:', error);
+        logger.error(
+          '[ProfessionalsService] ❌ Error fetching professionals',
+          error,
+          {
+            categoryId,
+            limit,
+            offset,
+            duration: `${totalDuration}ms`,
+            queryElapsed: `${queryElapsed}ms`,
+            timestamp: new Date().toISOString(),
+          }
+        );
         throw error;
       }
 
-      return (data || []) as ProfessionalWithRelations[];
+      logger.info('[ProfessionalsService] ✅ getProfessionals completed', {
+        categoryId,
+        limit,
+        offset,
+        duration: `${totalDuration}ms`,
+        queryElapsed: `${queryElapsed}ms`,
+        count: data?.length || 0,
+        timestamp: new Date().toISOString(),
+      });
+
+      return (data || []) as unknown as ProfessionalWithRelations[];
     } catch (error) {
-      console.error('Error in getProfessionals:', error);
+      const totalDuration = Date.now() - startTime;
+      logger.error(
+        '[ProfessionalsService] ❌ Error in getProfessionals',
+        error,
+        {
+          categoryId,
+          limit,
+          offset,
+          duration: `${totalDuration}ms`,
+          timestamp: new Date().toISOString(),
+        }
+      );
       throw error;
     }
   }
@@ -73,13 +125,28 @@ class ProfessionalsService {
   async getAvailableProfessionals(
     categoryId?: string
   ): Promise<ProfessionalWithRelations[]> {
+    const startTime = Date.now();
+    logger.info('[ProfessionalsService] 🔍 getAvailableProfessionals started', {
+      categoryId,
+      timestamp: new Date().toISOString(),
+    });
+
     try {
+      // ✅ OPTIMIZED: Only select fields needed for list display
       let query = supabase
         .from('professionals')
         .select(
           `
-          *,
-          users!inner(id, name, avatar_url),
+          id,
+          title,
+          profession,
+          rate_per_minute,
+          is_featured,
+          is_active,
+          is_available,
+          total_calls,
+          specialties,
+          users!inner(id, name, avatar_url, is_verified),
           categories!inner(id, name, slug, icon_name)
         `
         )
@@ -93,16 +160,48 @@ class ProfessionalsService {
         query = query.eq('category_id', categoryId);
       }
 
+      const queryStartTime = Date.now();
       const { data, error } = await query;
+      const queryElapsed = Date.now() - queryStartTime;
+      const totalDuration = Date.now() - startTime;
 
       if (error) {
-        console.error('Error fetching available professionals:', error);
+        logger.error(
+          '[ProfessionalsService] ❌ Error fetching available professionals',
+          error,
+          {
+            categoryId,
+            duration: `${totalDuration}ms`,
+            queryElapsed: `${queryElapsed}ms`,
+            timestamp: new Date().toISOString(),
+          }
+        );
         throw error;
       }
 
-      return (data || []) as ProfessionalWithRelations[];
+      logger.info(
+        '[ProfessionalsService] ✅ getAvailableProfessionals completed',
+        {
+          categoryId,
+          duration: `${totalDuration}ms`,
+          queryElapsed: `${queryElapsed}ms`,
+          count: data?.length || 0,
+          timestamp: new Date().toISOString(),
+        }
+      );
+
+      return (data || []) as unknown as ProfessionalWithRelations[];
     } catch (error) {
-      console.error('Error in getAvailableProfessionals:', error);
+      const totalDuration = Date.now() - startTime;
+      logger.error(
+        '[ProfessionalsService] ❌ Error in getAvailableProfessionals',
+        error,
+        {
+          categoryId,
+          duration: `${totalDuration}ms`,
+          timestamp: new Date().toISOString(),
+        }
+      );
       throw error;
     }
   }
@@ -112,13 +211,20 @@ class ProfessionalsService {
    * ✅ OPTIMIZED: Fetches educations and experiences in parallel
    */
   async getProfessional(id: string): Promise<ProfessionalWithRelations | null> {
+    const startTime = Date.now();
+    logger.info('[ProfessionalsService] 🔍 getProfessional started', {
+      professionalId: id,
+      timestamp: new Date().toISOString(),
+    });
+
     try {
-      // ✅ OPTIMIZED: Fetch all data in parallel instead of sequential
+      // ✅ OPTIMIZED: Fetch all data in parallel including availabilities
       const [
         professionalResult,
         educationsResult,
         experiencesResult,
         categoryLinksResult,
+        availabilitiesResult,
       ] = await Promise.all([
         supabase
           .from('professionals')
@@ -149,12 +255,20 @@ class ProfessionalsService {
           .from('professional_categories')
           .select('category_id, categories(id, name, slug, icon_name)')
           .eq('professional_id', id),
+        supabase
+          .from('availabilities')
+          .select('*')
+          .eq('professional_id', id)
+          .order('created_at', { ascending: true }),
       ]);
+
+      const elapsed = Date.now() - startTime;
 
       if (professionalResult.error) {
         logger.error('[ProfessionalsService] Error fetching professional', {
           error: professionalResult.error.message,
           professionalId: id,
+          elapsed: `${elapsed}ms`,
         });
         throw professionalResult.error;
       }
@@ -165,16 +279,30 @@ class ProfessionalsService {
           ?.map((link: any) => link.categories)
           .filter(Boolean) || [];
 
-      return {
+      const result = {
         ...professionalResult.data,
         educations: educationsResult.data || [],
         experiences: experiencesResult.data || [],
         categories: categories,
-      } as ProfessionalWithRelations;
+        availabilities: (availabilitiesResult.data || []) as Availability[],
+      } as ProfessionalWithRelations & { availabilities?: Availability[] };
+
+      logger.info('[ProfessionalsService] ✅ getProfessional completed', {
+        professionalId: id,
+        elapsed: `${elapsed}ms`,
+        hasEducations: (educationsResult.data || []).length > 0,
+        hasExperiences: (experiencesResult.data || []).length > 0,
+        hasCategories: categories.length > 0,
+        hasAvailabilities: (availabilitiesResult.data || []).length > 0,
+      });
+
+      return result as ProfessionalWithRelations;
     } catch (error: any) {
-      logger.error('[ProfessionalsService] Error in getProfessional', {
+      const elapsed = Date.now() - startTime;
+      logger.error('[ProfessionalsService] Error in getProfessional', error, {
         error: error?.message || String(error),
         professionalId: id,
+        elapsed: `${elapsed}ms`,
       });
       throw error;
     }
@@ -190,19 +318,36 @@ class ProfessionalsService {
     limit?: number,
     offset?: number
   ): Promise<ProfessionalWithRelations[]> {
+    const startTime = Date.now();
+    logger.info('[ProfessionalsService] 🔍 searchProfessionals started', {
+      query: query.substring(0, 50),
+      limit,
+      offset,
+      timestamp: new Date().toISOString(),
+    });
+
     try {
       // Escape special characters for ilike pattern (%, _)
       const escapedQuery = query.replace(/%/g, '\\%').replace(/_/g, '\\_');
       const searchPattern = `%${escapedQuery}%`;
 
       // ✅ OPTIMIZED: Execute queries in parallel instead of sequential
+      // ✅ OPTIMIZED: Only select fields needed for list display (not all professional data)
       // Query 1: Search by title
       const titleQuery = supabase
         .from('professionals')
         .select(
           `
-          *,
-          users!inner(id, name, avatar_url),
+          id,
+          title,
+          profession,
+          rate_per_minute,
+          is_featured,
+          is_active,
+          is_available,
+          total_calls,
+          specialties,
+          users!inner(id, name, avatar_url, is_verified),
           categories!inner(id, name, slug, icon_name)
         `
         )
@@ -219,18 +364,38 @@ class ProfessionalsService {
         .ilike('name', searchPattern);
 
       // ✅ Execute both queries in parallel
+      const queryStartTime = Date.now();
       const [titleResult, usersResult] = await Promise.all([
         titleQuery,
         usersQuery,
       ]);
+      const queryElapsed = Date.now() - queryStartTime;
 
       if (titleResult.error) {
-        console.error('Error searching professionals by title:', titleResult.error);
+        logger.error(
+          '[ProfessionalsService] ❌ Error searching professionals by title',
+          titleResult.error,
+          {
+            query: query.substring(0, 50),
+            duration: `${Date.now() - startTime}ms`,
+            queryElapsed: `${queryElapsed}ms`,
+            timestamp: new Date().toISOString(),
+          }
+        );
         throw titleResult.error;
       }
 
       if (usersResult.error) {
-        console.error('Error searching users by name:', usersResult.error);
+        logger.error(
+          '[ProfessionalsService] ❌ Error searching users by name',
+          usersResult.error,
+          {
+            query: query.substring(0, 50),
+            duration: `${Date.now() - startTime}ms`,
+            queryElapsed: `${queryElapsed}ms`,
+            timestamp: new Date().toISOString(),
+          }
+        );
         throw usersResult.error;
       }
 
@@ -238,14 +403,25 @@ class ProfessionalsService {
       const titleResults = titleResult.data || [];
 
       // Query 3: Get professionals for matching users (only if we have matches)
+      // ✅ OPTIMIZED: Only select fields needed for list display
       let nameResults: any[] = [];
+      let nameQueryElapsed = 0;
       if (matchingUserIds.length > 0) {
+        const nameQueryStartTime = Date.now();
         const { data: nameData, error: nameError } = await supabase
           .from('professionals')
           .select(
             `
-            *,
-            users!inner(id, name, avatar_url),
+            id,
+            title,
+            profession,
+            rate_per_minute,
+            is_featured,
+            is_active,
+            is_available,
+            total_calls,
+            specialties,
+            users!inner(id, name, avatar_url, is_verified),
             categories!inner(id, name, slug, icon_name)
           `
           )
@@ -254,11 +430,18 @@ class ProfessionalsService {
           .in('user_id', matchingUserIds)
           .order('is_featured', { ascending: false })
           .order('total_calls', { ascending: false });
+        nameQueryElapsed = Date.now() - nameQueryStartTime;
 
         if (nameError) {
-          console.error(
-            'Error searching professionals by user name:',
-            nameError
+          logger.error(
+            '[ProfessionalsService] ❌ Error searching professionals by user name',
+            nameError,
+            {
+              query: query.substring(0, 50),
+              matchingUserIdsCount: matchingUserIds.length,
+              nameQueryElapsed: `${nameQueryElapsed}ms`,
+              timestamp: new Date().toISOString(),
+            }
           );
           throw nameError;
         }
@@ -290,9 +473,35 @@ class ProfessionalsService {
         paginatedResults = uniqueResults.slice(start, end);
       }
 
-      return paginatedResults as ProfessionalWithRelations[];
+      const totalDuration = Date.now() - startTime;
+      logger.info('[ProfessionalsService] ✅ searchProfessionals completed', {
+        query: query.substring(0, 50),
+        duration: `${totalDuration}ms`,
+        queryElapsed: `${queryElapsed}ms`,
+        nameQueryElapsed: `${nameQueryElapsed}ms`,
+        titleResultsCount: titleResults.length,
+        nameResultsCount: nameResults.length,
+        uniqueResultsCount: uniqueResults.length,
+        paginatedResultsCount: paginatedResults.length,
+        limit,
+        offset,
+        timestamp: new Date().toISOString(),
+      });
+
+      return paginatedResults as unknown as ProfessionalWithRelations[];
     } catch (error) {
-      console.error('Error in searchProfessionals:', error);
+      const totalDuration = Date.now() - startTime;
+      logger.error(
+        '[ProfessionalsService] ❌ Error in searchProfessionals',
+        error,
+        {
+          query: query.substring(0, 50),
+          duration: `${totalDuration}ms`,
+          limit,
+          offset,
+          timestamp: new Date().toISOString(),
+        }
+      );
       throw error;
     }
   }
@@ -316,11 +525,19 @@ class ProfessionalsService {
 
     try {
       // ✅ OPTIMIZED: Build query with proper filter order (matches index)
+      // ✅ OPTIMIZED: Only select fields needed for list display (not all professional data)
       let query = supabase
         .from('professionals')
         .select(
           `
-          *,
+          id,
+          title,
+          profession,
+          rate_per_minute,
+          is_featured,
+          is_active,
+          is_available,
+          total_calls,
           users(id, name, avatar_url, is_verified),
           categories(id, name, slug, icon_name)
         `
@@ -336,10 +553,24 @@ class ProfessionalsService {
       }
 
       logger.info(
-        '[ProfessionalsService] 📊 Executing featured professionals query...'
+        '[ProfessionalsService] 📊 Executing featured professionals query...',
+        {
+          limit,
+          categoryId,
+          filters: {
+            is_active: true,
+            is_public: true,
+            is_featured: true,
+            ...(categoryId && { category_id: categoryId }),
+          },
+          orderBy: 'total_calls DESC',
+          timestamp: new Date().toISOString(),
+        }
       );
 
+      const queryStartTime = Date.now();
       const { data, error } = await query;
+      const queryElapsed = Date.now() - queryStartTime;
 
       const duration = Date.now() - startTime;
 
@@ -360,13 +591,17 @@ class ProfessionalsService {
         '[ProfessionalsService] ✅ getFeaturedProfessionals completed',
         {
           duration: `${duration}ms`,
+          queryElapsed: `${queryElapsed}ms`,
           count: data?.length || 0,
           limit,
           categoryId,
+          hasData: !!data,
+          dataLength: data?.length || 0,
+          timestamp: new Date().toISOString(),
         }
       );
 
-      return (data || []) as ProfessionalWithRelations[];
+      return (data || []) as unknown as ProfessionalWithRelations[];
     } catch (error: any) {
       const duration = Date.now() - startTime;
       logger.error(
@@ -376,6 +611,11 @@ class ProfessionalsService {
           duration: `${duration}ms`,
           limit,
           categoryId,
+          errorMessage: error?.message || String(error),
+          errorCode: (error as any)?.code,
+          errorDetails: (error as any)?.details,
+          errorHint: (error as any)?.hint,
+          timestamp: new Date().toISOString(),
         }
       );
       throw error;
@@ -799,6 +1039,50 @@ class ProfessionalsService {
   }
 
   /**
+   * Calculate rate_per_minute from availabilities
+   * Priority: 1) Lowest recurring (every) price, 2) Lowest specific date price, 3) Urgent price
+   */
+  private calculateRatePerMinute(
+    availabilities: Array<{
+      available_at: 'every' | 'specific' | 'urgent';
+      price_per_minute: number;
+    }>
+  ): number {
+    if (!availabilities || availabilities.length === 0) {
+      return 0;
+    }
+
+    // Priority 1: Recurring (every) - lowest price (standard rate)
+    const recurringPrices = availabilities
+      .filter((av) => av.available_at === 'every')
+      .map((av) => av.price_per_minute);
+
+    // Priority 2: Specific date - lowest price
+    const specificPrices = availabilities
+      .filter((av) => av.available_at === 'specific')
+      .map((av) => av.price_per_minute);
+
+    // Priority 3: Urgent price (last resort)
+    const urgentPrice = availabilities.find(
+      (av) => av.available_at === 'urgent'
+    )?.price_per_minute;
+
+    if (recurringPrices.length > 0) {
+      // Use lowest recurring price (standard rate)
+      return Math.min(...recurringPrices);
+    } else if (specificPrices.length > 0) {
+      // Fallback to lowest specific date price
+      return Math.min(...specificPrices);
+    } else if (urgentPrice) {
+      // Last resort: urgent price
+      return urgentPrice;
+    }
+
+    // Fallback: first availability's price
+    return availabilities[0].price_per_minute;
+  }
+
+  /**
    * Update professional availabilities
    */
   async updateProfessionalAvailabilities(
@@ -861,10 +1145,14 @@ class ProfessionalsService {
         return { success: false, error: insertError.message };
       }
 
-      // Update rate_per_minute in professionals table (use first availability's price)
+      // Calculate rate_per_minute using helper function
+      const calculatedRatePerMinute =
+        this.calculateRatePerMinute(availabilities);
+
+      // Update rate_per_minute in professionals table
       const { error: updateError } = await supabase
         .from('professionals')
-        .update({ rate_per_minute: availabilities[0].price_per_minute })
+        .update({ rate_per_minute: calculatedRatePerMinute })
         .eq('id', professionalId);
 
       if (updateError) {

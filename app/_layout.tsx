@@ -223,88 +223,210 @@ export default function RootLayout() {
     const notificationSubscription = setupNotificationResponseListener(
       // On Accept
       async (callId: string) => {
+        const acceptStartTime = Date.now();
         logger.info('[App] ✅ User accepted call from notification', {
           callId,
           timestamp: new Date().toISOString(),
         });
 
         try {
-          // Get current call state
-          const currentState = twilioVoiceService.getState();
-          
-          // If there's an active callInvite, accept it
-          if (currentState.callInvite) {
-            logger.info('[App] 📞 Accepting incoming call from notification', {
+          // ✅ Wait for callInvite to be available (app might have just opened)
+          // Try up to 5 times with 500ms delay between attempts
+          let callInviteFound = false;
+          const maxAttempts = 5;
+          const attemptDelay = 500;
+
+          logger.info('[App] 🔍 Starting callInvite wait loop', {
+            callId,
+            maxAttempts,
+            attemptDelay: `${attemptDelay}ms`,
+            timestamp: new Date().toISOString(),
+          });
+
+          for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            const attemptStartTime = Date.now();
+            const currentState = twilioVoiceService.getState();
+            const attemptElapsed = Date.now() - attemptStartTime;
+            
+            logger.debug('[App] 🔍 Checking callInvite availability', {
               callId,
+              attempt: attempt + 1,
+              maxAttempts,
               hasCallInvite: !!currentState.callInvite,
-              timestamp: new Date().toISOString(),
-            });
-
-            // Accept the call - this will automatically open the app and show ActiveCallOverlay
-            await twilioVoiceService.acceptIncomingCall({
-              callId: callId || undefined,
-              debugId: `notification-accept-${Date.now()}`,
-            });
-
-            logger.info('[App] ✅ Call accepted successfully from notification', {
-              callId,
-              timestamp: new Date().toISOString(),
-            });
-          } else {
-            logger.warn('[App] ⚠️ No active callInvite to accept', {
-              callId,
               status: currentState.status,
+              hasCall: !!currentState.call,
+              attemptElapsed: `${attemptElapsed}ms`,
+              timestamp: new Date().toISOString(),
+            });
+            
+            if (currentState.callInvite) {
+              callInviteFound = true;
+              const waitElapsed = Date.now() - acceptStartTime;
+              
+              logger.info('[App] 📞 Accepting incoming call from notification', {
+                callId,
+                attempt: attempt + 1,
+                hasCallInvite: !!currentState.callInvite,
+                status: currentState.status,
+                waitElapsed: `${waitElapsed}ms`,
+                timestamp: new Date().toISOString(),
+              });
+
+              const acceptCallStartTime = Date.now();
+              // Accept the call - this will automatically open the app and show ActiveCallOverlay
+              await twilioVoiceService.acceptIncomingCall({
+                callId: callId || undefined,
+                debugId: `notification-accept-${Date.now()}`,
+              });
+              const acceptCallElapsed = Date.now() - acceptCallStartTime;
+              const totalElapsed = Date.now() - acceptStartTime;
+
+              logger.info('[App] ✅ Call accepted successfully from notification', {
+                callId,
+                acceptCallElapsed: `${acceptCallElapsed}ms`,
+                totalElapsed: `${totalElapsed}ms`,
+                timestamp: new Date().toISOString(),
+              });
+              break;
+            } else {
+              logger.debug('[App] ⏳ Waiting for callInvite...', {
+                callId,
+                attempt: attempt + 1,
+                maxAttempts,
+                status: currentState.status,
+                hasCall: !!currentState.call,
+                attemptElapsed: `${attemptElapsed}ms`,
+                timestamp: new Date().toISOString(),
+              });
+              
+              // Wait before next attempt
+              await new Promise(resolve => setTimeout(resolve, attemptDelay));
+            }
+          }
+
+          if (!callInviteFound) {
+            const totalElapsed = Date.now() - acceptStartTime;
+            logger.warn('[App] ⚠️ No active callInvite found after waiting', {
+              callId,
+              maxAttempts,
+              totalElapsed: `${totalElapsed}ms`,
+              finalStatus: twilioVoiceService.getState().status,
               timestamp: new Date().toISOString(),
             });
           }
         } catch (error) {
+          const totalElapsed = Date.now() - acceptStartTime;
           logger.error('[App] ❌ Failed to accept call from notification', error, {
             callId,
             errorMessage: error instanceof Error ? error.message : String(error),
+            errorStack: error instanceof Error ? error.stack : undefined,
+            errorType: error instanceof Error ? error.constructor.name : typeof error,
+            totalElapsed: `${totalElapsed}ms`,
             timestamp: new Date().toISOString(),
           });
         }
       },
       // On Decline
       async (callId: string) => {
+        const declineStartTime = Date.now();
         logger.info('[App] ❌ User declined call from notification', {
           callId,
           timestamp: new Date().toISOString(),
         });
 
         try {
-          // Get current call state
-          const currentState = twilioVoiceService.getState();
-          
-          // If there's an active callInvite, reject it
-          if (currentState.callInvite) {
-            logger.info('[App] 📞 Rejecting incoming call from notification', {
+          // ✅ Wait for callInvite to be available (app might have just opened)
+          // Try up to 3 times with 500ms delay between attempts
+          let callInviteFound = false;
+          const maxAttempts = 3;
+          const attemptDelay = 500;
+
+          logger.info('[App] 🔍 Starting callInvite wait loop for decline', {
+            callId,
+            maxAttempts,
+            attemptDelay: `${attemptDelay}ms`,
+            timestamp: new Date().toISOString(),
+          });
+
+          for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            const attemptStartTime = Date.now();
+            const currentState = twilioVoiceService.getState();
+            const attemptElapsed = Date.now() - attemptStartTime;
+            
+            logger.debug('[App] 🔍 Checking callInvite for decline', {
               callId,
+              attempt: attempt + 1,
+              maxAttempts,
               hasCallInvite: !!currentState.callInvite,
-              timestamp: new Date().toISOString(),
-            });
-
-            // Reject the call
-            await twilioVoiceService.rejectIncomingCall({
-              callId: callId || undefined,
-              debugId: `notification-decline-${Date.now()}`,
-            });
-
-            logger.info('[App] ✅ Call rejected successfully from notification', {
-              callId,
-              timestamp: new Date().toISOString(),
-            });
-          } else {
-            logger.warn('[App] ⚠️ No active callInvite to reject', {
-              callId,
               status: currentState.status,
+              hasCall: !!currentState.call,
+              attemptElapsed: `${attemptElapsed}ms`,
+              timestamp: new Date().toISOString(),
+            });
+            
+            if (currentState.callInvite) {
+              callInviteFound = true;
+              const waitElapsed = Date.now() - declineStartTime;
+              
+              logger.info('[App] 📞 Rejecting incoming call from notification', {
+                callId,
+                attempt: attempt + 1,
+                hasCallInvite: !!currentState.callInvite,
+                status: currentState.status,
+                waitElapsed: `${waitElapsed}ms`,
+                timestamp: new Date().toISOString(),
+              });
+
+              const rejectCallStartTime = Date.now();
+              // Reject the call
+              await twilioVoiceService.rejectIncomingCall({
+                callId: callId || undefined,
+                debugId: `notification-decline-${Date.now()}`,
+              });
+              const rejectCallElapsed = Date.now() - rejectCallStartTime;
+              const totalElapsed = Date.now() - declineStartTime;
+
+              logger.info('[App] ✅ Call rejected successfully from notification', {
+                callId,
+                rejectCallElapsed: `${rejectCallElapsed}ms`,
+                totalElapsed: `${totalElapsed}ms`,
+                timestamp: new Date().toISOString(),
+              });
+              break;
+            } else {
+              logger.debug('[App] ⏳ Waiting for callInvite to reject...', {
+                callId,
+                attempt: attempt + 1,
+                maxAttempts,
+                status: currentState.status,
+                hasCall: !!currentState.call,
+                attemptElapsed: `${attemptElapsed}ms`,
+                timestamp: new Date().toISOString(),
+              });
+              
+              // Wait before next attempt
+              await new Promise(resolve => setTimeout(resolve, attemptDelay));
+            }
+          }
+
+          if (!callInviteFound) {
+            const totalElapsed = Date.now() - declineStartTime;
+            logger.warn('[App] ⚠️ No active callInvite found after waiting', {
+              callId,
+              maxAttempts,
+              totalElapsed: `${totalElapsed}ms`,
+              finalStatus: twilioVoiceService.getState().status,
               timestamp: new Date().toISOString(),
             });
           }
         } catch (error) {
+          const totalElapsed = Date.now() - declineStartTime;
           logger.error('[App] ❌ Failed to reject call from notification', error, {
             callId,
             errorMessage: error instanceof Error ? error.message : String(error),
+            errorStack: error instanceof Error ? error.stack : undefined,
+            errorType: error instanceof Error ? error.constructor.name : typeof error,
+            totalElapsed: `${totalElapsed}ms`,
             timestamp: new Date().toISOString(),
           });
         }

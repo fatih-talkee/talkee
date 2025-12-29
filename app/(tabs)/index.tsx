@@ -90,6 +90,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
+      edges={['top']}
     >
       <Header
         showLogo={true}

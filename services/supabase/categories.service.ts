@@ -5,23 +5,48 @@ import type { Category } from '../../types/database.types';
 class CategoriesService {
   /**
    * Get all active categories ordered by sort_order
+   * ✅ OPTIMIZED: Only select fields needed for list display (id, name, emoji, sort_order)
    */
   async getCategories(): Promise<Category[]> {
+    const startTime = Date.now();
+    logger.info('[CategoriesService] 🔍 getCategories started', {
+      timestamp: new Date().toISOString(),
+    });
+
     try {
+      // ✅ OPTIMIZED: Only select fields needed for FilterModal and other list displays
+      const queryStartTime = Date.now();
       const { data, error } = await supabase
         .from('categories')
-        .select('*')
+        .select('id, name, emoji, slug, icon_name, sort_order, is_active')
         .eq('is_active', true)
         .order('sort_order', { ascending: true });
+      const queryElapsed = Date.now() - queryStartTime;
+      const totalDuration = Date.now() - startTime;
 
       if (error) {
-        console.error('Error fetching categories:', error);
+        logger.error('[CategoriesService] ❌ Error fetching categories', error, {
+          duration: `${totalDuration}ms`,
+          queryElapsed: `${queryElapsed}ms`,
+          timestamp: new Date().toISOString(),
+        });
         throw new Error(`Failed to fetch categories: ${error.message}`);
       }
 
+      logger.info('[CategoriesService] ✅ getCategories completed', {
+        duration: `${totalDuration}ms`,
+        queryElapsed: `${queryElapsed}ms`,
+        count: data?.length || 0,
+        timestamp: new Date().toISOString(),
+      });
+
       return (data || []) as Category[];
     } catch (error) {
-      console.error('Error in getCategories:', error);
+      const totalDuration = Date.now() - startTime;
+      logger.error('[CategoriesService] ❌ Error in getCategories', error, {
+        duration: `${totalDuration}ms`,
+        timestamp: new Date().toISOString(),
+      });
       return [];
     }
   }
@@ -160,9 +185,9 @@ class CategoriesService {
   }
 
   /**
-   * Get popular categories (most professionals) with fallback to sort_order
-   * ✅ OPTIMIZED: Removed unnecessary timeout wrapper
-   * Returns top N categories by professional count, fills remaining with sort_order
+   * Get popular categories (most professionals)
+   * ✅ OPTIMIZED: Direct SQL query with count, order, and limit - MUCH faster!
+   * Returns top N categories by professional count
    */
   async getPopularCategories(limit: number = 8): Promise<Category[]> {
     const startTime = Date.now();
@@ -172,49 +197,95 @@ class CategoriesService {
     });
 
     try {
-      // Get all categories with their professional counts
-      const countsStart = Date.now();
-      logger.info('[CategoriesService] 📊 Calling getCategoriesWithCounts...');
+      // ✅ OPTIMIZED: Direct SQL query - count professionals per category, order by count DESC, limit
+      // This is MUCH faster than fetching all categories and counts, then sorting in JavaScript
+      const queryStartTime = Date.now();
 
-      const categoriesWithCounts = await this.getCategoriesWithCounts();
-      const countsDuration = Date.now() - countsStart;
-
-      logger.info('[CategoriesService] ✅ Professional counts fetched', {
-        duration: `${countsDuration}ms`,
-        categoryCount: categoriesWithCounts.length,
-      });
-
-      // Sort by professional count (descending), then by sort_order as tie-breaker
-      const sorted = categoriesWithCounts.sort((a, b) => {
-        // Ensure professionalCount exists, default to 0
-        const aCount = a.professionalCount ?? 0;
-        const bCount = b.professionalCount ?? 0;
-
-        // First sort by professional count (descending)
-        if (bCount !== aCount) {
-          return bCount - aCount;
+      logger.info(
+        '[CategoriesService] 📊 Executing optimized popular categories query...',
+        {
+          limit,
+          timestamp: new Date().toISOString(),
         }
-        // If counts are equal, use sort_order as tie-breaker
-        const aOrder = a.sort_order ?? 0;
-        const bOrder = b.sort_order ?? 0;
-        return aOrder - bOrder;
-      });
+      );
 
-      // Take top N and return as Category[] (without professionalCount)
-      const result = sorted.slice(0, limit).map((item) => {
-        // Safely extract category without professionalCount
-        const { professionalCount, ...category } = item;
-        return category as Category;
-      });
+      // Use RPC function if available, otherwise fallback to direct query
+      let result: Category[] = [];
+
+      // ✅ OPTIMIZED: Use RPC function to get top categories directly from SQL
+      // This is MUCH faster - SQL does the counting, sorting, and limiting
+      const rpcStartTime = Date.now();
+      logger.debug(
+        '[CategoriesService] 🔍 Calling RPC function get_top_categories_by_professional_count',
+        {
+          limit,
+          timestamp: new Date().toISOString(),
+        }
+      );
+
+      const { data: rpcData, error: rpcError } = await supabase.rpc(
+        'get_top_categories_by_professional_count',
+        { limit_count: limit }
+      );
+      const rpcElapsed = Date.now() - rpcStartTime;
+
+      if (rpcError) {
+        logger.warn(
+          '[CategoriesService] ⚠️ RPC function failed, using simple fallback',
+          {
+            errorMessage: rpcError.message,
+            errorCode: rpcError.code,
+            errorDetails: (rpcError as any)?.details,
+            errorHint: (rpcError as any)?.hint,
+            rpcElapsed: `${rpcElapsed}ms`,
+            timestamp: new Date().toISOString(),
+          }
+        );
+
+        // Fallback: Just get categories ordered by sort_order (only fields needed for list display)
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('categories')
+          .select(
+            'id, name, slug, icon_name, sort_order, is_active, created_at, updated_at'
+          )
+          .eq('is_active', true)
+          .order('sort_order', { ascending: true })
+          .limit(limit);
+
+        if (fallbackError) {
+          throw fallbackError;
+        }
+
+        result = (fallbackData || []) as Category[];
+      } else if (rpcData && Array.isArray(rpcData)) {
+        result = rpcData as Category[];
+        logger.info(
+          '[CategoriesService] ✅ Popular categories fetched via RPC',
+          {
+            duration: `${rpcElapsed}ms`,
+            count: result.length,
+            limit,
+            timestamp: new Date().toISOString(),
+          }
+        );
+      } else {
+        logger.warn(
+          '[CategoriesService] ⚠️ RPC returned unexpected data format',
+          {
+            hasData: !!rpcData,
+            dataType: typeof rpcData,
+            timestamp: new Date().toISOString(),
+          }
+        );
+        result = [];
+      }
 
       const totalDuration = Date.now() - startTime;
       logger.info('[CategoriesService] ✅ getPopularCategories completed', {
         totalDuration: `${totalDuration}ms`,
         resultCount: result.length,
         limit,
-        breakdown: {
-          getCategoriesWithCounts: `${countsDuration}ms`,
-        },
+        timestamp: new Date().toISOString(),
       });
 
       return result;
@@ -244,6 +315,7 @@ class CategoriesService {
         duration: `${totalDuration}ms`,
         limit,
         stack: error?.stack?.substring(0, 500) || 'No stack trace',
+        timestamp: new Date().toISOString(),
       });
       return [];
     }
@@ -367,6 +439,8 @@ class CategoriesService {
         '[CategoriesService] 📊 Fetching professional counts (RPC function)...',
         {
           categoryCount: categories.length,
+          categoryIds: categories.map((c) => c.id).slice(0, 10), // First 10 for logging
+          timestamp: new Date().toISOString(),
         }
       );
 
@@ -379,9 +453,18 @@ class CategoriesService {
 
       // ✅ OPTIMIZED: Use RPC function to get all counts in one query
       try {
+        const rpcStartTime = Date.now();
+        logger.debug(
+          '[CategoriesService] 🔍 Calling RPC function get_all_category_professional_counts',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+
         const { data: countsData, error: rpcError } = await supabase.rpc(
           'get_all_category_professional_counts'
         );
+        const rpcElapsed = Date.now() - rpcStartTime;
 
         if (rpcError) {
           logger.warn(
@@ -389,7 +472,9 @@ class CategoriesService {
             {
               errorMessage: rpcError.message,
               errorCode: rpcError.code,
-              errorDetails: rpcError.details,
+              errorDetails: (rpcError as any)?.details,
+              errorHint: (rpcError as any)?.hint,
+              rpcElapsed: `${rpcElapsed}ms`,
               timestamp: new Date().toISOString(),
             }
           );
@@ -400,6 +485,20 @@ class CategoriesService {
           });
         } else if (countsData) {
           // Map RPC results to category counts
+          logger.info(
+            '[CategoriesService] ✅ RPC function returned professional counts',
+            {
+              resultCount: countsData.length,
+              rpcElapsed: `${rpcElapsed}ms`,
+              sampleResults: (countsData as any[])
+                .slice(0, 5)
+                .map((r: any) => ({
+                  categoryId: r.category_id,
+                  count: r.professional_count,
+                })),
+              timestamp: new Date().toISOString(),
+            }
+          );
           countsData.forEach(
             (row: { category_id: string; professional_count: number }) => {
               categoryCountsMap.set(row.category_id, row.professional_count);
@@ -438,6 +537,12 @@ class CategoriesService {
           getCategories: `${categoriesDuration}ms`,
           professionalCounts: `${countsDuration}ms`,
         },
+        sampleCounts: categoriesWithCounts.slice(0, 5).map((c) => ({
+          categoryId: c.id,
+          categoryName: c.name,
+          professionalCount: c.professionalCount,
+        })),
+        timestamp: new Date().toISOString(),
       });
 
       return categoriesWithCounts;

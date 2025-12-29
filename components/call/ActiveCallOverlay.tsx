@@ -140,7 +140,13 @@ export default function ActiveCallOverlay() {
   }, [showOverlay, minimized]);
 
   const loadCallDetails = async () => {
+    const loadStartTime = Date.now();
     logger.info('[ActiveCallOverlay] 📞 Loading call details', {
+      hasCurrentUser: !!currentUser,
+      currentUserId: currentUser?.id,
+      callStatus: callState.status,
+      hasCall: !!callState.call,
+      hasCallInvite: !!callState.callInvite,
       timestamp: new Date().toISOString(),
     });
 
@@ -157,6 +163,14 @@ export default function ActiveCallOverlay() {
         });
         return;
       }
+
+      logger.info('[ActiveCallOverlay] 👤 Current user info', {
+        userId: currentUser.id,
+        userName: currentUser.name,
+        hasAvatar: !!currentUser.avatar_url,
+        avatarUrl: currentUser.avatar_url ? 'present' : 'missing',
+        timestamp: new Date().toISOString(),
+      });
 
       // ✅ OPTIMIZED: Get call record from database using call SID
       const call = callState.call as any;
@@ -224,9 +238,11 @@ export default function ActiveCallOverlay() {
           );
         } else if (callRecord) {
           // ✅ Get rate_per_minute from call record (most reliable - this is the rate charged for this specific call)
-          callRecordRatePerMinute = callRecord.rate_per_minute
+          // Only use if > 0, otherwise treat as null to use professional's rate
+          const recordRate = callRecord.rate_per_minute
             ? Number(callRecord.rate_per_minute)
-            : null;
+            : 0;
+          callRecordRatePerMinute = recordRate > 0 ? recordRate : null;
 
           logger.debug('[ActiveCallOverlay] 💰 Rate from call record', {
             ratePerMinute: callRecordRatePerMinute,
@@ -311,15 +327,27 @@ export default function ActiveCallOverlay() {
             .maybeSingle();
 
           if (recentCall?.rate_per_minute) {
-            callRecordRatePerMinute = Number(recentCall.rate_per_minute);
-            logger.info(
-              '[ActiveCallOverlay] ✅ Found rate from recent call record',
-              {
-                ratePerMinute: callRecordRatePerMinute,
-                professionalId,
-                timestamp: new Date().toISOString(),
-              }
-            );
+            const recentRate = Number(recentCall.rate_per_minute);
+            // Only use if > 0, otherwise treat as null to use professional's rate
+            if (recentRate > 0) {
+              callRecordRatePerMinute = recentRate;
+              logger.info(
+                '[ActiveCallOverlay] ✅ Found rate from recent call record',
+                {
+                  ratePerMinute: callRecordRatePerMinute,
+                  professionalId,
+                  timestamp: new Date().toISOString(),
+                }
+              );
+            } else {
+              logger.warn(
+                '[ActiveCallOverlay] ⚠️ Recent call record has rate 0, will use professional rate',
+                {
+                  professionalId,
+                  timestamp: new Date().toISOString(),
+                }
+              );
+            }
           }
         }
       }
@@ -467,23 +495,36 @@ export default function ActiveCallOverlay() {
         );
       }
 
-      // ✅ PRIORITY: Use rate from call record if available (this is the rate charged for this call)
+      // ✅ PRIORITY: Use rate from call record if available and > 0 (this is the rate charged for this call)
       // Otherwise, fallback to professional's current rate
       const ratePerMinute =
-        callRecordRatePerMinute !== null
+        callRecordRatePerMinute !== null && callRecordRatePerMinute > 0
           ? callRecordRatePerMinute
-          : professional?.rate_per_minute
+          : professional?.rate_per_minute &&
+            Number(professional.rate_per_minute) > 0
           ? Number(professional.rate_per_minute)
           : 0;
 
-      logger.info('[ActiveCallOverlay] 💰 Final rate per minute', {
-        ratePerMinute,
-        source:
-          callRecordRatePerMinute !== null ? 'call_record' : 'professional',
+      logger.info('[ActiveCallOverlay] 💰 Rate calculation details', {
+        finalRatePerMinute: ratePerMinute,
+        rateSource:
+          callRecordRatePerMinute !== null && callRecordRatePerMinute > 0
+            ? 'call_record'
+            : professional?.rate_per_minute &&
+              Number(professional.rate_per_minute) > 0
+            ? 'professional'
+            : 'fallback_zero',
         callRecordRate: callRecordRatePerMinute,
+        callRecordRateValid:
+          callRecordRatePerMinute !== null && callRecordRatePerMinute > 0,
         professionalRate: professional?.rate_per_minute
           ? Number(professional.rate_per_minute)
           : null,
+        professionalRateValid: professional?.rate_per_minute
+          ? Number(professional.rate_per_minute) > 0
+          : false,
+        hasProfessional: !!professional,
+        isIncomingCall,
         timestamp: new Date().toISOString(),
       });
 
@@ -494,15 +535,30 @@ export default function ActiveCallOverlay() {
         ? categoryData[0]?.name || null
         : (categoryData as any)?.name || null;
 
+      const loadElapsed = Date.now() - loadStartTime;
+
       logger.info('[ActiveCallOverlay] 📊 Fetched data summary', {
         hasUser: !!user,
         userName: user?.name || 'N/A',
+        userId: (user as any)?.id,
         hasAvatar: !!user?.avatar_url,
         avatarUrl: user?.avatar_url ? 'present' : 'missing',
         isProfessional: !!professional,
+        professionalId: (professional as any)?.id,
+        professionalUserId: (professional as any)?.user_id,
         ratePerMinute,
+        rateSource:
+          callRecordRatePerMinute !== null && callRecordRatePerMinute > 0
+            ? 'call_record'
+            : professional?.rate_per_minute &&
+              Number(professional.rate_per_minute) > 0
+            ? 'professional'
+            : 'fallback_zero',
         category,
-        userId: otherUserId,
+        categoryId: (professional as any)?.category_id,
+        otherUserId,
+        isIncomingCall,
+        loadElapsed: `${loadElapsed}ms`,
         timestamp: new Date().toISOString(),
       });
 
@@ -514,11 +570,19 @@ export default function ActiveCallOverlay() {
       });
 
       logger.info('[ActiveCallOverlay] ✅ Call details loaded and set', {
-        name: user?.name || 'User',
+        callerName: user?.name || 'User',
         hasAvatar: !!user?.avatar_url,
         category,
         ratePerMinute,
+        rateSource:
+          callRecordRatePerMinute !== null && callRecordRatePerMinute > 0
+            ? 'call_record'
+            : professional?.rate_per_minute &&
+              Number(professional.rate_per_minute) > 0
+            ? 'professional'
+            : 'fallback_zero',
         isProfessional: !!professional,
+        loadElapsed: `${loadElapsed}ms`,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

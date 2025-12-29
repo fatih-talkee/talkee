@@ -217,6 +217,7 @@ export function setupNotificationResponseListener(
 
   const subscription = Notifications.addNotificationResponseReceivedListener(
     (response) => {
+      const responseStartTime = Date.now();
       const { notification, actionIdentifier } = response;
       const data = notification.request.content.data;
       const callId = data?.call_id as string | undefined;
@@ -224,14 +225,26 @@ export function setupNotificationResponseListener(
       logger.info('[NotificationSetup] 📲 Notification response received', {
         actionIdentifier,
         hasCallId: !!callId,
+        callId,
         dataType: data?.type,
+        notificationId: notification.request.identifier,
+        notificationTitle: notification.request.content.title,
+        notificationBody: notification.request.content.body,
+        dataKeys: Object.keys(data || {}),
+        callerId: data?.caller_id,
+        callerName: data?.caller_name,
+        callType: data?.call_type,
+        urgent: data?.urgent,
         timestamp: new Date().toISOString(),
       });
 
       if (!callId || data?.type !== 'incoming_call') {
         logger.warn('[NotificationSetup] ⚠️ Invalid notification response', {
           hasCallId: !!callId,
+          callId,
           dataType: data?.type,
+          expectedType: 'incoming_call',
+          dataKeys: Object.keys(data || {}),
           timestamp: new Date().toISOString(),
         });
         return;
@@ -243,6 +256,11 @@ export function setupNotificationResponseListener(
           '[NotificationSetup] ✅ User accepted call from notification',
           {
             callId,
+            actionIdentifier,
+            callerId: data?.caller_id,
+            callerName: data?.caller_name,
+            callType: data?.call_type,
+            urgent: data?.urgent,
             timestamp: new Date().toISOString(),
           }
         );
@@ -252,18 +270,37 @@ export function setupNotificationResponseListener(
           '[NotificationSetup] ❌ User declined call from notification',
           {
             callId,
+            actionIdentifier,
+            callerId: data?.caller_id,
+            callerName: data?.caller_name,
+            callType: data?.call_type,
+            urgent: data?.urgent,
             timestamp: new Date().toISOString(),
           }
         );
         onDecline(callId);
       } else {
         // Default tap (no action button)
-        logger.info('[NotificationSetup] 👆 User tapped notification', {
+        logger.info('[NotificationSetup] 👆 User tapped notification (no action)', {
           callId,
+          actionIdentifier,
+          callerId: data?.caller_id,
+          callerName: data?.caller_name,
+          callType: data?.call_type,
+          urgent: data?.urgent,
+          note: 'Defaulting to accept',
           timestamp: new Date().toISOString(),
         });
         onAccept(callId); // Default to opening the call
       }
+
+      const responseElapsed = Date.now() - responseStartTime;
+      logger.debug('[NotificationSetup] ⏱️ Notification response processed', {
+        actionIdentifier,
+        callId,
+        responseElapsed: `${responseElapsed}ms`,
+        timestamp: new Date().toISOString(),
+      });
     }
   );
 

@@ -875,6 +875,7 @@ export interface ProfessionalWithRelations extends Professional {
   reviews?: Array<ReviewWithUser>;
   educations?: ProfessionalEducation[];
   experiences?: ProfessionalExperience[];
+  availabilities?: Availability[]; // ✅ Added for optimized getProfessional
   total_years_experience?: number;
   highest_degree?: DegreeLevel | null;
 }

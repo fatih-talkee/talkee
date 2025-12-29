@@ -2,6 +2,7 @@
 // ✅ FIXED: Uses RPC functions to bypass RLS
 
 import { supabase } from '@/lib/supabase';
+import { logger } from '@/lib/logger';
 import type { ProfessionalWithRelations } from '@/types/database.types';
 
 class FavoritesService {
@@ -31,13 +32,22 @@ class FavoritesService {
         throw new Error('User not found in database');
       }
 
+      // ✅ OPTIMIZED: Only select fields needed for list display (not all professional data)
       const { data, error } = await supabase
         .from('favorites')
         .select(
           `
           professional_id,
           professionals (
-            *,
+            id,
+            title,
+            profession,
+            rate_per_minute,
+            is_featured,
+            is_active,
+            is_available,
+            total_calls,
+            specialties,
             users (id, name, avatar_url, is_verified),
             categories (id, name, slug, icon_name)
           )

@@ -639,8 +639,20 @@ class TwilioVoiceService {
       const currentAppState = AppState.currentState;
       const isAppInForeground = currentAppState === 'active';
 
+      logger.info('[TwilioVoice] 🔍 Push notification decision', {
+        debugId: params.debugId,
+        callId: callRecord.id,
+        currentAppState,
+        isAppInForeground,
+        callType: params.type || 'voice',
+        urgent: params.urgent || false,
+        professionalUserId: params.professionalUserId,
+        timestamp: new Date().toISOString(),
+      });
+
       if (!isAppInForeground) {
         // ✅ App is in background/closed - send push notification
+        const pushStartTime = Date.now();
         try {
           logger.info(
             '[TwilioVoice] 🔔 Sending incoming call notification (app is background)',
@@ -649,52 +661,92 @@ class TwilioVoiceService {
               callId: callRecord.id,
               professionalUserId: params.professionalUserId,
               appState: currentAppState,
+              callType: params.type || 'voice',
+              urgent: params.urgent || false,
               timestamp: new Date().toISOString(),
             }
           );
 
+          const userFetchStartTime = Date.now();
           const currentUser = await usersService.getCurrentUser();
+          const userFetchElapsed = Date.now() - userFetchStartTime;
+          
           const callerName = currentUser?.name || 'Someone';
           const callerAvatar = currentUser?.avatar_url || null;
 
-          logger.debug('[TwilioVoice] 👤 Caller info', {
+          logger.info('[TwilioVoice] 👤 Caller info fetched', {
             debugId: params.debugId,
             callerName,
+            callerId: params.callerId,
             hasAvatar: !!callerAvatar,
+            avatarUrl: callerAvatar ? 'present' : 'missing',
+            userFetchElapsed: `${userFetchElapsed}ms`,
             timestamp: new Date().toISOString(),
           });
 
+          const pushData = {
+            type: 'incoming_call',
+            call_id: callRecord.id,
+            caller_id: params.callerId,
+            caller_name: callerName,
+            caller_avatar: callerAvatar,
+            call_type: params.type || 'voice',
+            urgent: params.urgent || false,
+            sent_at: new Date().toISOString(),
+          };
+
+          logger.info('[TwilioVoice] 📤 Preparing push notification payload', {
+            debugId: params.debugId,
+            callId: callRecord.id,
+            title: '📞 Incoming Call',
+            body: `${callerName} is calling you`,
+            category: 'INCOMING_CALL',
+            channelId: 'talkee-default-v2',
+            dataKeys: Object.keys(pushData),
+            dataType: pushData.type,
+            callType: pushData.call_type,
+            urgent: pushData.urgent,
+            timestamp: new Date().toISOString(),
+          });
+
+          const pushCallStartTime = Date.now();
           const pushResult = await notificationsService.sendPushNotification(
             params.professionalUserId,
             '📞 Incoming Call',
             `${callerName} is calling you`,
-            {
-              type: 'incoming_call',
-              call_id: callRecord.id,
-              caller_id: params.callerId,
-              caller_name: callerName,
-              caller_avatar: callerAvatar,
-              call_type: params.type || 'voice',
-              urgent: params.urgent || false,
-              sent_at: new Date().toISOString(),
-            },
-            'INCOMING_CALL' // ✅ Category with Accept/Decline buttons
+            pushData,
+            'INCOMING_CALL', // ✅ Category with Accept/Decline buttons
+            'talkee-default-v2' // Channel ID
           );
+          const pushCallElapsed = Date.now() - pushCallStartTime;
+          const totalPushElapsed = Date.now() - pushStartTime;
 
           logger.info('[TwilioVoice] ✅ Push notification sent', {
             debugId: params.debugId,
             callId: callRecord.id,
             success: pushResult,
+            pushCallElapsed: `${pushCallElapsed}ms`,
+            totalPushElapsed: `${totalPushElapsed}ms`,
+            professionalUserId: params.professionalUserId,
+            category: 'INCOMING_CALL',
+            channelId: 'talkee-default-v2',
             timestamp: new Date().toISOString(),
           });
         } catch (pushError) {
+          const totalPushElapsed = Date.now() - pushStartTime;
           logger.error('[TwilioVoice] ❌ Push notification error', pushError, {
             debugId: params.debugId,
             callId: callRecord.id,
+            professionalUserId: params.professionalUserId,
+            appState: currentAppState,
             errorMessage:
               pushError instanceof Error
                 ? pushError.message
                 : String(pushError),
+            errorStack:
+              pushError instanceof Error ? pushError.stack : undefined,
+            errorType: pushError instanceof Error ? pushError.constructor.name : typeof pushError,
+            totalPushElapsed: `${totalPushElapsed}ms`,
             timestamp: new Date().toISOString(),
           });
         }
@@ -707,6 +759,8 @@ class TwilioVoiceService {
             callId: callRecord.id,
             note: 'IncomingCallHandler modal will show instead',
             appState: currentAppState,
+            callType: params.type || 'voice',
+            urgent: params.urgent || false,
             timestamp: new Date().toISOString(),
           }
         );
@@ -2173,7 +2227,7 @@ class TwilioVoiceService {
     });
 
     // ✅ FIX: Store Disconnected listener
-    const disconnectedHandler = (error?: any) => {
+    const disconnectedHandler = async (error?: any) => {
       const previousStatus = this.state.status;
       const wasConnected = previousStatus === 'connected';
       logger.info('[TwilioVoice] 📞 Call disconnected event', {
@@ -2205,6 +2259,59 @@ class TwilioVoiceService {
           timestamp: new Date().toISOString(),
         });
         BillingService.stopTracking();
+      }
+
+      // ✅ Send local push notification to caller when call ends
+      if (wasConnected && callId) {
+        try {
+          logger.info('[TwilioVoice] 📬 Sending call ended notification to caller', {
+            debugId,
+            callId,
+            timestamp: new Date().toISOString(),
+          });
+
+          // Fetch call record to get caller_id and professional info
+          const { data: callRecord } = await supabase
+            .from('calls')
+            .select(
+              'caller_id, professional:professionals!professional_id(user_id, users:users!user_id(name))'
+            )
+            .eq('id', callId)
+            .single();
+
+          if (callRecord?.caller_id) {
+            // Get current user to check if they are the caller
+            const currentUser = await usersService.getCurrentUser();
+            if (currentUser?.id === callRecord.caller_id) {
+              // This is the caller, send local notification
+              const professionalName =
+                (callRecord.professional as any)?.users?.name || 'Professional';
+              await notificationsService.sendLocalNotification(
+                'Call Ended',
+                `Your call with ${professionalName} has ended.`,
+                {
+                  type: 'call_ended',
+                  call_id: callId,
+                  call_sid: call.getSid(),
+                }
+              );
+              logger.info('[TwilioVoice] ✅ Call ended notification sent to caller', {
+                debugId,
+                callId,
+                callerId: callRecord.caller_id,
+                professionalName,
+                timestamp: new Date().toISOString(),
+              });
+            }
+          }
+        } catch (notifError) {
+          logger.warn('[TwilioVoice] ⚠️ Failed to send call ended notification', {
+            debugId,
+            callId,
+            error: notifError instanceof Error ? notifError.message : String(notifError),
+            timestamp: new Date().toISOString(),
+          });
+        }
       }
 
       logger.debug('[TwilioVoice] 🔄 Resetting state to idle', {

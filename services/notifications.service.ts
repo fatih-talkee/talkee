@@ -1121,12 +1121,24 @@ class NotificationsService {
         return [];
       }
 
+      // ✅ OPTIMIZED: Only select fields needed for list display
       // Single optimized query: Get notifications with professional info in one go
       // No need for separate professional query - return empty professional field
       const queryStart = Date.now();
       const { data, error } = await supabase
         .from('notifications')
-        .select('*')
+        .select(
+          `
+          id,
+          title,
+          message,
+          type,
+          is_read,
+          created_at,
+          data,
+          user_id
+        `
+        )
         .eq('user_id', currentUser.id) // Use user.id (from users table), not auth_id
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
@@ -1317,11 +1329,14 @@ class NotificationsService {
         authId: currentUser.auth_id?.substring(0, 8) + '...',
       });
 
+      // ✅ OPTIMIZED: Only select id for count (head: true means no data returned, only count)
+      const queryStartTime = Date.now();
       const { count, error } = await supabase
         .from('notifications')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', currentUser.id) // Use user.id (from users table), not auth_id
         .eq('is_read', false);
+      const queryElapsed = Date.now() - queryStartTime;
 
       if (error) {
         logger.error('📬 [NotificationService] getUnreadCount: Error', error, {
@@ -1333,10 +1348,13 @@ class NotificationsService {
       }
 
       const result = count || 0;
-      logger.info('📬 [NotificationService] getUnreadCount: Success', {
+      const totalDuration = Date.now() - startTime;
+      logger.info('[NotificationService] ✅ getUnreadCount completed', {
         userId: currentUser.id,
         count: result,
-        duration: `${Date.now() - startTime}ms`,
+        duration: `${totalDuration}ms`,
+        queryElapsed: `${queryElapsed}ms`,
+        timestamp: new Date().toISOString(),
       });
 
       return result;
@@ -1922,6 +1940,7 @@ class NotificationsService {
 
   /**
    * Subscribe to real-time notifications
+   * ✅ FIX: Fixed race condition by ensuring subscription is set up before returning unsubscribe function
    */
   subscribeToNotifications(
     callback: (notification: DbNotification) => void
@@ -1930,8 +1949,10 @@ class NotificationsService {
       timestamp: new Date().toISOString(),
     });
 
-    let subscription: any;
+    let subscription: any = null;
+    let isUnsubscribed = false;
 
+    // Set up subscription asynchronously
     (async () => {
       const subscribeStartTime = Date.now();
       logger.debug(
@@ -1946,6 +1967,17 @@ class NotificationsService {
       if (!currentUser) {
         logger.warn(
           '[NotificationService] ⚠️ No current user, skipping subscription',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+        return;
+      }
+
+      // Check if already unsubscribed before setting up subscription
+      if (isUnsubscribed) {
+        logger.debug(
+          '[NotificationService] ⏭️ Already unsubscribed, skipping subscription setup',
           {
             timestamp: new Date().toISOString(),
           }
@@ -2001,15 +2033,26 @@ class NotificationsService {
         '[NotificationService] 🔚 Unsubscribing from real-time notifications',
         {
           hasSubscription: !!subscription,
+          isUnsubscribed,
           timestamp: new Date().toISOString(),
         }
       );
 
+      isUnsubscribed = true;
+
       if (subscription) {
         subscription.unsubscribe();
+        subscription = null;
         logger.debug('[NotificationService] ✅ Unsubscribed successfully', {
           timestamp: new Date().toISOString(),
         });
+      } else {
+        logger.debug(
+          '[NotificationService] ⚠️ Subscription not yet initialized, marked for cleanup',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
       }
     };
   }
@@ -2701,6 +2744,90 @@ class NotificationsService {
   }
 
   /**
+   * Cleanup all subscriptions and listeners
+   * Should be called when the service is being destroyed or app is closing
+   */
+  cleanup(): void {
+    const cleanupStartTime = Date.now();
+    logger.info('[NotificationService] 🧹 cleanup called', {
+      timestamp: new Date().toISOString(),
+    });
+
+    try {
+      // Cleanup auth state subscription
+      if (this.authStateSubscription) {
+        logger.debug(
+          '[NotificationService] 🔚 Unsubscribing from auth state changes',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+        this.authStateSubscription.unsubscribe();
+        this.authStateSubscription = null;
+        logger.debug(
+          '[NotificationService] ✅ Auth state subscription cleaned up',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+      }
+
+      // Cleanup notification response subscription
+      if (this.notificationResponseSubscription) {
+        logger.debug(
+          '[NotificationService] 🔚 Removing notification response subscription',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+        this.notificationResponseSubscription.remove();
+        this.notificationResponseSubscription = null;
+        logger.debug(
+          '[NotificationService] ✅ Notification response subscription cleaned up',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+      }
+
+      // Cleanup notification received subscription
+      if (this.notificationReceivedSubscription) {
+        logger.debug(
+          '[NotificationService] 🔚 Removing notification received subscription',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+        this.notificationReceivedSubscription.remove();
+        this.notificationReceivedSubscription = null;
+        logger.debug(
+          '[NotificationService] ✅ Notification received subscription cleaned up',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+      }
+
+      // Clear callbacks
+      this.notificationReceivedCallbacks.clear();
+
+      const cleanupElapsed = Date.now() - cleanupStartTime;
+      logger.info('[NotificationService] ✅ Cleanup completed', {
+        elapsed: `${cleanupElapsed}ms`,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      const cleanupElapsed = Date.now() - cleanupStartTime;
+      logger.error('[NotificationService] ❌ Error during cleanup', error, {
+        elapsed: `${cleanupElapsed}ms`,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  /**
    * Clean up inactive device tokens (older than 30 days)
    */
   async cleanupInactiveTokens(): Promise<boolean> {
@@ -2799,6 +2926,7 @@ class NotificationsService {
     title: string,
     body: string,
     data?: Record<string, any>,
+    category?: string,
     channelId?: string
   ): Promise<boolean> {
     try {
@@ -2808,6 +2936,7 @@ class NotificationsService {
         body: body.substring(0, 50) + '...',
         hasData: !!data,
         dataType: data?.type,
+        category,
         channelId,
       });
 
@@ -2819,6 +2948,7 @@ class NotificationsService {
             title,
             body,
             data,
+            category, // ✅ Category for action buttons (e.g., 'INCOMING_CALL')
             channelId,
             sound: 'default',
             priority: 'high',
@@ -3015,9 +3145,21 @@ class NotificationsService {
         timestamp: new Date().toISOString(),
       });
 
+      // ✅ OPTIMIZED: Only select fields needed for list display
       const { data, error } = await supabase
         .from('notifications')
-        .select('*')
+        .select(
+          `
+          id,
+          title,
+          message,
+          type,
+          is_read,
+          created_at,
+          data,
+          user_id
+        `
+        )
         .eq('user_id', currentUser.id)
         .eq('type', type)
         .order('created_at', { ascending: false })

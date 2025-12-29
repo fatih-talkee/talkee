@@ -31,6 +31,7 @@ interface PushMessage {
   badge?: number;
   priority?: 'default' | 'normal' | 'high';
   channelId?: string;
+  categoryIdentifier?: string; // ✅ Category for action buttons (iOS/Android)
 }
 
 interface PushTicket {
@@ -87,6 +88,7 @@ serve(async (req) => {
       sound: body.sound,
       priority: body.priority,
       channelId: body.channelId,
+      category: body.category,
     });
 
     let user_id: string = body.user_id;
@@ -97,6 +99,7 @@ serve(async (req) => {
     const badge: number | undefined = body.badge;
     const priority: 'default' | 'normal' | 'high' | undefined = body.priority;
     const channelId: string | undefined = body.channelId;
+    const category: string | undefined = body.category; // ✅ Category for action buttons
 
     // Validate required fields
     if (!user_id || !title || !messageBody) {
@@ -292,6 +295,7 @@ serve(async (req) => {
       badge,
       priority: priority ?? 'high', // Default to high for faster delivery
       channelId: channelId ?? 'talkee-default-v2', // Use the new channel by default
+      categoryIdentifier: category, // ✅ Category for action buttons (e.g., 'INCOMING_CALL')
     }));
 
     console.log('📨 [SEND-PUSH] Messages created:', {
