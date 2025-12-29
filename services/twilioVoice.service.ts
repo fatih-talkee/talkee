@@ -1541,6 +1541,8 @@ class TwilioVoiceService {
         logger.debug('[TwilioVoice] 🔍 Extracting invite SID', {
           debugId: params?.debugId,
           callId: params?.callId,
+          callIdLength: params.callId.length,
+          callIdPrefix: params.callId.substring(0, 10),
           timestamp: new Date().toISOString(),
         });
 
@@ -1554,18 +1556,172 @@ class TwilioVoiceService {
           });
 
           const sidSaveStartTime = Date.now();
-          await supabase
-            .from('calls')
-            .update({ call_sid: inviteSid })
-            .eq('id', params.callId);
-          const sidSaveElapsed = Date.now() - sidSaveStartTime;
 
-          logger.info('[TwilioVoice] ✅ Invite call_sid saved', {
-            debugId: params?.debugId,
-            callId: params?.callId,
-            elapsed: `${sidSaveElapsed}ms`,
-            timestamp: new Date().toISOString(),
-          });
+          // ✅ FIX: Check if params.callId is a Call SID (starts with "CA") or UUID
+          const isCallSid =
+            params.callId.startsWith('CA') && params.callId.length === 34;
+
+          if (isCallSid) {
+            // ✅ If params.callId is a Call SID, update by call_sid
+            logger.info(
+              '[TwilioVoice] 🔍 params.callId is a Call SID, updating by call_sid',
+              {
+                debugId: params?.debugId,
+                callSid: params.callId.substring(0, 20) + '...',
+                inviteSid: inviteSid.substring(0, 20) + '...',
+                timestamp: new Date().toISOString(),
+              }
+            );
+
+            const { data: existingCall, error: findError } = await supabase
+              .from('calls')
+              .select('id, call_sid, rate_per_minute')
+              .eq('call_sid', params.callId)
+              .maybeSingle();
+
+            if (findError) {
+              logger.warn(
+                '[TwilioVoice] ⚠️ Failed to find call record by call_sid',
+                {
+                  debugId: params?.debugId,
+                  callSid: params.callId.substring(0, 20) + '...',
+                  errorMessage: findError.message,
+                  timestamp: new Date().toISOString(),
+                }
+              );
+            } else if (existingCall) {
+              // ✅ Found existing call record, update call_sid with inviteSid
+              this.currentDbCallId = existingCall.id;
+
+              const { error: updateError } = await supabase
+                .from('calls')
+                .update({ call_sid: inviteSid })
+                .eq('id', existingCall.id);
+
+              const sidSaveElapsed = Date.now() - sidSaveStartTime;
+
+              if (updateError) {
+                logger.warn('[TwilioVoice] ⚠️ Failed to update call_sid', {
+                  debugId: params?.debugId,
+                  callId: existingCall.id,
+                  callSid: params.callId.substring(0, 20) + '...',
+                  inviteSid: inviteSid.substring(0, 20) + '...',
+                  errorMessage: updateError.message,
+                  elapsed: `${sidSaveElapsed}ms`,
+                  timestamp: new Date().toISOString(),
+                });
+              } else {
+                logger.info(
+                  '[TwilioVoice] ✅ Invite call_sid saved (found by call_sid)',
+                  {
+                    debugId: params?.debugId,
+                    callId: existingCall.id,
+                    callSid: params.callId.substring(0, 20) + '...',
+                    inviteSid: inviteSid.substring(0, 20) + '...',
+                    ratePerMinute: existingCall.rate_per_minute,
+                    elapsed: `${sidSaveElapsed}ms`,
+                    timestamp: new Date().toISOString(),
+                  }
+                );
+              }
+            } else {
+              // ✅ No existing call record found, try to find by caller/professional
+              logger.warn(
+                '[TwilioVoice] ⚠️ No call record found by call_sid, will try to find by caller/professional',
+                {
+                  debugId: params?.debugId,
+                  callSid: params.callId.substring(0, 20) + '...',
+                  timestamp: new Date().toISOString(),
+                }
+              );
+
+              // Try to find by caller_id and professional_id (for incoming calls)
+              // This is a fallback - ideally the call record should exist
+              const { data: currentUser } = await supabase.auth.getUser();
+              if (currentUser?.user?.id) {
+                const { data: recentCall } = await supabase
+                  .from('calls')
+                  .select('id, call_sid, rate_per_minute')
+                  .or(
+                    `caller_id.eq.${currentUser.user.id},professional_id.in.(select id from professionals where user_id.eq.${currentUser.user.id})`
+                  )
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+
+                if (recentCall) {
+                  this.currentDbCallId = recentCall.id;
+
+                  const { error: updateError } = await supabase
+                    .from('calls')
+                    .update({ call_sid: inviteSid })
+                    .eq('id', recentCall.id);
+
+                  const sidSaveElapsed = Date.now() - sidSaveStartTime;
+
+                  if (updateError) {
+                    logger.warn(
+                      '[TwilioVoice] ⚠️ Failed to update call_sid (fallback)',
+                      {
+                        debugId: params?.debugId,
+                        callId: recentCall.id,
+                        errorMessage: updateError.message,
+                        elapsed: `${sidSaveElapsed}ms`,
+                        timestamp: new Date().toISOString(),
+                      }
+                    );
+                  } else {
+                    logger.info(
+                      '[TwilioVoice] ✅ Invite call_sid saved (fallback by caller/professional)',
+                      {
+                        debugId: params?.debugId,
+                        callId: recentCall.id,
+                        inviteSid: inviteSid.substring(0, 20) + '...',
+                        ratePerMinute: recentCall.rate_per_minute,
+                        elapsed: `${sidSaveElapsed}ms`,
+                        timestamp: new Date().toISOString(),
+                      }
+                    );
+                  }
+                } else {
+                  logger.warn(
+                    '[TwilioVoice] ⚠️ No call record found (fallback also failed)',
+                    {
+                      debugId: params?.debugId,
+                      callSid: params.callId.substring(0, 20) + '...',
+                      timestamp: new Date().toISOString(),
+                    }
+                  );
+                }
+              }
+            }
+          } else {
+            // ✅ params.callId is a UUID, update directly
+            const { error: updateError } = await supabase
+              .from('calls')
+              .update({ call_sid: inviteSid })
+              .eq('id', params.callId);
+            const sidSaveElapsed = Date.now() - sidSaveStartTime;
+
+            if (updateError) {
+              logger.warn('[TwilioVoice] ⚠️ Failed to update call_sid', {
+                debugId: params?.debugId,
+                callId: params.callId,
+                inviteSid: inviteSid.substring(0, 20) + '...',
+                errorMessage: updateError.message,
+                elapsed: `${sidSaveElapsed}ms`,
+                timestamp: new Date().toISOString(),
+              });
+            } else {
+              logger.info('[TwilioVoice] ✅ Invite call_sid saved', {
+                debugId: params?.debugId,
+                callId: params.callId,
+                inviteSid: inviteSid.substring(0, 20) + '...',
+                elapsed: `${sidSaveElapsed}ms`,
+                timestamp: new Date().toISOString(),
+              });
+            }
+          }
         } else {
           logger.warn('[TwilioVoice] ⚠️ No invite SID found', {
             debugId: params?.debugId,
