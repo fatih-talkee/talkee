@@ -114,47 +114,68 @@ class ProfessionalsService {
   async getProfessional(id: string): Promise<ProfessionalWithRelations | null> {
     try {
       // ✅ OPTIMIZED: Fetch all data in parallel instead of sequential
-      const [professionalResult, educationsResult, experiencesResult] =
-        await Promise.all([
-          supabase
-            .from('professionals')
-            .select(
-              `
-              *,
-              users!inner(id, name, avatar_url, is_verified),
-              categories!inner(id, name, slug, icon_name)
+      const [
+        professionalResult,
+        educationsResult,
+        experiencesResult,
+        categoryLinksResult,
+      ] = await Promise.all([
+        supabase
+          .from('professionals')
+          .select(
             `
-            )
-            .eq('id', id)
-            .single(),
-          supabase
-            .from('professional_educations')
-            .select('*')
-            .eq('professional_id', id)
-            .order('sort_order', { ascending: true })
-            .order('end_year', { ascending: false, nullsFirst: false })
-            .order('start_year', { ascending: false }),
-          supabase
-            .from('professional_experiences')
-            .select('*')
-            .eq('professional_id', id)
-            .order('sort_order', { ascending: true })
-            .order('end_date', { ascending: false, nullsFirst: false })
-            .order('start_date', { ascending: false }),
-        ]);
+            *,
+            users!inner(id, name, avatar_url, is_verified),
+            categories!inner(id, name, slug, icon_name)
+          `
+          )
+          .eq('id', id)
+          .single(),
+        supabase
+          .from('professional_educations')
+          .select('*')
+          .eq('professional_id', id)
+          .order('sort_order', { ascending: true })
+          .order('end_year', { ascending: false, nullsFirst: false })
+          .order('start_year', { ascending: false }),
+        supabase
+          .from('professional_experiences')
+          .select('*')
+          .eq('professional_id', id)
+          .order('sort_order', { ascending: true })
+          .order('end_date', { ascending: false, nullsFirst: false })
+          .order('start_date', { ascending: false }),
+        supabase
+          .from('professional_categories')
+          .select('category_id, categories(id, name, slug, icon_name)')
+          .eq('professional_id', id),
+      ]);
 
       if (professionalResult.error) {
-        console.error('Error fetching professional:', professionalResult.error);
+        logger.error('[ProfessionalsService] Error fetching professional', {
+          error: professionalResult.error.message,
+          professionalId: id,
+        });
         throw professionalResult.error;
       }
+
+      // Transform categoryLinks to categories array
+      const categories =
+        categoryLinksResult.data
+          ?.map((link: any) => link.categories)
+          .filter(Boolean) || [];
 
       return {
         ...professionalResult.data,
         educations: educationsResult.data || [],
         experiences: experiencesResult.data || [],
+        categories: categories,
       } as ProfessionalWithRelations;
-    } catch (error) {
-      console.error('Error in getProfessional:', error);
+    } catch (error: any) {
+      logger.error('[ProfessionalsService] Error in getProfessional', {
+        error: error?.message || String(error),
+        professionalId: id,
+      });
       throw error;
     }
   }
@@ -790,6 +811,8 @@ class ProfessionalsService {
       start_hour?: string | null;
       end_hour?: string | null;
       price_per_minute: number;
+      video_call_enabled?: boolean;
+      video_call_rate_per_minute?: number | null;
     }>
   ): Promise<{ success: boolean; error?: string }> {
     try {
@@ -822,6 +845,11 @@ class ProfessionalsService {
         end_hour: av.available_at === 'urgent' ? null : av.end_hour || null,
         currency: 'USD',
         price_per_minute: av.price_per_minute,
+        video_call_enabled: av.video_call_enabled || false,
+        video_call_rate_per_minute:
+          av.video_call_enabled && av.video_call_rate_per_minute
+            ? av.video_call_rate_per_minute
+            : null,
       }));
 
       const { error: insertError } = await supabase

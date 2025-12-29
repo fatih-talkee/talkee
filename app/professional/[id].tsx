@@ -9,11 +9,13 @@ import {
   Platform,
   Modal,
   Pressable,
-  SafeAreaView,
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { Href, router, useLocalSearchParams } from 'expo-router';
 import { logger } from '@/lib/logger';
 import {
@@ -50,15 +52,13 @@ import { useIsOnline } from '@/hooks/useNetworkStatus';
 // ✅ API HOOKS
 import { useProfessional } from '@/hooks/useProfessionals';
 import { useIsFavorite, useToggleFavorite } from '@/hooks/useFavorites';
-import {
-  useFeedCount,
-  useProfessionalFeeds,
-} from '@/hooks/useProfessionalFeeds';
+import { useProfessionalFeeds } from '@/hooks/useProfessionalFeeds';
 import { professionalsService } from '@/services/supabase/professionals.service';
 import { usersService } from '@/services/supabase/user.service';
 import { useQuery } from '@tanstack/react-query';
 import type { Availability } from '@/types/database.types';
 import { useWalletBalance } from '@/hooks/useUser';
+import { useProfile } from '@/hooks/useProfile';
 
 // ✅ TYPE ADAPTERS (not needed here, we use ProfessionalWithRelations directly)
 import {
@@ -86,6 +86,9 @@ export default function ProfessionalProfileScreen() {
   // ✅ Fetch wallet balance
   const { data: walletBalance = 0 } = useWalletBalance();
 
+  // ✅ Get current user profile
+  const { user: currentUser } = useProfile();
+
   // ✅ Fetch professional data
   const {
     data: professionalData,
@@ -93,15 +96,13 @@ export default function ProfessionalProfileScreen() {
     error,
   } = useProfessional(id as string);
 
-  // ✅ Fetch feed count
-  const { data: feedCountData = 0 } = useFeedCount(id as string);
-
-  // ✅ Fetch feeds
+  // ✅ Fetch feeds (includes total_count, no need for separate feed count query)
   const { data: feedsResponse, isLoading: feedsLoading } = useProfessionalFeeds(
     id as string,
     20
   );
   const feedsData = feedsResponse?.feeds || [];
+  const feedCountData = feedsResponse?.total_count || 0;
 
   // ✅ Fetch availabilities
   const { data: availabilitiesData = [] } = useQuery<Availability[]>({
@@ -479,8 +480,12 @@ export default function ProfessionalProfileScreen() {
         professionalId: id,
       });
 
+      // ✅ Get video call rate if enabled, otherwise use voice rate
       const effectiveRatePerMinute = currentAvailability
-        ? currentAvailability.availability.price_per_minute
+        ? currentAvailability.availability.video_call_enabled &&
+          currentAvailability.availability.video_call_rate_per_minute
+          ? currentAvailability.availability.video_call_rate_per_minute
+          : currentAvailability.availability.price_per_minute
         : professional?.rate_per_minute || 0;
 
       // ✅ Get user data
@@ -610,11 +615,19 @@ export default function ProfessionalProfileScreen() {
   // Show voice/video buttons if scheduled availability exists (not urgent)
   const showVoiceVideo = isAvailable && !isUrgentCallAvailability;
 
+  // Check if viewing own profile (can't call yourself)
+  const isOwnProfile = useMemo(() => {
+    if (!currentUser || !professional) return false;
+    return currentUser.id === professional.user_id;
+  }, [currentUser?.id, professional?.user_id]);
+
   // Buttons enabled if:
-  // 1. Scheduled availability + online, OR
-  // 2. Urgent call availability + online
-  // 3. AND professional has NOT blocked us
+  // 1. NOT viewing own profile (can't call yourself)
+  // 2. Professional has NOT blocked us
+  // 3. Scheduled availability + online, OR
+  // 4. Urgent call availability + online
   const buttonsEnabled =
+    !isOwnProfile &&
     !isBlockedByProfessional &&
     ((isAvailable && isOnline && !isUrgentCallAvailability) ||
       (isUrgentCallAvailability && isOnline));
@@ -1127,18 +1140,54 @@ export default function ProfessionalProfileScreen() {
                       </Text>
                     </View>
                     <View style={styles.currentAvailabilityPriceContainer}>
-                      <DollarSign size={18} color="#10B981" strokeWidth={2.5} />
-                      <Text
-                        style={[
-                          styles.currentAvailabilityPrice,
-                          { color: '#10B981' },
-                        ]}
-                      >
-                        {currentAvailability.availability.price_per_minute.toFixed(
-                          2
+                      {/* Voice Call Price */}
+                      <View style={styles.availabilityPriceRow}>
+                        <Phone size={14} color="#10B981" strokeWidth={2.5} />
+                        <Text
+                          style={[
+                            styles.currentAvailabilityPrice,
+                            { color: '#10B981' },
+                          ]}
+                        >
+                          $
+                          {currentAvailability.availability.price_per_minute.toFixed(
+                            2
+                          )}
+                          /min
+                        </Text>
+                      </View>
+                      {/* Video Call Price (if enabled) */}
+                      {currentAvailability.availability.video_call_enabled &&
+                        currentAvailability.availability
+                          .video_call_rate_per_minute && (
+                          <>
+                            <View
+                              style={[
+                                styles.priceSeparator,
+                                { backgroundColor: theme.colors.border },
+                              ]}
+                            />
+                            <View style={styles.availabilityPriceRow}>
+                              <Video
+                                size={14}
+                                color="#10B981"
+                                strokeWidth={2.5}
+                              />
+                              <Text
+                                style={[
+                                  styles.currentAvailabilityPrice,
+                                  { color: '#10B981' },
+                                ]}
+                              >
+                                $
+                                {currentAvailability.availability.video_call_rate_per_minute.toFixed(
+                                  2
+                                )}
+                                /min
+                              </Text>
+                            </View>
+                          </>
                         )}
-                        /min
-                      </Text>
                     </View>
                   </View>
                 </Card>
@@ -1185,18 +1234,54 @@ export default function ProfessionalProfileScreen() {
                       </Text>
                     </View>
                     <View style={styles.currentAvailabilityPriceContainer}>
-                      <DollarSign size={18} color="#F59E0B" strokeWidth={2.5} />
-                      <Text
-                        style={[
-                          styles.currentAvailabilityPrice,
-                          { color: '#F59E0B' },
-                        ]}
-                      >
-                        {currentAvailability.availability.price_per_minute.toFixed(
-                          2
+                      {/* Voice Call Price */}
+                      <View style={styles.availabilityPriceRow}>
+                        <Phone size={14} color="#F59E0B" strokeWidth={2.5} />
+                        <Text
+                          style={[
+                            styles.currentAvailabilityPrice,
+                            { color: '#F59E0B' },
+                          ]}
+                        >
+                          $
+                          {currentAvailability.availability.price_per_minute.toFixed(
+                            2
+                          )}
+                          /min
+                        </Text>
+                      </View>
+                      {/* Video Call Price (if enabled) */}
+                      {currentAvailability.availability.video_call_enabled &&
+                        currentAvailability.availability
+                          .video_call_rate_per_minute && (
+                          <>
+                            <View
+                              style={[
+                                styles.priceSeparator,
+                                { backgroundColor: theme.colors.border },
+                              ]}
+                            />
+                            <View style={styles.availabilityPriceRow}>
+                              <Video
+                                size={14}
+                                color="#F59E0B"
+                                strokeWidth={2.5}
+                              />
+                              <Text
+                                style={[
+                                  styles.currentAvailabilityPrice,
+                                  { color: '#F59E0B' },
+                                ]}
+                              >
+                                $
+                                {currentAvailability.availability.video_call_rate_per_minute.toFixed(
+                                  2
+                                )}
+                                /min
+                              </Text>
+                            </View>
+                          </>
                         )}
-                        /min
-                      </Text>
                     </View>
                   </View>
                 </Card>
@@ -1312,15 +1397,49 @@ export default function ProfessionalProfileScreen() {
                       </Text>
                     </View>
                     <View style={styles.priceContainer}>
-                      <DollarSign size={16} color="#10B981" strokeWidth={2.5} />
-                      <Text
-                        style={[
-                          styles.availabilityPriceText,
-                          { color: '#10B981' },
-                        ]}
-                      >
-                        {firstAvail.price_per_minute.toFixed(2)}/min
-                      </Text>
+                      {/* Voice Call Price */}
+                      <View style={styles.availabilityPriceRow}>
+                        <Phone size={14} color="#10B981" strokeWidth={2.5} />
+                        <Text
+                          style={[
+                            styles.availabilityPriceText,
+                            { color: '#10B981' },
+                          ]}
+                        >
+                          ${firstAvail.price_per_minute.toFixed(2)}/min
+                        </Text>
+                      </View>
+                      {/* Video Call Price (if enabled) */}
+                      {firstAvail.video_call_enabled &&
+                        firstAvail.video_call_rate_per_minute && (
+                          <>
+                            <View
+                              style={[
+                                styles.priceSeparator,
+                                { backgroundColor: theme.colors.border },
+                              ]}
+                            />
+                            <View style={styles.availabilityPriceRow}>
+                              <Video
+                                size={14}
+                                color="#10B981"
+                                strokeWidth={2.5}
+                              />
+                              <Text
+                                style={[
+                                  styles.availabilityPriceText,
+                                  { color: '#10B981' },
+                                ]}
+                              >
+                                $
+                                {firstAvail.video_call_rate_per_minute.toFixed(
+                                  2
+                                )}
+                                /min
+                              </Text>
+                            </View>
+                          </>
+                        )}
                     </View>
                   </View>
                 </Card>
@@ -1973,7 +2092,10 @@ export default function ProfessionalProfileScreen() {
         ]}
       >
         <View
-          style={[styles.callActions, { borderTopColor: theme.colors.border }]}
+          style={[
+            styles.callActions,
+            { borderTopColor: theme.colors.tabBarBorder },
+          ]}
         >
           <View style={styles.priceRow}>
             {currentAvailability &&
@@ -1994,28 +2116,29 @@ export default function ProfessionalProfileScreen() {
                       Available Now
                     </Text>
                   </View>
-                  <DollarSign size={18} color="#10B981" />
-                  <Text style={[styles.priceText, { color: '#10B981' }]}>
-                    {currentAvailability.availability.price_per_minute.toFixed(
-                      2
-                    )}
-                  </Text>
-                  <Text
+                  <View
                     style={[
-                      styles.priceUnit,
-                      { color: theme.colors.textMuted },
+                      styles.footerAvailabilityBadge,
+                      {
+                        backgroundColor: theme.colors.surface,
+                        borderColor: theme.colors.border,
+                      },
                     ]}
                   >
-                    /min
-                  </Text>
-                  <Text
-                    style={[
-                      styles.footerRemainingTime,
-                      { color: theme.colors.textMuted },
-                    ]}
-                  >
-                    • {formatRemainingTime(remainingTime)}
-                  </Text>
+                    <Clock
+                      size={14}
+                      color={theme.colors.textMuted}
+                      strokeWidth={2.5}
+                    />
+                    <Text
+                      style={[
+                        styles.footerAvailabilityText,
+                        { color: theme.colors.textMuted },
+                      ]}
+                    >
+                      {formatRemainingTime(remainingTime)} left
+                    </Text>
+                  </View>
                 </>
               ) : (
                 // Available but Offline → Orange/Warning
@@ -2039,165 +2162,32 @@ export default function ProfessionalProfileScreen() {
                       Available but Offline
                     </Text>
                   </View>
-                  <DollarSign size={18} color="#F59E0B" />
-                  <Text style={[styles.priceText, { color: '#F59E0B' }]}>
-                    {currentAvailability.availability.price_per_minute.toFixed(
-                      2
-                    )}
-                  </Text>
-                  <Text
+                  <View
                     style={[
-                      styles.priceUnit,
-                      { color: theme.colors.textMuted },
+                      styles.footerAvailabilityBadge,
+                      {
+                        backgroundColor: theme.colors.surface,
+                        borderColor: theme.colors.border,
+                      },
                     ]}
                   >
-                    /min
-                  </Text>
-                  <Text
-                    style={[
-                      styles.footerRemainingTime,
-                      { color: theme.colors.textMuted },
-                    ]}
-                  >
-                    • {formatRemainingTime(remainingTime)}
-                  </Text>
+                    <Clock
+                      size={14}
+                      color={theme.colors.textMuted}
+                      strokeWidth={2.5}
+                    />
+                    <Text
+                      style={[
+                        styles.footerAvailabilityText,
+                        { color: theme.colors.textMuted },
+                      ]}
+                    >
+                      {formatRemainingTime(remainingTime)} left
+                    </Text>
+                  </View>
                 </>
               )
-            ) : (
-              <>
-                <DollarSign size={18} color="#10B981" />
-                <Text style={[styles.priceText, { color: '#10B981' }]}>
-                  {(() => {
-                    if (availabilitiesData.length === 0) {
-                      return (professional.rate_per_minute || 0).toFixed(2);
-                    }
-
-                    const now = new Date();
-                    const currentDay = now.toLocaleDateString('en-US', {
-                      weekday: 'long',
-                    });
-                    const currentTime = `${now
-                      .getHours()
-                      .toString()
-                      .padStart(2, '0')}:${now
-                      .getMinutes()
-                      .toString()
-                      .padStart(2, '0')}`;
-                    const currentDate = now.toISOString().split('T')[0];
-
-                    // First, try to find currently active availability
-                    for (const avail of availabilitiesData) {
-                      if (avail.available_at === 'urgent') {
-                        // Urgent call is always available when online
-                        // Return urgent call price if professional is online
-                        if (professional.is_available) {
-                          return avail.price_per_minute.toFixed(2);
-                        }
-                      } else if (
-                        avail.available_at === 'every' &&
-                        avail.days &&
-                        avail.start_hour &&
-                        avail.end_hour
-                      ) {
-                        if (avail.days.includes(currentDay)) {
-                          if (
-                            currentTime >= avail.start_hour &&
-                            currentTime <= avail.end_hour
-                          ) {
-                            return avail.price_per_minute.toFixed(2);
-                          }
-                        }
-                      } else if (
-                        avail.available_at === 'specific' &&
-                        avail.date &&
-                        avail.start_hour &&
-                        avail.end_hour
-                      ) {
-                        if (avail.date === currentDate) {
-                          if (
-                            currentTime >= avail.start_hour &&
-                            currentTime <= avail.end_hour
-                          ) {
-                            return avail.price_per_minute.toFixed(2);
-                          }
-                        }
-                      }
-                    }
-
-                    // If no current availability, find next available (future)
-                    let nextAvailability: Availability | null = null;
-                    let minDateDiff = Infinity;
-
-                    for (const avail of availabilitiesData) {
-                      // Skip urgent calls for next availability search
-                      if (avail.available_at === 'urgent') {
-                        continue;
-                      }
-
-                      if (
-                        avail.available_at === 'every' &&
-                        avail.days &&
-                        avail.end_hour
-                      ) {
-                        // For recurring, if today is in list but time passed, or if future day
-                        if (
-                          avail.days.includes(currentDay) &&
-                          currentTime < avail.end_hour
-                        ) {
-                          // Still available later today
-                          if (!nextAvailability) {
-                            nextAvailability = avail;
-                          }
-                        } else {
-                          // Check for next occurrence in the week
-                          const dayOrder = [
-                            'Sunday',
-                            'Monday',
-                            'Tuesday',
-                            'Wednesday',
-                            'Thursday',
-                            'Friday',
-                            'Saturday',
-                          ];
-                          const currentDayIndex = dayOrder.indexOf(currentDay);
-                          const nextDay = avail.days.find((day) => {
-                            const dayIndex = dayOrder.indexOf(day);
-                            return (
-                              dayIndex > currentDayIndex ||
-                              (dayIndex === 0 && currentDayIndex !== 0)
-                            );
-                          });
-                          if (nextDay && !nextAvailability) {
-                            nextAvailability = avail;
-                          }
-                        }
-                      } else if (
-                        avail.available_at === 'specific' &&
-                        avail.date
-                      ) {
-                        if (avail.date >= currentDate) {
-                          const dateDiff =
-                            new Date(avail.date).getTime() - now.getTime();
-                          if (dateDiff < minDateDiff) {
-                            minDateDiff = dateDiff;
-                            nextAvailability = avail;
-                          }
-                        }
-                      }
-                    }
-
-                    return nextAvailability
-                      ? nextAvailability.price_per_minute.toFixed(2)
-                      : (professional.rate_per_minute || 0).toFixed(2);
-                  })()}
-                </Text>
-                <Text
-                  style={[styles.priceUnit, { color: theme.colors.textMuted }]}
-                >
-                  /min
-                </Text>
-              </>
-            )}
+            ) : null}
           </View>
           <View style={styles.callButtonsRow}>
             {isBlockedByProfessional ? (
@@ -2226,165 +2216,254 @@ export default function ProfessionalProfileScreen() {
               </View>
             ) : showUrgentCall ? (
               // Available değil ama Online → Urgent Call (sarı)
-              <TouchableOpacity
-                style={[
-                  styles.callTypeButton,
-                  {
-                    backgroundColor:
-                      buttonsEnabled && !isCalling
-                        ? '#F59E0B'
-                        : theme.colors.border,
-                    flex: 1,
-                    opacity: buttonsEnabled && !isCalling ? 1 : 0.5,
-                  },
-                ]}
-                onPress={handleUrgentCall}
-                disabled={!buttonsEnabled || isCalling}
-              >
-                {isCalling ? (
-                  <>
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                    <Text
-                      style={[
-                        styles.callTypeText,
-                        {
-                          color: '#FFFFFF',
-                        },
-                      ]}
-                    >
-                      Calling...
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <Zap
-                      size={20}
-                      color={
-                        buttonsEnabled ? '#FFFFFF' : theme.colors.textMuted
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.callTypeText,
-                        {
-                          color: buttonsEnabled
-                            ? '#FFFFFF'
-                            : theme.colors.textMuted,
-                        },
-                      ]}
-                    >
-                      Urgent Call
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
+              <View style={styles.callButtonWrapper}>
+                <TouchableOpacity
+                  style={[
+                    styles.callTypeButton,
+                    {
+                      backgroundColor:
+                        buttonsEnabled && !isCalling
+                          ? '#F59E0B'
+                          : theme.colors.border,
+                      opacity: buttonsEnabled && !isCalling ? 1 : 0.5,
+                    },
+                  ]}
+                  onPress={handleUrgentCall}
+                  disabled={!buttonsEnabled || isCalling}
+                >
+                  {isCalling ? (
+                    <>
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <Text
+                        style={[
+                          styles.callTypeText,
+                          {
+                            color: '#FFFFFF',
+                          },
+                        ]}
+                      >
+                        Calling...
+                      </Text>
+                    </>
+                  ) : (
+                    <View style={styles.callButtonContent}>
+                      <View style={styles.callButtonTopRow}>
+                        <Zap
+                          size={20}
+                          color={
+                            buttonsEnabled ? '#FFFFFF' : theme.colors.textMuted
+                          }
+                        />
+                        <Text
+                          style={[
+                            styles.callTypeText,
+                            {
+                              color: buttonsEnabled
+                                ? '#FFFFFF'
+                                : theme.colors.textMuted,
+                            },
+                          ]}
+                        >
+                          Urgent Call
+                        </Text>
+                      </View>
+                      {(() => {
+                        // Get urgent call price
+                        let urgentPrice = 0;
+                        if (
+                          currentAvailability?.availability?.price_per_minute
+                        ) {
+                          urgentPrice =
+                            currentAvailability.availability.price_per_minute;
+                        } else {
+                          // Find urgent availability
+                          const urgentAvail = availabilitiesData.find(
+                            (avail) => avail.available_at === 'urgent'
+                          );
+                          if (urgentAvail) {
+                            urgentPrice = urgentAvail.price_per_minute;
+                          } else {
+                            urgentPrice = professional?.rate_per_minute || 0;
+                          }
+                        }
+                        return (
+                          <Text
+                            style={[
+                              styles.callButtonPriceInline,
+                              {
+                                color: buttonsEnabled
+                                  ? '#FFFFFF'
+                                  : theme.colors.textMuted,
+                                opacity: 0.9,
+                              },
+                            ]}
+                          >
+                            ${urgentPrice.toFixed(2)}/min
+                          </Text>
+                        );
+                      })()}
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
             ) : showVoiceVideo ? (
               // Available → Voice ve Video butonları
               <>
-                <TouchableOpacity
-                  style={[
-                    styles.callTypeButton,
-                    {
-                      backgroundColor:
-                        buttonsEnabled && !isCalling
-                          ? theme.colors.primary
-                          : theme.colors.border,
-                      flex: 1,
-                      opacity: buttonsEnabled && !isCalling ? 1 : 0.5,
-                    },
-                  ]}
-                  onPress={handleVoiceCall}
-                  disabled={!buttonsEnabled || isCalling}
-                >
-                  {isCalling ? (
-                    <>
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                      <Text
+                <View style={styles.callButtonWrapper}>
+                  <TouchableOpacity
+                    style={[
+                      styles.callTypeButton,
+                      {
+                        backgroundColor:
+                          buttonsEnabled && !isCalling
+                            ? theme.colors.primary
+                            : theme.colors.border,
+                        opacity: buttonsEnabled && !isCalling ? 1 : 0.5,
+                      },
+                    ]}
+                    onPress={handleVoiceCall}
+                    disabled={!buttonsEnabled || isCalling}
+                  >
+                    {isCalling ? (
+                      <>
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                        <Text
+                          style={[
+                            styles.callTypeText,
+                            {
+                              color: '#FFFFFF',
+                            },
+                          ]}
+                        >
+                          Calling...
+                        </Text>
+                      </>
+                    ) : (
+                      <View style={styles.callButtonContent}>
+                        <View style={styles.callButtonTopRow}>
+                          <Phone
+                            size={20}
+                            color={
+                              buttonsEnabled
+                                ? '#FFFFFF'
+                                : theme.colors.textMuted
+                            }
+                          />
+                          <Text
+                            style={[
+                              styles.callTypeText,
+                              {
+                                color: buttonsEnabled
+                                  ? '#FFFFFF'
+                                  : theme.colors.textMuted,
+                              },
+                            ]}
+                          >
+                            Voice
+                          </Text>
+                        </View>
+                        {currentAvailability && (
+                          <Text
+                            style={[
+                              styles.callButtonPriceInline,
+                              {
+                                color: buttonsEnabled
+                                  ? '#FFFFFF'
+                                  : theme.colors.textMuted,
+                                opacity: 0.9,
+                              },
+                            ]}
+                          >
+                            $
+                            {currentAvailability.availability.price_per_minute.toFixed(
+                              2
+                            )}
+                            /min
+                          </Text>
+                        )}
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
+                {/* Video Call Button - Only show if video call is enabled */}
+                {currentAvailability?.availability.video_call_enabled &&
+                  currentAvailability.availability
+                    .video_call_rate_per_minute && (
+                    <View style={styles.callButtonWrapper}>
+                      <TouchableOpacity
                         style={[
-                          styles.callTypeText,
+                          styles.callTypeButton,
                           {
-                            color: '#FFFFFF',
+                            backgroundColor:
+                              buttonsEnabled && !isCalling
+                                ? theme.colors.primary
+                                : theme.colors.border,
+                            opacity: buttonsEnabled && !isCalling ? 1 : 0.5,
                           },
                         ]}
+                        onPress={handleVideoCall}
+                        disabled={!buttonsEnabled || isCalling}
                       >
-                        Calling...
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <Phone
-                        size={20}
-                        color={
-                          buttonsEnabled ? '#FFFFFF' : theme.colors.textMuted
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.callTypeText,
-                          {
-                            color: buttonsEnabled
-                              ? '#FFFFFF'
-                              : theme.colors.textMuted,
-                          },
-                        ]}
-                      >
-                        Voice
-                      </Text>
-                    </>
+                        {isCalling ? (
+                          <>
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                            <Text
+                              style={[
+                                styles.callTypeText,
+                                {
+                                  color: '#FFFFFF',
+                                },
+                              ]}
+                            >
+                              Calling...
+                            </Text>
+                          </>
+                        ) : (
+                          <View style={styles.callButtonContent}>
+                            <View style={styles.callButtonTopRow}>
+                              <Video
+                                size={20}
+                                color={
+                                  buttonsEnabled
+                                    ? '#FFFFFF'
+                                    : theme.colors.textMuted
+                                }
+                              />
+                              <Text
+                                style={[
+                                  styles.callTypeText,
+                                  {
+                                    color: buttonsEnabled
+                                      ? '#FFFFFF'
+                                      : theme.colors.textMuted,
+                                  },
+                                ]}
+                              >
+                                Video
+                              </Text>
+                            </View>
+                            <Text
+                              style={[
+                                styles.callButtonPriceInline,
+                                {
+                                  color: buttonsEnabled
+                                    ? '#FFFFFF'
+                                    : theme.colors.textMuted,
+                                  opacity: 0.9,
+                                },
+                              ]}
+                            >
+                              $
+                              {currentAvailability.availability.video_call_rate_per_minute.toFixed(
+                                2
+                              )}
+                              /min
+                            </Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    </View>
                   )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.callTypeButton,
-                    {
-                      backgroundColor:
-                        buttonsEnabled && !isCalling
-                          ? theme.colors.primary
-                          : theme.colors.border,
-                      flex: 1,
-                      opacity: buttonsEnabled && !isCalling ? 1 : 0.5,
-                    },
-                  ]}
-                  onPress={handleVideoCall}
-                  disabled={!buttonsEnabled || isCalling}
-                >
-                  {isCalling ? (
-                    <>
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                      <Text
-                        style={[
-                          styles.callTypeText,
-                          {
-                            color: '#FFFFFF',
-                          },
-                        ]}
-                      >
-                        Calling...
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <Video
-                        size={20}
-                        color={
-                          buttonsEnabled ? '#FFFFFF' : theme.colors.textMuted
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.callTypeText,
-                          {
-                            color: buttonsEnabled
-                              ? '#FFFFFF'
-                              : theme.colors.textMuted,
-                          },
-                        ]}
-                      >
-                        Video
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
               </>
             ) : null}
           </View>
@@ -2959,9 +3038,10 @@ const styles = StyleSheet.create({
   currentAvailabilityPriceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    flexWrap: 'wrap',
     borderRadius: 12,
     backgroundColor: '#10B981' + '20',
   },
@@ -3105,13 +3185,12 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   callTypeButton: {
-    flex: 1,
-    flexDirection: 'row',
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 12,
-    gap: 6,
   },
   scheduleCallButton: {
     borderWidth: 1.5,
@@ -3119,6 +3198,57 @@ const styles = StyleSheet.create({
   callTypeText: {
     fontSize: 15,
     fontFamily: 'Inter-Bold',
+  },
+  callButtonContent: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 4,
+    justifyContent: 'center',
+  },
+  callButtonTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    justifyContent: 'center',
+  },
+  callButtonPriceInline: {
+    fontSize: 11,
+    fontFamily: 'Inter-Medium',
+  },
+  availabilityPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  priceSeparator: {
+    width: 1,
+    height: 16,
+    marginHorizontal: 4,
+  },
+  footerPriceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  footerPriceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  footerPriceText: {
+    fontSize: 11,
+    fontFamily: 'Inter-Medium',
+  },
+  callButtonWrapper: {
+    flex: 1,
+  },
+  callButtonPrice: {
+    fontSize: 10,
+    fontFamily: 'Inter-Medium',
+    marginTop: 4,
+    textAlign: 'center',
   },
   blockedWarningContainer: {
     flexDirection: 'row',

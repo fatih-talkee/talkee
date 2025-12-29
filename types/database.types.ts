@@ -256,6 +256,7 @@ export interface ProfessionalCategoryInsert
 /**
  * Availabilities table - Professional availability schedules
  * UPDATED: Added 'urgent' type for urgent calls (always available when online)
+ * UPDATED: Added video call support with separate pricing
  */
 export interface Availability {
   id: string;
@@ -267,6 +268,8 @@ export interface Availability {
   end_hour: string | null; // NULL for urgent calls
   currency: string;
   price_per_minute: number;
+  video_call_enabled: boolean; // Whether video calls are enabled for this availability
+  video_call_rate_per_minute: number | null; // Price per minute for video calls (required if video_call_enabled is true)
   created_at: string;
   updated_at: string;
 }

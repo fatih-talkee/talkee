@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -29,14 +29,20 @@ import {
   DollarSign,
   Edit2,
   Trash2,
+  ChevronDown,
+  Check,
+  Phone,
+  Video,
 } from 'lucide-react-native';
 import { daysOptions, timeOptions } from '@/app/become-professional/_constants';
 import {
   validateAvailability,
   getFilteredTimeOptions,
   compareTimes,
+  checkAvailabilityOverlaps,
 } from '@/app/become-professional/_utils';
 import type { Availability } from '@/app/become-professional/_types';
+import { AvailabilityOverlapModal } from '@/components/ui/AvailabilityOverlapModal';
 
 export default function AvailabilityScreen() {
   const router = useRouter();
@@ -60,6 +66,8 @@ export default function AvailabilityScreen() {
     startHour: '',
     endHour: '',
     pricePerMinute: '',
+    videoCallEnabled: false,
+    videoCallRatePerMinute: '',
   });
   const [showTimePicker, setShowTimePicker] = useState<'start' | 'end' | null>(
     null
@@ -68,6 +76,40 @@ export default function AvailabilityScreen() {
   const [availabilityError, setAvailabilityError] = useState<string | null>(
     null
   );
+  const [showOverlapModal, setShowOverlapModal] = useState(false);
+  const [overlappingAvailabilities, setOverlappingAvailabilities] = useState<
+    Availability[]
+  >([]);
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+
+  // Close dropdown when modal closes
+  useEffect(() => {
+    if (!showAvailabilityModal) {
+      setShowTypeDropdown(false);
+    }
+  }, [showAvailabilityModal]);
+
+  // Calculate if save button should be disabled
+  const isSaveButtonDisabled = useMemo(() => {
+    // Check if price is entered
+    const hasPrice =
+      availabilityFormData.pricePerMinute &&
+      availabilityFormData.pricePerMinute.trim() !== '' &&
+      parseFloat(availabilityFormData.pricePerMinute) > 0;
+
+    // Check if video call price is entered (if video call is enabled)
+    const hasVideoPrice =
+      !availabilityFormData.videoCallEnabled ||
+      (availabilityFormData.videoCallRatePerMinute &&
+        availabilityFormData.videoCallRatePerMinute.trim() !== '' &&
+        parseFloat(availabilityFormData.videoCallRatePerMinute) > 0);
+
+    return !hasPrice || !hasVideoPrice;
+  }, [
+    availabilityFormData.pricePerMinute,
+    availabilityFormData.videoCallEnabled,
+    availabilityFormData.videoCallRatePerMinute,
+  ]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -98,6 +140,9 @@ export default function AvailabilityScreen() {
                   endHour:
                     av.available_at === 'urgent' ? undefined : av.end_hour,
                   pricePerMinute: av.price_per_minute?.toString() || '0',
+                  videoCallEnabled: av.video_call_enabled || false,
+                  videoCallRatePerMinute:
+                    av.video_call_rate_per_minute?.toString() || '',
                 }));
               setAvailabilities(availabilitiesData);
             } else {
@@ -135,6 +180,8 @@ export default function AvailabilityScreen() {
       startHour: '',
       endHour: '',
       pricePerMinute: '',
+      videoCallEnabled: false,
+      videoCallRatePerMinute: '',
     });
     setAvailabilityError(null);
     setShowAvailabilityModal(true);
@@ -149,12 +196,14 @@ export default function AvailabilityScreen() {
       startHour: item.startHour,
       endHour: item.endHour,
       pricePerMinute: item.pricePerMinute,
+      videoCallEnabled: item.videoCallEnabled || false,
+      videoCallRatePerMinute: item.videoCallRatePerMinute || '',
     });
     setAvailabilityError(null);
     setShowAvailabilityModal(true);
   };
 
-  const handleSaveAvailability = () => {
+  const handleSaveAvailability = async () => {
     const error = validateAvailability(availabilityFormData);
     if (error) {
       setAvailabilityError(error);
@@ -181,16 +230,87 @@ export default function AvailabilityScreen() {
           ? undefined
           : availabilityFormData.endHour,
       pricePerMinute: availabilityFormData.pricePerMinute!,
+      videoCallEnabled: availabilityFormData.videoCallEnabled || false,
+      videoCallRatePerMinute: availabilityFormData.videoCallRatePerMinute || '',
     };
 
+    // Check for overlaps (only for scheduled availabilities, not urgent)
+    if (newAvailability.availableAt !== 'urgent') {
+      const overlaps = checkAvailabilityOverlaps(newAvailability, availabilities);
+      if (overlaps.length > 0) {
+        setOverlappingAvailabilities(overlaps);
+        setShowOverlapModal(true);
+        return;
+      }
+    }
+
+    // Update local state
+    let updatedAvailabilities: Availability[];
     if (editingAvailability) {
-      setAvailabilities((prev) =>
-        prev.map((av) =>
-          av.id === editingAvailability.id ? newAvailability : av
-        )
+      updatedAvailabilities = availabilities.map((av) =>
+        av.id === editingAvailability.id ? newAvailability : av
       );
     } else {
-      setAvailabilities((prev) => [...prev, newAvailability]);
+      updatedAvailabilities = [...availabilities, newAvailability];
+    }
+    setAvailabilities(updatedAvailabilities);
+
+    // Auto-save to database
+    if (professional?.id) {
+      try {
+        setSaving(true);
+        const availabilitiesData = updatedAvailabilities.map((av) => ({
+          available_at: av.availableAt,
+          days: av.availableAt === 'urgent' ? null : av.days || null,
+          date:
+            av.availableAt === 'urgent'
+              ? null
+              : av.date
+              ? av.date.toISOString().split('T')[0]
+              : null,
+          start_hour: av.availableAt === 'urgent' ? null : av.startHour || null,
+          end_hour: av.availableAt === 'urgent' ? null : av.endHour || null,
+          price_per_minute: parseFloat(av.pricePerMinute) || 0,
+          video_call_enabled: av.videoCallEnabled || false,
+          video_call_rate_per_minute: av.videoCallEnabled
+            ? parseFloat(av.videoCallRatePerMinute || '0') || null
+            : null,
+        }));
+
+        const result =
+          await professionalsService.updateProfessionalAvailabilities(
+            professional.id,
+            availabilitiesData
+          );
+
+        if (!result.success) {
+          // Revert on error
+          setAvailabilities(availabilities);
+          toast.error({
+            title: 'Error',
+            message: result.error || 'Failed to save availability',
+          });
+          setSaving(false);
+          return;
+        }
+
+        toast.success({
+          title: 'Success',
+          message: editingAvailability
+            ? 'Availability updated successfully'
+            : 'Availability added successfully',
+        });
+      } catch (error: any) {
+        console.error('Error auto-saving availability:', error);
+        // Revert on error
+        setAvailabilities(availabilities);
+        toast.error({
+          title: 'Error',
+          message: error.message || 'Failed to save availability',
+        });
+      } finally {
+        setSaving(false);
+      }
     }
 
     setShowAvailabilityModal(false);
@@ -202,91 +322,72 @@ export default function AvailabilityScreen() {
       startHour: '',
       endHour: '',
       pricePerMinute: '',
+      videoCallEnabled: false,
+      videoCallRatePerMinute: '',
     });
   };
 
-  const handleDeleteAvailability = (id: string) => {
-    setAvailabilities((prev) => prev.filter((av) => av.id !== id));
-  };
-
-  const handleSave = async () => {
-    if (!profileData?.professional?.id) {
-      toast.error({
-        title: 'Error',
-        message: 'Professional data not found',
-      });
-      return;
-    }
-
-    // Validation
-    if (availabilities.length === 0) {
-      toast.error({
-        title: 'Validation Error',
-        message: 'Please add at least one availability',
-      });
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      const availabilitiesData = availabilities.map((av) => ({
-        available_at: av.availableAt,
-        days: av.availableAt === 'urgent' ? null : av.days || null,
-        date:
-          av.availableAt === 'urgent'
-            ? null
-            : av.date
-            ? av.date.toISOString().split('T')[0]
+  const handleDeleteAvailability = async (id: string) => {
+    const updatedAvailabilities = availabilities.filter((av) => av.id !== id);
+    setAvailabilities(updatedAvailabilities);
+    
+    // Auto-save after deletion
+    if (professional?.id) {
+      try {
+        setSaving(true);
+        const availabilitiesData = updatedAvailabilities.map((av) => ({
+          available_at: av.availableAt,
+          days: av.availableAt === 'urgent' ? null : av.days || null,
+          date:
+            av.availableAt === 'urgent'
+              ? null
+              : av.date
+              ? av.date.toISOString().split('T')[0]
+              : null,
+          start_hour: av.availableAt === 'urgent' ? null : av.startHour || null,
+          end_hour: av.availableAt === 'urgent' ? null : av.endHour || null,
+          price_per_minute: parseFloat(av.pricePerMinute) || 0,
+          video_call_enabled: av.videoCallEnabled || false,
+          video_call_rate_per_minute: av.videoCallEnabled
+            ? parseFloat(av.videoCallRatePerMinute || '0') || null
             : null,
-        start_hour: av.availableAt === 'urgent' ? null : av.startHour || null,
-        end_hour: av.availableAt === 'urgent' ? null : av.endHour || null,
-        price_per_minute: parseFloat(av.pricePerMinute) || 0,
-      }));
+        }));
 
-      if (!professional?.id) {
+        const result =
+          await professionalsService.updateProfessionalAvailabilities(
+            professional.id,
+            availabilitiesData
+          );
+
+        if (!result.success) {
+          // Revert on error
+          setAvailabilities(availabilities);
+          toast.error({
+            title: 'Error',
+            message: result.error || 'Failed to delete availability',
+          });
+          setSaving(false);
+          return;
+        }
+
+        toast.success({
+          title: 'Success',
+          message: 'Availability deleted successfully',
+        });
+      } catch (error: any) {
+        console.error('Error auto-saving after deletion:', error);
+        // Revert on error
+        setAvailabilities(availabilities);
         toast.error({
           title: 'Error',
-          message: 'Professional data not found',
+          message: error.message || 'Failed to delete availability',
         });
+      } finally {
         setSaving(false);
-        return;
       }
-
-      const result =
-        await professionalsService.updateProfessionalAvailabilities(
-          professional.id,
-          availabilitiesData
-        );
-
-      if (!result.success) {
-        toast.error({
-          title: 'Error',
-          message: result.error || 'Failed to update availabilities',
-        });
-        setSaving(false);
-        return;
-      }
-
-      toast.success({
-        title: 'Success',
-        message: 'Availabilities updated successfully',
-      });
-
-      // Navigate back after a short delay
-      setTimeout(() => {
-        router.back();
-      }, 1000);
-    } catch (error: any) {
-      console.error('Error saving availabilities:', error);
-      toast.error({
-        title: 'Error',
-        message: error.message || 'Failed to save availabilities',
-      });
-    } finally {
-      setSaving(false);
     }
   };
+
 
   if (loading || profileLoading) {
     return (
@@ -303,12 +404,7 @@ export default function AvailabilityScreen() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <Header
-        showBack
-        showLogo={false}
-        title="Availability"
-        onBackPress={() => router.back()}
-      />
+      <Header showLogo showBack onBackPress={() => router.back()} />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -558,22 +654,60 @@ export default function AvailabilityScreen() {
                 />
 
                 <View style={styles.priceSection}>
+                  {/* Voice Call Price */}
                   <View
                     style={[
                       styles.priceBadge,
-                      { backgroundColor: theme.colors.primary + '20' },
+                      {
+                        backgroundColor:
+                          theme.name === 'dark'
+                            ? theme.colors.primary + '40'
+                            : theme.colors.primary + '20',
+                        borderWidth: theme.name === 'dark' ? 1 : 0,
+                        borderColor: theme.colors.primary + '60',
+                      },
                     ]}
                   >
-                    <DollarSign size={20} color={theme.colors.primary} />
+                    <Phone size={16} color={theme.colors.primary} />
                     <Text
                       style={[
                         styles.priceText,
                         { color: theme.colors.primary },
                       ]}
                     >
-                      ${item.pricePerMinute} / min
+                      ${parseFloat(item.pricePerMinute).toFixed(2)} / min
                     </Text>
                   </View>
+                  {/* Video Call Price (if enabled) */}
+                  {item.videoCallEnabled &&
+                    item.videoCallRatePerMinute &&
+                    parseFloat(item.videoCallRatePerMinute) > 0 && (
+                      <View
+                        style={[
+                          styles.priceBadge,
+                          {
+                            backgroundColor:
+                              theme.name === 'dark'
+                                ? theme.colors.accent + '40'
+                                : theme.colors.accent + '20',
+                            borderWidth: theme.name === 'dark' ? 1 : 0,
+                            borderColor: theme.colors.accent + '60',
+                          },
+                        ]}
+                      >
+                        <Video size={16} color={theme.colors.accent} />
+                        <Text
+                          style={[
+                            styles.priceText,
+                            { color: theme.colors.accent },
+                          ]}
+                        >
+                          $
+                          {parseFloat(item.videoCallRatePerMinute).toFixed(2)}{' '}
+                          / min
+                        </Text>
+                      </View>
+                    )}
                 </View>
               </Card>
             ))}
@@ -615,24 +749,6 @@ export default function AvailabilityScreen() {
         )}
       </ScrollView>
 
-      {/* Footer with Save Button */}
-      <View
-        style={[
-          styles.footer,
-          {
-            backgroundColor: theme.colors.background,
-            borderTopColor: theme.colors.border,
-            paddingBottom: Math.max(insets.bottom, 60),
-          },
-        ]}
-      >
-        <Button
-          title={saving ? 'Saving...' : 'Save Changes'}
-          onPress={handleSave}
-          disabled={saving || availabilities.length === 0}
-          style={styles.saveButton}
-        />
-      </View>
 
       {/* Availability Modal */}
       {showAvailabilityModal && (
@@ -683,7 +799,10 @@ export default function AvailabilityScreen() {
 
               <ScrollView
                 style={styles.modalBody}
-                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.modalBodyContent}
+                showsVerticalScrollIndicator={true}
+                keyboardShouldPersistTaps="handled"
+                onScrollBeginDrag={() => setShowTypeDropdown(false)}
               >
                 {availabilityError && (
                   <View
@@ -702,169 +821,184 @@ export default function AvailabilityScreen() {
 
                 {/* Availability Type */}
                 <View style={styles.inputWrapper}>
-                  <Text style={[styles.label, { color: theme.colors.text }]}>
-                    Availability Type
-                  </Text>
-                  <View style={styles.radioGroup}>
+                  <View style={styles.dropdownContainer}>
                     <TouchableOpacity
                       style={[
-                        styles.radioOption,
+                        styles.dropdownButton,
                         {
-                          backgroundColor:
-                            availabilityFormData.availableAt === 'every'
-                              ? theme.colors.primary + '20'
-                              : theme.colors.card,
-                          borderColor:
-                            availabilityFormData.availableAt === 'every'
-                              ? theme.colors.primary
-                              : theme.colors.border,
+                          backgroundColor: theme.colors.card,
+                          borderColor: theme.colors.border,
                         },
                       ]}
-                      onPress={() => {
-                        setAvailabilityFormData({
-                          ...availabilityFormData,
-                          availableAt: 'every',
-                          date: undefined,
-                        });
-                        setAvailabilityError(null);
-                      }}
+                      onPress={() => setShowTypeDropdown(!showTypeDropdown)}
                     >
-                      <View
-                        style={[
-                          styles.radioCircle,
-                          {
-                            borderColor:
-                              availabilityFormData.availableAt === 'every'
-                                ? theme.colors.primary
-                                : theme.colors.border,
-                          },
-                        ]}
-                      >
-                        {availabilityFormData.availableAt === 'every' && (
-                          <View
-                            style={[
-                              styles.radioInner,
-                              { backgroundColor: theme.colors.primary },
-                            ]}
-                          />
-                        )}
-                      </View>
                       <Text
                         style={[
-                          styles.radioLabel,
+                          styles.dropdownButtonText,
                           { color: theme.colors.text },
                         ]}
                       >
-                        Every Week
+                        {availabilityFormData.availableAt === 'every'
+                          ? 'Every Week'
+                          : availabilityFormData.availableAt === 'specific'
+                          ? 'Specific Date'
+                          : 'Urgent Call'}
                       </Text>
+                      <ChevronDown
+                        size={20}
+                        color={theme.colors.text}
+                        style={[
+                          styles.dropdownIcon,
+                          showTypeDropdown && styles.dropdownIconOpen,
+                        ]}
+                      />
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.radioOption,
-                        {
-                          backgroundColor:
-                            availabilityFormData.availableAt === 'specific'
-                              ? theme.colors.primary + '20'
-                              : theme.colors.card,
-                          borderColor:
-                            availabilityFormData.availableAt === 'specific'
-                              ? theme.colors.primary
-                              : theme.colors.border,
-                        },
-                      ]}
-                      onPress={() => {
-                        setAvailabilityFormData({
-                          ...availabilityFormData,
-                          availableAt: 'specific',
-                          days: undefined,
-                        });
-                        setAvailabilityError(null);
-                      }}
-                    >
+                    {showTypeDropdown && (
                       <View
                         style={[
-                          styles.radioCircle,
+                          styles.dropdownMenu,
                           {
-                            borderColor:
-                              availabilityFormData.availableAt === 'specific'
-                                ? theme.colors.primary
-                                : theme.colors.border,
+                            backgroundColor: theme.colors.card,
+                            borderColor: theme.colors.border,
                           },
                         ]}
                       >
-                        {availabilityFormData.availableAt === 'specific' && (
-                          <View
+                        <TouchableOpacity
+                          style={[
+                            styles.dropdownOption,
+                            {
+                              backgroundColor:
+                                availabilityFormData.availableAt === 'every'
+                                  ? theme.colors.primary + '20'
+                                  : 'transparent',
+                              borderBottomColor: theme.colors.border,
+                            },
+                          ]}
+                          onPress={() => {
+                            setAvailabilityFormData({
+                              ...availabilityFormData,
+                              availableAt: 'every',
+                              date: undefined,
+                            });
+                            setShowTypeDropdown(false);
+                            setAvailabilityError(null);
+                          }}
+                        >
+                          <Text
                             style={[
-                              styles.radioInner,
-                              { backgroundColor: theme.colors.primary },
+                              styles.dropdownOptionText,
+                              {
+                                color:
+                                  availabilityFormData.availableAt === 'every'
+                                    ? theme.colors.primary
+                                    : theme.colors.text,
+                                fontFamily:
+                                  availabilityFormData.availableAt === 'every'
+                                    ? 'Inter-SemiBold'
+                                    : 'Inter-Regular',
+                              },
                             ]}
-                          />
-                        )}
-                      </View>
-                      <Text
-                        style={[
-                          styles.radioLabel,
-                          { color: theme.colors.text },
-                        ]}
-                      >
-                        Specific Date
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.radioOption,
-                        {
-                          backgroundColor:
-                            availabilityFormData.availableAt === 'urgent'
-                              ? '#F59E0B' + '20'
-                              : theme.colors.card,
-                          borderColor:
-                            availabilityFormData.availableAt === 'urgent'
-                              ? '#F59E0B'
-                              : theme.colors.border,
-                        },
-                      ]}
-                      onPress={() => {
-                        setAvailabilityFormData({
-                          ...availabilityFormData,
-                          availableAt: 'urgent',
-                          days: undefined,
-                          date: undefined,
-                          startHour: undefined,
-                          endHour: undefined,
-                        });
-                        setAvailabilityError(null);
-                      }}
-                    >
-                      <View
-                        style={[
-                          styles.radioCircle,
-                          {
-                            borderColor:
-                              availabilityFormData.availableAt === 'urgent'
-                                ? '#F59E0B'
-                                : theme.colors.border,
-                          },
-                        ]}
-                      >
-                        {availabilityFormData.availableAt === 'urgent' && (
-                          <View
+                          >
+                            Every Week
+                          </Text>
+                          {availabilityFormData.availableAt === 'every' && (
+                            <Check
+                              size={18}
+                              color={theme.colors.primary}
+                            />
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.dropdownOption,
+                            {
+                              backgroundColor:
+                                availabilityFormData.availableAt === 'specific'
+                                  ? theme.colors.primary + '20'
+                                  : 'transparent',
+                              borderBottomColor: theme.colors.border,
+                            },
+                          ]}
+                          onPress={() => {
+                            setAvailabilityFormData({
+                              ...availabilityFormData,
+                              availableAt: 'specific',
+                              days: undefined,
+                            });
+                            setShowTypeDropdown(false);
+                            setAvailabilityError(null);
+                          }}
+                        >
+                          <Text
                             style={[
-                              styles.radioInner,
-                              { backgroundColor: '#F59E0B' },
+                              styles.dropdownOptionText,
+                              {
+                                color:
+                                  availabilityFormData.availableAt === 'specific'
+                                    ? theme.colors.primary
+                                    : theme.colors.text,
+                                fontFamily:
+                                  availabilityFormData.availableAt === 'specific'
+                                    ? 'Inter-SemiBold'
+                                    : 'Inter-Regular',
+                              },
                             ]}
-                          />
-                        )}
+                          >
+                            Specific Date
+                          </Text>
+                          {availabilityFormData.availableAt === 'specific' && (
+                            <Check
+                              size={18}
+                              color={theme.colors.primary}
+                            />
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.dropdownOption,
+                            {
+                              backgroundColor:
+                                availabilityFormData.availableAt === 'urgent'
+                                  ? '#F59E0B' + '20'
+                                  : 'transparent',
+                            },
+                          ]}
+                          onPress={() => {
+                            setAvailabilityFormData({
+                              ...availabilityFormData,
+                              availableAt: 'urgent',
+                              days: undefined,
+                              date: undefined,
+                              startHour: undefined,
+                              endHour: undefined,
+                            });
+                            setShowTypeDropdown(false);
+                            setAvailabilityError(null);
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.dropdownOptionText,
+                              {
+                                color:
+                                  availabilityFormData.availableAt === 'urgent'
+                                    ? '#F59E0B'
+                                    : theme.colors.text,
+                                fontFamily:
+                                  availabilityFormData.availableAt === 'urgent'
+                                    ? 'Inter-SemiBold'
+                                    : 'Inter-Regular',
+                              },
+                            ]}
+                          >
+                            Urgent Call
+                          </Text>
+                          {availabilityFormData.availableAt === 'urgent' && (
+                            <Check size={18} color="#F59E0B" />
+                          )}
+                        </TouchableOpacity>
                       </View>
-                      <Text
-                        style={[
-                          styles.radioLabel,
-                          { color: theme.colors.text },
-                        ]}
-                      >
-                        Urgent Call
-                      </Text>
-                    </TouchableOpacity>
+                    )}
                   </View>
                 </View>
 
@@ -1223,7 +1357,7 @@ export default function AvailabilityScreen() {
                 {/* Price Per Minute */}
                 <View style={styles.inputWrapper}>
                   <Text style={[styles.label, { color: theme.colors.text }]}>
-                    Price Per Minute ($) *
+                    Voice Call Price Per Minute ($) *
                   </Text>
                   <TextInput
                     value={availabilityFormData.pricePerMinute}
@@ -1248,6 +1382,78 @@ export default function AvailabilityScreen() {
                     ]}
                   />
                 </View>
+
+                {/* Video Call Toggle */}
+                <View style={styles.inputWrapper}>
+                  <TouchableOpacity
+                    style={styles.checkboxRow}
+                    onPress={() => {
+                      setAvailabilityFormData({
+                        ...availabilityFormData,
+                        videoCallEnabled: !availabilityFormData.videoCallEnabled,
+                        videoCallRatePerMinute: availabilityFormData
+                          .videoCallEnabled
+                          ? ''
+                          : availabilityFormData.videoCallRatePerMinute,
+                      });
+                      setAvailabilityError(null);
+                    }}
+                  >
+                    <View
+                      style={[
+                        styles.checkbox,
+                        {
+                          backgroundColor: availabilityFormData.videoCallEnabled
+                            ? theme.colors.primary
+                            : 'transparent',
+                          borderColor: availabilityFormData.videoCallEnabled
+                            ? theme.colors.primary
+                            : theme.colors.border,
+                        },
+                      ]}
+                    >
+                      {availabilityFormData.videoCallEnabled && (
+                        <Text style={[styles.checkmark, { color: '#fff' }]}>
+                          ✓
+                        </Text>
+                      )}
+                    </View>
+                    <Text style={[styles.checkboxLabel, { color: theme.colors.text }]}>
+                      Enable Video Calls
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Video Call Price Per Minute */}
+                {availabilityFormData.videoCallEnabled && (
+                  <View style={styles.inputWrapper}>
+                    <Text style={[styles.label, { color: theme.colors.text }]}>
+                      Video Call Price Per Minute ($) *
+                    </Text>
+                    <TextInput
+                      value={availabilityFormData.videoCallRatePerMinute}
+                      onChangeText={(text) => {
+                        const numericValue = text.replace(/[^0-9.,]/g, '');
+                        setAvailabilityFormData({
+                          ...availabilityFormData,
+                          videoCallRatePerMinute: numericValue,
+                        });
+                        setAvailabilityError(null);
+                      }}
+                      placeholder="0.00"
+                      placeholderTextColor={theme.colors.textMuted}
+                      keyboardType="decimal-pad"
+                      style={[
+                        styles.priceInput,
+                        {
+                          backgroundColor: theme.colors.card,
+                          borderColor: theme.colors.border,
+                          color: theme.colors.text,
+                        },
+                      ]}
+                    />
+                  </View>
+                )}
               </ScrollView>
 
               <View
@@ -1257,15 +1463,46 @@ export default function AvailabilityScreen() {
                 ]}
               >
                 <Button
-                  title="Add"
+                  title={editingAvailability ? 'Update' : 'Add'}
                   onPress={handleSaveAvailability}
                   style={styles.modalButtonFullWidth}
+                  disabled={isSaveButtonDisabled}
                 />
               </View>
             </View>
           </View>
         </Modal>
       )}
+
+      {/* Overlap Error Modal */}
+      <AvailabilityOverlapModal
+        visible={showOverlapModal}
+        onClose={() => setShowOverlapModal(false)}
+        overlappingAvailabilities={overlappingAvailabilities}
+        newAvailability={{
+          id: editingAvailability?.id || Date.now().toString(),
+          availableAt: availabilityFormData.availableAt!,
+          days:
+            availabilityFormData.availableAt === 'urgent'
+              ? undefined
+              : availabilityFormData.days,
+          date:
+            availabilityFormData.availableAt === 'urgent'
+              ? undefined
+              : availabilityFormData.date,
+          startHour:
+            availabilityFormData.availableAt === 'urgent'
+              ? undefined
+              : availabilityFormData.startHour,
+          endHour:
+            availabilityFormData.availableAt === 'urgent'
+              ? undefined
+              : availabilityFormData.endHour,
+          pricePerMinute: availabilityFormData.pricePerMinute!,
+          videoCallEnabled: availabilityFormData.videoCallEnabled || false,
+          videoCallRatePerMinute: availabilityFormData.videoCallRatePerMinute || '',
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -1411,15 +1648,18 @@ const styles = StyleSheet.create({
     marginVertical: 16,
   },
   priceSection: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
   },
   priceBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    gap: 6,
   },
   priceText: {
     fontSize: 15,
@@ -1431,14 +1671,6 @@ const styles = StyleSheet.create({
   addAvailabilityText: {
     fontSize: 15,
     fontFamily: 'Inter-Bold',
-  },
-  footer: {
-    padding: 24,
-    paddingBottom: 24,
-    borderTopWidth: 1,
-  },
-  saveButton: {
-    width: '100%',
   },
   // Modal styles
   modalOverlay: {
@@ -1474,7 +1706,10 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     flex: 1,
+  },
+  modalBodyContent: {
     padding: 20,
+    paddingBottom: 40,
   },
   modalFooter: {
     flexDirection: 'row',
@@ -1532,6 +1767,55 @@ const styles = StyleSheet.create({
   radioLabel: {
     fontSize: 14,
     fontFamily: 'Inter-Medium',
+  },
+  dropdownContainer: {
+    position: 'relative',
+    zIndex: 1,
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  dropdownButtonText: {
+    fontSize: 15,
+    fontFamily: 'Inter-Regular',
+  },
+  dropdownIcon: {
+    transform: [{ rotate: '0deg' }],
+  },
+  dropdownIconOpen: {
+    transform: [{ rotate: '180deg' }],
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 4,
+    overflow: 'hidden',
+    zIndex: 1000,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  dropdownOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+  },
+  dropdownOptionText: {
+    fontSize: 15,
+    flex: 1,
   },
   daysContainerModal: {
     flexDirection: 'row',
@@ -1635,5 +1919,27 @@ const styles = StyleSheet.create({
       outlineWidth: 0,
       outlineColor: 'transparent',
     }),
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkmark: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+  },
+  checkboxLabel: {
+    fontSize: 15,
+    fontFamily: 'Inter-Medium',
+    flex: 1,
   },
 });

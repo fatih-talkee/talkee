@@ -6,6 +6,8 @@ export interface Availability {
   startHour?: string; // Optional for urgent calls
   endHour?: string; // Optional for urgent calls
   pricePerMinute: string;
+  videoCallEnabled?: boolean; // Whether video calls are enabled
+  videoCallRatePerMinute?: string; // Price per minute for video calls (required if videoCallEnabled is true)
 }
 
 export interface EducationLevel {

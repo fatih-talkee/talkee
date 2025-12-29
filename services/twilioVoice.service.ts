@@ -7,9 +7,7 @@ import { notificationsService } from '@/services/notifications.service';
 import { usersService } from '@/services/supabase/user.service';
 import { CallStatus as DbCallStatus } from '@/types/database.types';
 import BillingService from '@/services/billingService';
-// TODO: Migrate to expo-audio when package is installed
-// import { AudioPlayer, setAudioModeAsync } from 'expo-audio';
-import { Audio } from 'expo-av';
+import { AudioPlayer, setAudioModeAsync } from 'expo-audio';
 
 // 🔔 Ringtone configuration
 const RINGTONE_CONFIG = {
@@ -56,8 +54,7 @@ class TwilioVoiceService {
   private appStateSubscription: any = null;
 
   // 🔔 Ringtone player
-  // TODO: Migrate to expo-audio AudioPlayer when package is installed
-  private ringtoneSound: Audio.Sound | null = null;
+  private ringtoneSound: AudioPlayer | null = null;
   private ringtoneTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // ✅ FIX: Track event listeners for cleanup
@@ -206,8 +203,7 @@ class TwilioVoiceService {
       await this.stopRingtone();
 
       // ✅ Configure audio mode for ringtone
-      // TODO: Migrate to expo-audio setAudioModeAsync when package is installed
-      await Audio.setAudioModeAsync({
+      await setAudioModeAsync({
         allowsRecordingIOS: false,
         playsInSilentModeIOS: true, // ✅ Play even in silent mode
         staysActiveInBackground: true,
@@ -215,17 +211,13 @@ class TwilioVoiceService {
       });
 
       // ✅ Create and play ringtone
-      // TODO: Migrate to expo-audio AudioPlayer when package is installed
-      const { sound } = await Audio.Sound.createAsync(
-        RINGTONE_CONFIG.customRingtone,
-        {
-          volume: RINGTONE_CONFIG.volume,
-          isLooping: RINGTONE_CONFIG.shouldLoop,
-          shouldPlay: true, // ✅ Auto-play
-        }
-      );
+      const player = new AudioPlayer(RINGTONE_CONFIG.customRingtone, {
+        volume: RINGTONE_CONFIG.volume,
+        isLooping: RINGTONE_CONFIG.shouldLoop,
+        shouldPlay: true, // ✅ Auto-play
+      });
 
-      this.ringtoneSound = sound;
+      this.ringtoneSound = player;
 
       logger.info('[TwilioVoice] ✅ Ringtone started', {
         timestamp: new Date().toISOString(),
@@ -259,14 +251,13 @@ class TwilioVoiceService {
       }
 
       // ✅ Stop and unload sound
-      // TODO: Migrate to expo-audio AudioPlayer when package is installed
       if (this.ringtoneSound) {
         logger.info('[TwilioVoice] 🔕 Stopping ringtone', {
           timestamp: new Date().toISOString(),
         });
 
-        await this.ringtoneSound.stopAsync();
-        await this.ringtoneSound.unloadAsync();
+        this.ringtoneSound.pause();
+        this.ringtoneSound.remove();
         this.ringtoneSound = null;
 
         logger.info('[TwilioVoice] ✅ Ringtone stopped', {

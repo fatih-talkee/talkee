@@ -7,6 +7,8 @@ import {
   DollarSign,
   Edit2,
   Trash2,
+  Phone,
+  Video,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -202,17 +204,48 @@ function AvailabilityCard({
       />
 
       <View style={styles.priceSection}>
+        {/* Voice Call Price */}
         <View
           style={[
             styles.priceBadge,
-            { backgroundColor: theme.colors.primary + '20' },
+            {
+              backgroundColor:
+                theme.name === 'dark'
+                  ? theme.colors.primary + '40'
+                  : theme.colors.primary + '20',
+              borderWidth: theme.name === 'dark' ? 1 : 0,
+              borderColor: theme.colors.primary + '60',
+            },
           ]}
         >
-          <DollarSign size={20} color={theme.colors.primary} />
+          <Phone size={16} color={theme.colors.primary} />
           <Text style={[styles.priceText, { color: theme.colors.primary }]}>
-            {item.pricePerMinute} / min
+            ${parseFloat(item.pricePerMinute).toFixed(2)} / min
           </Text>
         </View>
+        {/* Video Call Price (if enabled) */}
+        {item.videoCallEnabled &&
+          item.videoCallRatePerMinute &&
+          parseFloat(item.videoCallRatePerMinute) > 0 && (
+            <View
+              style={[
+                styles.priceBadge,
+                {
+                  backgroundColor:
+                    theme.name === 'dark'
+                      ? theme.colors.accent + '40'
+                      : theme.colors.accent + '20',
+                  borderWidth: theme.name === 'dark' ? 1 : 0,
+                  borderColor: theme.colors.accent + '60',
+                },
+              ]}
+            >
+              <Video size={16} color={theme.colors.accent} />
+              <Text style={[styles.priceText, { color: theme.colors.accent }]}>
+                ${parseFloat(item.videoCallRatePerMinute).toFixed(2)} / min
+              </Text>
+            </View>
+          )}
       </View>
     </Card>
   );
@@ -507,15 +540,18 @@ const styles = StyleSheet.create({
     marginVertical: 16,
   },
   priceSection: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
   },
   priceBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    gap: 6,
   },
   priceText: {
     fontSize: 15,

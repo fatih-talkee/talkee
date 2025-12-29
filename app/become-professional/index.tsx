@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -43,7 +43,9 @@ import {
   validateAvailability,
   getFilteredTimeOptions,
   compareTimes,
+  checkAvailabilityOverlaps,
 } from './_utils';
+import { AvailabilityOverlapModal } from '@/components/ui/AvailabilityOverlapModal';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Calendar, Clock } from 'lucide-react-native';
 
@@ -56,6 +58,8 @@ interface Availability {
   startHour?: string; // Optional for urgent calls
   endHour?: string; // Optional for urgent calls
   pricePerMinute: string;
+  videoCallEnabled?: boolean;
+  videoCallRatePerMinute?: string;
 }
 
 const TOTAL_STEPS = 6;
@@ -103,6 +107,8 @@ export default function BecomeProfessionalScreen() {
     startHour: '',
     endHour: '',
     pricePerMinute: '',
+    videoCallEnabled: false,
+    videoCallRatePerMinute: '',
   });
   const [showTimePicker, setShowTimePicker] = useState<'start' | 'end' | null>(
     null
@@ -111,6 +117,10 @@ export default function BecomeProfessionalScreen() {
   const [availabilityError, setAvailabilityError] = useState<string | null>(
     null
   );
+  const [showOverlapModal, setShowOverlapModal] = useState(false);
+  const [overlappingAvailabilities, setOverlappingAvailabilities] = useState<
+    Availability[]
+  >([]);
 
   // Step 6 - Finish
   const [isAvailable, setIsAvailable] = useState(true);
@@ -321,6 +331,10 @@ export default function BecomeProfessionalScreen() {
           end_hour: av.availableAt === 'urgent' ? null : av.endHour || null,
           currency: 'USD',
           price_per_minute: parseFloat(av.pricePerMinute) || 0,
+          video_call_enabled: av.videoCallEnabled || false,
+          video_call_rate_per_minute: av.videoCallEnabled
+            ? parseFloat(av.videoCallRatePerMinute || '0') || null
+            : null,
         })),
 
         // Step 6
@@ -522,6 +536,8 @@ export default function BecomeProfessionalScreen() {
       startHour: '',
       endHour: '',
       pricePerMinute: '',
+      videoCallEnabled: false,
+      videoCallRatePerMinute: '',
     });
     setAvailabilityError(null);
     setShowAvailabilityModal(true);
@@ -536,10 +552,34 @@ export default function BecomeProfessionalScreen() {
       startHour: item.startHour,
       endHour: item.endHour,
       pricePerMinute: item.pricePerMinute,
+      videoCallEnabled: item.videoCallEnabled || false,
+      videoCallRatePerMinute: item.videoCallRatePerMinute || '',
     });
     setAvailabilityError(null);
     setShowAvailabilityModal(true);
   };
+
+  // Calculate if save button should be disabled
+  const isSaveButtonDisabled = useMemo(() => {
+    // Check if price is entered
+    const hasPrice =
+      availabilityFormData.pricePerMinute &&
+      availabilityFormData.pricePerMinute.trim() !== '' &&
+      parseFloat(availabilityFormData.pricePerMinute) > 0;
+
+    // Check if video call price is entered (if video call is enabled)
+    const hasVideoPrice =
+      !availabilityFormData.videoCallEnabled ||
+      (availabilityFormData.videoCallRatePerMinute &&
+        availabilityFormData.videoCallRatePerMinute.trim() !== '' &&
+        parseFloat(availabilityFormData.videoCallRatePerMinute) > 0);
+
+    return !hasPrice || !hasVideoPrice;
+  }, [
+    availabilityFormData.pricePerMinute,
+    availabilityFormData.videoCallEnabled,
+    availabilityFormData.videoCallRatePerMinute,
+  ]);
 
   const handleSaveAvailability = () => {
     const error = validateAvailability(availabilityFormData);
@@ -568,7 +608,19 @@ export default function BecomeProfessionalScreen() {
           ? undefined
           : availabilityFormData.endHour,
       pricePerMinute: availabilityFormData.pricePerMinute!,
+      videoCallEnabled: availabilityFormData.videoCallEnabled || false,
+      videoCallRatePerMinute: availabilityFormData.videoCallRatePerMinute || '',
     };
+
+    // Check for overlaps (only for scheduled availabilities, not urgent)
+    if (newAvailability.availableAt !== 'urgent') {
+      const overlaps = checkAvailabilityOverlaps(newAvailability, availabilities);
+      if (overlaps.length > 0) {
+        setOverlappingAvailabilities(overlaps);
+        setShowOverlapModal(true);
+        return;
+      }
+    }
 
     if (editingAvailability) {
       setAvailabilities((prev) =>
@@ -590,6 +642,8 @@ export default function BecomeProfessionalScreen() {
       startHour: '',
       endHour: '',
       pricePerMinute: '',
+      videoCallEnabled: false,
+      videoCallRatePerMinute: '',
     });
   };
 
@@ -1553,7 +1607,7 @@ export default function BecomeProfessionalScreen() {
                       { color: theme.colors.text },
                     ]}
                   >
-                    Price Per Minute ($) *
+                    Voice Call Price Per Minute ($) *
                   </Text>
                   <TextInput
                     value={availabilityFormData.pricePerMinute}
@@ -1578,6 +1632,93 @@ export default function BecomeProfessionalScreen() {
                     ]}
                   />
                 </View>
+
+                {/* Video Call Toggle */}
+                <View style={availabilityModalStyles.inputWrapper}>
+                  <TouchableOpacity
+                    style={availabilityModalStyles.checkboxRow}
+                    onPress={() => {
+                      setAvailabilityFormData({
+                        ...availabilityFormData,
+                        videoCallEnabled: !availabilityFormData.videoCallEnabled,
+                        videoCallRatePerMinute: availabilityFormData
+                          .videoCallEnabled
+                          ? ''
+                          : availabilityFormData.videoCallRatePerMinute,
+                      });
+                      setAvailabilityError(null);
+                    }}
+                  >
+                    <View
+                      style={[
+                        availabilityModalStyles.checkbox,
+                        {
+                          backgroundColor: availabilityFormData.videoCallEnabled
+                            ? theme.colors.primary
+                            : 'transparent',
+                          borderColor: availabilityFormData.videoCallEnabled
+                            ? theme.colors.primary
+                            : theme.colors.border,
+                        },
+                      ]}
+                    >
+                      {availabilityFormData.videoCallEnabled && (
+                        <Text
+                          style={[
+                            availabilityModalStyles.checkmark,
+                            { color: '#fff' },
+                          ]}
+                        >
+                          ✓
+                        </Text>
+                      )}
+                    </View>
+                    <Text
+                      style={[
+                        availabilityModalStyles.checkboxLabel,
+                        { color: theme.colors.text },
+                      ]}
+                    >
+                      Enable Video Calls
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Video Call Price Per Minute */}
+                {availabilityFormData.videoCallEnabled && (
+                  <View style={availabilityModalStyles.inputWrapper}>
+                    <Text
+                      style={[
+                        availabilityModalStyles.label,
+                        { color: theme.colors.text },
+                      ]}
+                    >
+                      Video Call Price Per Minute ($) *
+                    </Text>
+                    <TextInput
+                      value={availabilityFormData.videoCallRatePerMinute}
+                      onChangeText={(text) => {
+                        const numericValue = text.replace(/[^0-9.,]/g, '');
+                        setAvailabilityFormData({
+                          ...availabilityFormData,
+                          videoCallRatePerMinute: numericValue,
+                        });
+                        setAvailabilityError(null);
+                      }}
+                      placeholder="0.00"
+                      placeholderTextColor={theme.colors.textMuted}
+                      keyboardType="decimal-pad"
+                      style={[
+                        availabilityModalStyles.priceInput,
+                        {
+                          backgroundColor: theme.colors.card,
+                          borderColor: theme.colors.border,
+                          color: theme.colors.text,
+                        },
+                      ]}
+                    />
+                  </View>
+                )}
               </ScrollView>
 
               <View
@@ -1590,12 +1731,43 @@ export default function BecomeProfessionalScreen() {
                   title="Add"
                   onPress={handleSaveAvailability}
                   style={availabilityModalStyles.modalButtonFullWidth}
+                  disabled={isSaveButtonDisabled}
                 />
               </View>
             </View>
           </View>
         </Modal>
       )}
+
+      {/* Overlap Error Modal */}
+      <AvailabilityOverlapModal
+        visible={showOverlapModal}
+        onClose={() => setShowOverlapModal(false)}
+        overlappingAvailabilities={overlappingAvailabilities}
+        newAvailability={{
+          id: editingAvailability?.id || Date.now().toString(),
+          availableAt: availabilityFormData.availableAt!,
+          days:
+            availabilityFormData.availableAt === 'urgent'
+              ? undefined
+              : availabilityFormData.days,
+          date:
+            availabilityFormData.availableAt === 'urgent'
+              ? undefined
+              : availabilityFormData.date,
+          startHour:
+            availabilityFormData.availableAt === 'urgent'
+              ? undefined
+              : availabilityFormData.startHour,
+          endHour:
+            availabilityFormData.availableAt === 'urgent'
+              ? undefined
+              : availabilityFormData.endHour,
+          pricePerMinute: availabilityFormData.pricePerMinute!,
+          videoCallEnabled: availabilityFormData.videoCallEnabled || false,
+          videoCallRatePerMinute: availabilityFormData.videoCallRatePerMinute || '',
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -1847,6 +2019,28 @@ const availabilityModalStyles = StyleSheet.create({
       outlineWidth: 0,
       outlineColor: 'transparent',
     }),
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkmark: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+  },
+  checkboxLabel: {
+    fontSize: 15,
+    fontFamily: 'Inter-Medium',
+    flex: 1,
   },
   infoBox: {
     padding: 16,

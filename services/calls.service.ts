@@ -293,7 +293,7 @@ class CallsService {
       const { data: availabilities, error: availError } = await supabase
         .from('availabilities')
         .select(
-          'available_at, days, date, start_hour, end_hour, price_per_minute'
+          'available_at, days, date, start_hour, end_hour, price_per_minute, video_call_enabled, video_call_rate_per_minute'
         )
         .eq('professional_id', professionalId);
       const availElapsed = Date.now() - availStartTime;
@@ -325,12 +325,31 @@ class CallsService {
           });
 
           if (urgentAvail?.price_per_minute != null) {
-            ratePerMinuteToCharge = Number(urgentAvail.price_per_minute || 0);
-            logger.info('[CallsService] ✅ Using urgent availability rate', {
-              professionalId,
-              ratePerMinute: ratePerMinuteToCharge,
-              timestamp: new Date().toISOString(),
-            });
+            // For video calls, check if video calls are enabled and use video_call_rate_per_minute
+            if (callType === 'video') {
+              if (!urgentAvail.video_call_enabled || !urgentAvail.video_call_rate_per_minute) {
+                logger.error('[CallsService] ❌ Video calls not enabled for urgent availability', undefined, {
+                  professionalId,
+                  videoCallEnabled: urgentAvail.video_call_enabled,
+                  videoCallRate: urgentAvail.video_call_rate_per_minute,
+                  timestamp: new Date().toISOString(),
+                });
+                throw new Error('Video calls are not enabled for this urgent availability');
+              }
+              ratePerMinuteToCharge = Number(urgentAvail.video_call_rate_per_minute || 0);
+              logger.info('[CallsService] ✅ Using urgent availability video call rate', {
+                professionalId,
+                ratePerMinute: ratePerMinuteToCharge,
+                timestamp: new Date().toISOString(),
+              });
+            } else {
+              ratePerMinuteToCharge = Number(urgentAvail.price_per_minute || 0);
+              logger.info('[CallsService] ✅ Using urgent availability voice call rate', {
+                professionalId,
+                ratePerMinute: ratePerMinuteToCharge,
+                timestamp: new Date().toISOString(),
+              });
+            }
           } else {
             logger.debug('[CallsService] ℹ️ No urgent availability found, using default rate', {
               professionalId,
@@ -400,13 +419,34 @@ class CallsService {
           throw new Error('No active availability for this call');
         }
 
-        ratePerMinuteToCharge = Number(activeAvail.price_per_minute || 0);
-        logger.info('[CallsService] ✅ Active availability found', {
-          professionalId,
-          ratePerMinute: ratePerMinuteToCharge,
-          availableAt: activeAvail.available_at,
-          timestamp: new Date().toISOString(),
-        });
+        // For video calls, check if video calls are enabled and use video_call_rate_per_minute
+        if (callType === 'video') {
+          if (!activeAvail.video_call_enabled || !activeAvail.video_call_rate_per_minute) {
+            logger.error('[CallsService] ❌ Video calls not enabled for active availability', undefined, {
+              professionalId,
+              videoCallEnabled: activeAvail.video_call_enabled,
+              videoCallRate: activeAvail.video_call_rate_per_minute,
+              availableAt: activeAvail.available_at,
+              timestamp: new Date().toISOString(),
+            });
+            throw new Error('Video calls are not enabled for this availability');
+          }
+          ratePerMinuteToCharge = Number(activeAvail.video_call_rate_per_minute || 0);
+          logger.info('[CallsService] ✅ Active availability found - using video call rate', {
+            professionalId,
+            ratePerMinute: ratePerMinuteToCharge,
+            availableAt: activeAvail.available_at,
+            timestamp: new Date().toISOString(),
+          });
+        } else {
+          ratePerMinuteToCharge = Number(activeAvail.price_per_minute || 0);
+          logger.info('[CallsService] ✅ Active availability found - using voice call rate', {
+            professionalId,
+            ratePerMinute: ratePerMinuteToCharge,
+            availableAt: activeAvail.available_at,
+            timestamp: new Date().toISOString(),
+          });
+        }
       }
 
       logger.info('[CallsService] 💰 Final rate per minute determined', {
