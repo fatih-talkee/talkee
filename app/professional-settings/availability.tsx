@@ -248,7 +248,7 @@ export default function AvailabilityScreen() {
     let updatedAvailabilities: Availability[];
     if (editingAvailability) {
       updatedAvailabilities = availabilities.map((av) =>
-        av.id === editingAvailability.id ? newAvailability : av
+          av.id === editingAvailability.id ? newAvailability : av
       );
     } else {
       updatedAvailabilities = [...availabilities, newAvailability];
@@ -286,13 +286,13 @@ export default function AvailabilityScreen() {
         if (!result.success) {
           // Revert on error
           setAvailabilities(availabilities);
-          toast.error({
-            title: 'Error',
+      toast.error({
+        title: 'Error',
             message: result.error || 'Failed to save availability',
-          });
+      });
           setSaving(false);
-          return;
-        }
+      return;
+    }
 
         toast.success({
           title: 'Success',
@@ -304,7 +304,7 @@ export default function AvailabilityScreen() {
         console.error('Error auto-saving availability:', error);
         // Revert on error
         setAvailabilities(availabilities);
-        toast.error({
+      toast.error({
           title: 'Error',
           message: error.message || 'Failed to save availability',
         });
@@ -336,54 +336,54 @@ export default function AvailabilityScreen() {
       try {
         setSaving(true);
         const availabilitiesData = updatedAvailabilities.map((av) => ({
-          available_at: av.availableAt,
-          days: av.availableAt === 'urgent' ? null : av.days || null,
-          date:
-            av.availableAt === 'urgent'
-              ? null
-              : av.date
-              ? av.date.toISOString().split('T')[0]
-              : null,
-          start_hour: av.availableAt === 'urgent' ? null : av.startHour || null,
-          end_hour: av.availableAt === 'urgent' ? null : av.endHour || null,
-          price_per_minute: parseFloat(av.pricePerMinute) || 0,
+        available_at: av.availableAt,
+        days: av.availableAt === 'urgent' ? null : av.days || null,
+        date:
+          av.availableAt === 'urgent'
+            ? null
+            : av.date
+            ? av.date.toISOString().split('T')[0]
+            : null,
+        start_hour: av.availableAt === 'urgent' ? null : av.startHour || null,
+        end_hour: av.availableAt === 'urgent' ? null : av.endHour || null,
+        price_per_minute: parseFloat(av.pricePerMinute) || 0,
           video_call_enabled: av.videoCallEnabled || false,
           video_call_rate_per_minute: av.videoCallEnabled
             ? parseFloat(av.videoCallRatePerMinute || '0') || null
             : null,
         }));
 
-        const result =
-          await professionalsService.updateProfessionalAvailabilities(
-            professional.id,
-            availabilitiesData
-          );
+      const result =
+        await professionalsService.updateProfessionalAvailabilities(
+          professional.id,
+          availabilitiesData
+        );
 
-        if (!result.success) {
+      if (!result.success) {
           // Revert on error
           setAvailabilities(availabilities);
-          toast.error({
-            title: 'Error',
+        toast.error({
+          title: 'Error',
             message: result.error || 'Failed to delete availability',
-          });
-          setSaving(false);
-          return;
-        }
-
-        toast.success({
-          title: 'Success',
-          message: 'Availability deleted successfully',
         });
-      } catch (error: any) {
+        setSaving(false);
+        return;
+      }
+
+      toast.success({
+        title: 'Success',
+          message: 'Availability deleted successfully',
+      });
+    } catch (error: any) {
         console.error('Error auto-saving after deletion:', error);
         // Revert on error
         setAvailabilities(availabilities);
-        toast.error({
-          title: 'Error',
+      toast.error({
+        title: 'Error',
           message: error.message || 'Failed to delete availability',
-        });
-      } finally {
-        setSaving(false);
+      });
+    } finally {
+      setSaving(false);
       }
     }
   };
@@ -843,7 +843,7 @@ export default function AvailabilityScreen() {
                           : availabilityFormData.availableAt === 'specific'
                           ? 'Specific Date'
                           : 'Urgent Call'}
-                      </Text>
+                  </Text>
                       <ChevronDown
                         size={20}
                         color={theme.colors.text}
@@ -863,140 +863,140 @@ export default function AvailabilityScreen() {
                           },
                         ]}
                       >
-                        <TouchableOpacity
-                          style={[
+                    <TouchableOpacity
+                      style={[
                             styles.dropdownOption,
-                            {
-                              backgroundColor:
-                                availabilityFormData.availableAt === 'every'
-                                  ? theme.colors.primary + '20'
+                        {
+                          backgroundColor:
+                            availabilityFormData.availableAt === 'every'
+                              ? theme.colors.primary + '20'
                                   : 'transparent',
                               borderBottomColor: theme.colors.border,
-                            },
-                          ]}
-                          onPress={() => {
-                            setAvailabilityFormData({
-                              ...availabilityFormData,
-                              availableAt: 'every',
-                              date: undefined,
-                            });
+                        },
+                      ]}
+                      onPress={() => {
+                        setAvailabilityFormData({
+                          ...availabilityFormData,
+                          availableAt: 'every',
+                          date: undefined,
+                        });
                             setShowTypeDropdown(false);
-                            setAvailabilityError(null);
-                          }}
-                        >
+                        setAvailabilityError(null);
+                      }}
+                    >
                           <Text
-                            style={[
+                        style={[
                               styles.dropdownOptionText,
-                              {
+                          {
                                 color:
-                                  availabilityFormData.availableAt === 'every'
-                                    ? theme.colors.primary
+                              availabilityFormData.availableAt === 'every'
+                                ? theme.colors.primary
                                     : theme.colors.text,
                                 fontFamily:
                                   availabilityFormData.availableAt === 'every'
                                     ? 'Inter-SemiBold'
                                     : 'Inter-Regular',
-                              },
-                            ]}
-                          >
+                          },
+                        ]}
+                      >
                             Every Week
                           </Text>
-                          {availabilityFormData.availableAt === 'every' && (
+                        {availabilityFormData.availableAt === 'every' && (
                             <Check
                               size={18}
                               color={theme.colors.primary}
-                            />
-                          )}
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
+                          />
+                        )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
                             styles.dropdownOption,
-                            {
-                              backgroundColor:
-                                availabilityFormData.availableAt === 'specific'
-                                  ? theme.colors.primary + '20'
+                        {
+                          backgroundColor:
+                            availabilityFormData.availableAt === 'specific'
+                              ? theme.colors.primary + '20'
                                   : 'transparent',
                               borderBottomColor: theme.colors.border,
-                            },
-                          ]}
-                          onPress={() => {
-                            setAvailabilityFormData({
-                              ...availabilityFormData,
-                              availableAt: 'specific',
-                              days: undefined,
-                            });
+                        },
+                      ]}
+                      onPress={() => {
+                        setAvailabilityFormData({
+                          ...availabilityFormData,
+                          availableAt: 'specific',
+                          days: undefined,
+                        });
                             setShowTypeDropdown(false);
-                            setAvailabilityError(null);
-                          }}
-                        >
+                        setAvailabilityError(null);
+                      }}
+                    >
                           <Text
-                            style={[
+                        style={[
                               styles.dropdownOptionText,
-                              {
+                          {
                                 color:
-                                  availabilityFormData.availableAt === 'specific'
-                                    ? theme.colors.primary
+                              availabilityFormData.availableAt === 'specific'
+                                ? theme.colors.primary
                                     : theme.colors.text,
                                 fontFamily:
                                   availabilityFormData.availableAt === 'specific'
                                     ? 'Inter-SemiBold'
                                     : 'Inter-Regular',
-                              },
-                            ]}
-                          >
+                          },
+                        ]}
+                      >
                             Specific Date
                           </Text>
-                          {availabilityFormData.availableAt === 'specific' && (
+                        {availabilityFormData.availableAt === 'specific' && (
                             <Check
                               size={18}
                               color={theme.colors.primary}
-                            />
-                          )}
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
+                          />
+                        )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
                             styles.dropdownOption,
-                            {
-                              backgroundColor:
-                                availabilityFormData.availableAt === 'urgent'
-                                  ? '#F59E0B' + '20'
+                        {
+                          backgroundColor:
+                            availabilityFormData.availableAt === 'urgent'
+                              ? '#F59E0B' + '20'
                                   : 'transparent',
-                            },
-                          ]}
-                          onPress={() => {
-                            setAvailabilityFormData({
-                              ...availabilityFormData,
-                              availableAt: 'urgent',
-                              days: undefined,
-                              date: undefined,
-                              startHour: undefined,
-                              endHour: undefined,
-                            });
+                        },
+                      ]}
+                      onPress={() => {
+                        setAvailabilityFormData({
+                          ...availabilityFormData,
+                          availableAt: 'urgent',
+                          days: undefined,
+                          date: undefined,
+                          startHour: undefined,
+                          endHour: undefined,
+                        });
                             setShowTypeDropdown(false);
-                            setAvailabilityError(null);
-                          }}
-                        >
+                        setAvailabilityError(null);
+                      }}
+                    >
                           <Text
-                            style={[
+                        style={[
                               styles.dropdownOptionText,
-                              {
+                          {
                                 color:
-                                  availabilityFormData.availableAt === 'urgent'
-                                    ? '#F59E0B'
+                              availabilityFormData.availableAt === 'urgent'
+                                ? '#F59E0B'
                                     : theme.colors.text,
                                 fontFamily:
                                   availabilityFormData.availableAt === 'urgent'
                                     ? 'Inter-SemiBold'
                                     : 'Inter-Regular',
                               },
-                            ]}
-                          >
-                            Urgent Call
-                          </Text>
+                        ]}
+                      >
+                        Urgent Call
+                      </Text>
                           {availabilityFormData.availableAt === 'urgent' && (
                             <Check size={18} color="#F59E0B" />
                           )}
-                        </TouchableOpacity>
+                    </TouchableOpacity>
                       </View>
                     )}
                   </View>

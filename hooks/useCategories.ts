@@ -42,38 +42,7 @@ export function usePopularCategories(
       });
       const startTime = Date.now();
       try {
-        // Add additional timeout wrapper for React Query
-        const queryPromise = categoriesService.getPopularCategories(limit);
-        let queryTimeoutId: ReturnType<typeof setTimeout> | null = null;
-        const queryTimeout = new Promise((_, reject) => {
-          queryTimeoutId = setTimeout(() => {
-            const timeoutElapsed = Date.now() - startTime;
-            const timeoutError = new Error(
-              'Popular categories query timeout in hook'
-            );
-            logger.error(
-              '[usePopularCategories] ⏱️ Query TIMEOUT in React Query hook',
-              timeoutError,
-              {
-                elapsedTime: `${timeoutElapsed}ms`,
-                timeoutLimit: '25000ms',
-                timestamp: new Date().toISOString(),
-              }
-            );
-            reject(timeoutError);
-          }, 25000);
-        });
-
-        const result = (await Promise.race([
-          queryPromise,
-          queryTimeout,
-        ])) as any;
-
-        // Clear timeout if query succeeded
-        if (queryTimeoutId) {
-          clearTimeout(queryTimeoutId);
-        }
-
+        const result = await categoriesService.getPopularCategories(limit);
         const duration = Date.now() - startTime;
         logger.info('[usePopularCategories] ✅ Fetch completed', {
           duration: `${duration}ms`,
@@ -82,11 +51,6 @@ export function usePopularCategories(
         });
         return result;
       } catch (error: any) {
-        // Clear timeout on error too
-        if (queryTimeoutId) {
-          clearTimeout(queryTimeoutId);
-        }
-
         const duration = Date.now() - startTime;
         logger.error('[usePopularCategories] ❌ Fetch failed', {
           error: error?.message || String(error),

@@ -141,12 +141,15 @@ export default function ActiveCallOverlay() {
 
   const loadCallDetails = async () => {
     const loadStartTime = Date.now();
-    logger.info('[ActiveCallOverlay] 📞 Loading call details', {
+    logger.info('[ActiveCallOverlay] 📞 ===== LOADING CALL DETAILS =====', {
       hasCurrentUser: !!currentUser,
       currentUserId: currentUser?.id,
+      currentUserName: currentUser?.name,
       callStatus: callState.status,
+      callDuration: callState.duration,
       hasCall: !!callState.call,
       hasCallInvite: !!callState.callInvite,
+      isMuted: callState.isMuted,
       timestamp: new Date().toISOString(),
     });
 
@@ -179,14 +182,30 @@ export default function ActiveCallOverlay() {
         call?.sid ??
         (typeof call?.getSid === 'function' ? call.getSid() : null);
 
+      logger.info('[ActiveCallOverlay] 🔍 Call SID extraction', {
+        hasCall: !!call,
+        callSid: callSid ? callSid.substring(0, 20) + '...' : null,
+        callSidLength: callSid?.length,
+        callSidSource: call?.callSid
+          ? 'callSid'
+          : call?.sid
+          ? 'sid'
+          : typeof call?.getSid === 'function'
+          ? 'getSid()'
+          : 'none',
+        callState: call?.state || call?._state || 'unknown',
+        timestamp: new Date().toISOString(),
+      });
+
       let otherUserId: string | null = null;
       let isIncomingCall = false;
       let callRecordRatePerMinute: number | null = null; // ✅ Get rate from call record
 
       // Try to get call record from database first (most reliable)
       if (callSid) {
-        logger.debug('[ActiveCallOverlay] 🔍 Looking up call record by SID', {
+        logger.info('[ActiveCallOverlay] 🔍 STEP 1: Looking up call record by SID', {
           callSid: callSid.substring(0, 20) + '...',
+          callSidFull: callSid,
           timestamp: new Date().toISOString(),
         });
 
@@ -244,8 +263,15 @@ export default function ActiveCallOverlay() {
             : 0;
           callRecordRatePerMinute = recordRate > 0 ? recordRate : null;
 
-          logger.debug('[ActiveCallOverlay] 💰 Rate from call record', {
+          logger.info('[ActiveCallOverlay] ✅ STEP 1 SUCCESS: Rate from call record (by call_sid)', {
             ratePerMinute: callRecordRatePerMinute,
+            rawRate: callRecord.rate_per_minute,
+            recordRate,
+            recordRateType: typeof callRecord.rate_per_minute,
+            callSid: callSid.substring(0, 20) + '...',
+            callerId: callRecord.caller_id,
+            professionalId: callRecord.professional_id,
+            professionalUserId: (callRecord.professional as any)?.user_id,
             timestamp: new Date().toISOString(),
           });
 
@@ -273,10 +299,12 @@ export default function ActiveCallOverlay() {
             });
           }
         } else {
-          logger.debug(
-            '[ActiveCallOverlay] ℹ️ No call record found by SID (will try caller/professional lookup)',
+          logger.warn(
+            '[ActiveCallOverlay] ⚠️ STEP 1 FAILED: No call record found by SID',
             {
               callSid: callSid.substring(0, 20) + '...',
+              callSidFull: callSid,
+              willTryFallback: true,
               timestamp: new Date().toISOString(),
             }
           );
@@ -286,10 +314,12 @@ export default function ActiveCallOverlay() {
       // ✅ FALLBACK: If call_sid lookup failed, try to find call by caller_id and professional_id
       // This is useful if call_sid column doesn't exist or hasn't been set yet
       if (!callRecordRatePerMinute && currentUser) {
-        logger.debug(
-          '[ActiveCallOverlay] 🔍 Fallback: Looking up call by caller/professional',
+        logger.info(
+          '[ActiveCallOverlay] 🔍 STEP 2: Fallback - Looking up call by caller/professional',
           {
             currentUserId: currentUser.id,
+            currentUserName: currentUser.name,
+            callRecordRatePerMinute,
             timestamp: new Date().toISOString(),
           }
         );
@@ -301,54 +331,145 @@ export default function ActiveCallOverlay() {
           const customParams =
             call._customParameters || call.customParameters || {};
           const toParam = customParams.To || customParams.to || null;
+          
+          logger.debug('[ActiveCallOverlay] 🔍 Extracting professional_id from call state', {
+            hasCustomParams: !!customParams,
+            customParamsKeys: Object.keys(customParams),
+            toParam,
+            timestamp: new Date().toISOString(),
+          });
+
           if (toParam) {
             const toUserId = toParam.replace('client:', '');
+            logger.debug('[ActiveCallOverlay] 🔍 Looking up professional by user_id', {
+              toUserId,
+              toParam,
+              timestamp: new Date().toISOString(),
+            });
+
             // Try to get professional_id from user_id
-            const { data: prof } = await supabase
+            const { data: prof, error: profError } = await supabase
               .from('professionals')
               .select('id')
               .eq('user_id', toUserId)
               .maybeSingle();
-            if (prof) {
+
+            if (profError) {
+              logger.warn('[ActiveCallOverlay] ⚠️ Failed to find professional', {
+                toUserId,
+                error: profError.message,
+                timestamp: new Date().toISOString(),
+              });
+            } else if (prof) {
               professionalId = prof.id;
+              logger.info('[ActiveCallOverlay] ✅ Found professional_id', {
+                professionalId,
+                toUserId,
+                timestamp: new Date().toISOString(),
+              });
+            } else {
+              logger.debug('[ActiveCallOverlay] ℹ️ User is not a professional', {
+                toUserId,
+                timestamp: new Date().toISOString(),
+              });
             }
           }
+        } else {
+          logger.warn('[ActiveCallOverlay] ⚠️ No call object available for professional_id lookup', {
+            timestamp: new Date().toISOString(),
+          });
         }
 
         if (professionalId) {
-          const { data: recentCall } = await supabase
+          // ✅ FIX: Remove status filter to find call record regardless of status
+          // Also try to find by professional_id directly (for incoming calls)
+          logger.info('[ActiveCallOverlay] 🔍 Querying call record by caller/professional', {
+            callerId: currentUser.id,
+            professionalId,
+            query: `or(and(caller_id.eq.${currentUser.id},professional_id.eq.${professionalId}),and(professional_id.eq.${professionalId},caller_id.eq.${currentUser.id}))`,
+            timestamp: new Date().toISOString(),
+          });
+
+          const { data: recentCall, error: recentCallError } = await supabase
             .from('calls')
-            .select('rate_per_minute, caller_id, professional_id')
-            .eq('caller_id', currentUser.id)
-            .eq('professional_id', professionalId)
-            .in('status', ['pending', 'active', 'connected'])
+            .select('rate_per_minute, caller_id, professional_id, status, created_at, call_sid')
+            .or(
+              `and(caller_id.eq.${currentUser.id},professional_id.eq.${professionalId}),and(professional_id.eq.${professionalId},caller_id.eq.${currentUser.id})`
+            )
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
 
-          if (recentCall?.rate_per_minute) {
-            const recentRate = Number(recentCall.rate_per_minute);
-            // Only use if > 0, otherwise treat as null to use professional's rate
-            if (recentRate > 0) {
-              callRecordRatePerMinute = recentRate;
-              logger.info(
-                '[ActiveCallOverlay] ✅ Found rate from recent call record',
-                {
-                  ratePerMinute: callRecordRatePerMinute,
-                  professionalId,
-                  timestamp: new Date().toISOString(),
-                }
-              );
+          if (recentCallError) {
+            logger.warn('[ActiveCallOverlay] ⚠️ Error querying call record', {
+              professionalId,
+              error: recentCallError.message,
+              errorCode: recentCallError.code,
+              timestamp: new Date().toISOString(),
+            });
+          } else if (recentCall) {
+            logger.info('[ActiveCallOverlay] ✅ STEP 2 SUCCESS: Found call record', {
+              callId: recentCall.id || 'unknown',
+              ratePerMinute: recentCall.rate_per_minute,
+              callerId: recentCall.caller_id,
+              professionalId: recentCall.professional_id,
+              callStatus: recentCall.status,
+              createdAt: recentCall.created_at,
+              hasCallSid: !!recentCall.call_sid,
+              timestamp: new Date().toISOString(),
+            });
+
+            if (recentCall?.rate_per_minute) {
+              const recentRate = Number(recentCall.rate_per_minute);
+              // Only use if > 0, otherwise treat as null to use professional's rate
+              if (recentRate > 0) {
+                callRecordRatePerMinute = recentRate;
+                logger.info(
+                  '[ActiveCallOverlay] ✅ STEP 2: Found rate from recent call record',
+                  {
+                    ratePerMinute: callRecordRatePerMinute,
+                    rawRate: recentCall.rate_per_minute,
+                    professionalId,
+                    callStatus: recentCall.status,
+                    timestamp: new Date().toISOString(),
+                  }
+                );
+              } else {
+                logger.warn(
+                  '[ActiveCallOverlay] ⚠️ STEP 2: Recent call record has rate 0, will use professional rate',
+                  {
+                    professionalId,
+                    callStatus: recentCall.status,
+                    rawRate: recentCall.rate_per_minute,
+                    timestamp: new Date().toISOString(),
+                  }
+                );
+              }
             } else {
               logger.warn(
-                '[ActiveCallOverlay] ⚠️ Recent call record has rate 0, will use professional rate',
+                '[ActiveCallOverlay] ⚠️ STEP 2: Call record found but no rate_per_minute field',
                 {
                   professionalId,
+                  callStatus: recentCall.status,
+                  hasRateField: 'rate_per_minute' in recentCall,
                   timestamp: new Date().toISOString(),
                 }
               );
             }
+          } else {
+            logger.warn(
+              '[ActiveCallOverlay] ⚠️ STEP 2 FAILED: No recent call record found',
+              {
+                professionalId,
+                hasRecentCall: !!recentCall,
+                timestamp: new Date().toISOString(),
+              }
+            );
           }
+        } else {
+          logger.warn('[ActiveCallOverlay] ⚠️ STEP 2 SKIPPED: No professional_id found', {
+            timestamp: new Date().toISOString(),
+          });
         }
       }
 
@@ -371,7 +492,7 @@ export default function ActiveCallOverlay() {
           }
         );
 
-        // For incoming calls: get from CallInvite
+        // For incoming calls: get from CallInvite or Call object
         if (callState.callInvite) {
           const invite = callState.callInvite as any;
           const fromField = invite._from || invite.from;
@@ -385,6 +506,26 @@ export default function ActiveCallOverlay() {
               timestamp: new Date().toISOString(),
             }
           );
+        }
+
+        // ✅ FIX: For incoming calls that are already connected, get from Call object
+        if (!otherUserId && call) {
+          const callObj = call as any;
+          const fromField = callObj._from || callObj.from;
+          
+          if (fromField) {
+            otherUserId = fromField.replace('client:', '');
+            isIncomingCall = true;
+
+            logger.debug(
+              '[ActiveCallOverlay] 📥 Incoming call - caller ID from call object',
+              {
+                otherUserId,
+                fromField,
+                timestamp: new Date().toISOString(),
+              }
+            );
+          }
         }
 
         // For outgoing calls: get from call parameters
@@ -497,6 +638,22 @@ export default function ActiveCallOverlay() {
 
       // ✅ PRIORITY: Use rate from call record if available and > 0 (this is the rate charged for this call)
       // Otherwise, fallback to professional's current rate
+      logger.info('[ActiveCallOverlay] 💰 STEP 3: Calculating final rate', {
+        callRecordRatePerMinute,
+        callRecordRateValid: callRecordRatePerMinute !== null && callRecordRatePerMinute > 0,
+        professionalRate: professional?.rate_per_minute,
+        professionalRateType: typeof professional?.rate_per_minute,
+        professionalRateNumber: professional?.rate_per_minute
+          ? Number(professional.rate_per_minute)
+          : null,
+        professionalRateValid: professional?.rate_per_minute
+          ? Number(professional.rate_per_minute) > 0
+          : false,
+        hasProfessional: !!professional,
+        isIncomingCall,
+        timestamp: new Date().toISOString(),
+      });
+
       const ratePerMinute =
         callRecordRatePerMinute !== null && callRecordRatePerMinute > 0
           ? callRecordRatePerMinute
@@ -505,15 +662,17 @@ export default function ActiveCallOverlay() {
           ? Number(professional.rate_per_minute)
           : 0;
 
-      logger.info('[ActiveCallOverlay] 💰 Rate calculation details', {
+      const rateSource =
+        callRecordRatePerMinute !== null && callRecordRatePerMinute > 0
+          ? 'call_record'
+          : professional?.rate_per_minute &&
+            Number(professional.rate_per_minute) > 0
+          ? 'professional'
+          : 'fallback_zero';
+
+      logger.info('[ActiveCallOverlay] 💰 STEP 3 RESULT: Final rate calculation', {
         finalRatePerMinute: ratePerMinute,
-        rateSource:
-          callRecordRatePerMinute !== null && callRecordRatePerMinute > 0
-            ? 'call_record'
-            : professional?.rate_per_minute &&
-              Number(professional.rate_per_minute) > 0
-            ? 'professional'
-            : 'fallback_zero',
+        rateSource,
         callRecordRate: callRecordRatePerMinute,
         callRecordRateValid:
           callRecordRatePerMinute !== null && callRecordRatePerMinute > 0,

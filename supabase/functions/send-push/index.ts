@@ -307,7 +307,10 @@ serve(async (req) => {
         sound: messages[0]?.sound,
         priority: messages[0]?.priority,
         has_data: !!messages[0]?.data,
+        data_keys: messages[0]?.data ? Object.keys(messages[0].data) : [],
+        data_preview: messages[0]?.data ? JSON.stringify(messages[0].data).substring(0, 200) : 'null',
         channelId: messages[0]?.channelId,
+        categoryIdentifier: messages[0]?.categoryIdentifier,
       },
     });
 

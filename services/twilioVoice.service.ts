@@ -56,6 +56,7 @@ class TwilioVoiceService {
   // 🔔 Ringtone player
   private ringtoneSound: AudioPlayer | null = null;
   private ringtoneTimeout: ReturnType<typeof setTimeout> | null = null;
+  private ringtonePreloaded: boolean = false; // ✅ Track if ringtone is preloaded
 
   // ✅ FIX: Track event listeners for cleanup
   private voiceEventListeners: Map<string, any> = new Map();
@@ -68,6 +69,9 @@ class TwilioVoiceService {
   // ✅ FIX: Race condition guards
   private isMakingCall: boolean = false;
   private isAcceptingCall: boolean = false;
+
+  // ✅ FIX: Store wasConnected before state reset in disconnect()
+  private lastDisconnectWasConnected: boolean = false;
 
   private state: CallState = {
     status: 'idle',
@@ -110,6 +114,22 @@ class TwilioVoiceService {
 
       // ✅ NEW: Setup AppState listener for background handling
       this.setupAppStateListener();
+
+      // ✅ NEW: Preload ringtone for instant playback (non-blocking, non-critical)
+      // ✅ Use setTimeout to defer preload and prevent blocking initialization
+      setTimeout(() => {
+        this.preloadRingtone().catch((error) => {
+          logger.warn(
+            '[TwilioVoice] ⚠️ Ringtone preload failed (non-critical, will load on-demand)',
+            {
+              errorMessage:
+                error instanceof Error ? error.message : String(error),
+              errorStack: error instanceof Error ? error.stack : undefined,
+              timestamp: new Date().toISOString(),
+            }
+          );
+        });
+      }, 1000); // ✅ Defer by 1 second to let app initialize first
 
       const totalElapsed = Date.now() - initStartTime;
       logger.info('[TwilioVoice] ✅ Initialized successfully', {
@@ -190,38 +210,267 @@ class TwilioVoiceService {
   // RINGTONE METHODS
   // 🔔 ================================
 
+  /**
+   * ✅ Preload ringtone for instant playback
+   * This ensures the audio file is loaded and ready before incoming calls
+   */
+  private async preloadRingtone(): Promise<void> {
+    if (this.ringtonePreloaded) {
+      logger.debug('[TwilioVoice] ⏭️ Ringtone already preloaded', {
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    try {
+      logger.info('[TwilioVoice] 🔔 Preloading ringtone for instant playback', {
+        timestamp: new Date().toISOString(),
+      });
+
+      const preloadStartTime = Date.now();
+
+      // ✅ Configure audio mode for ringtone (do this early)
+      await setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: true,
+        interruptionMode: 'duckOthers',
+      });
+
+      // ✅ Create AudioPlayer with shouldPlay: true, then immediately pause
+      // ✅ This approach is more reliable than shouldPlay: false
+      try {
+        // ✅ Check if AudioPlayer is available
+        // ✅ Type assertion: AudioPlayer is exported as type but works as constructor at runtime
+        // @ts-expect-error - AudioPlayer is exported as type but works as constructor at runtime
+        const AudioPlayerConstructor = AudioPlayer as any;
+        if (
+          !AudioPlayerConstructor ||
+          typeof AudioPlayerConstructor !== 'function'
+        ) {
+          logger.warn(
+            '[TwilioVoice] ⚠️ AudioPlayer not available for preload, will skip',
+            {
+              audioPlayerType: typeof AudioPlayerConstructor,
+              audioPlayerAvailable: !!AudioPlayerConstructor,
+              timestamp: new Date().toISOString(),
+            }
+          );
+          this.ringtonePreloaded = false;
+          return;
+        }
+
+        // ✅ Use AudioPlayerConstructor (already type-asserted above)
+        const player = new AudioPlayerConstructor(
+          RINGTONE_CONFIG.customRingtone,
+          {
+            volume: RINGTONE_CONFIG.volume,
+            isLooping: RINGTONE_CONFIG.shouldLoop,
+            shouldPlay: true, // ✅ Start playing to load the file
+          }
+        );
+
+        // ✅ Immediately pause after starting (file will be loaded)
+        await new Promise((resolve) => setTimeout(resolve, 50)); // ✅ Small delay to let it start loading
+        player.pause(); // ✅ Pause immediately
+
+        // ✅ Wait a bit more for the file to fully load
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        // ✅ Store the preloaded player
+        this.ringtoneSound = player;
+        this.ringtonePreloaded = true;
+
+        const preloadElapsed = Date.now() - preloadStartTime;
+        logger.info('[TwilioVoice] ✅ Ringtone preloaded successfully', {
+          elapsed: `${preloadElapsed}ms`,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (playerError) {
+        // ✅ Type assertion for logging (AudioPlayer is exported as type)
+        // @ts-expect-error - AudioPlayer is exported as type but works as constructor at runtime
+        const AudioPlayerConstructor = AudioPlayer as any;
+        logger.warn(
+          '[TwilioVoice] ⚠️ AudioPlayer preload failed (will load on-demand)',
+          {
+            errorMessage:
+              playerError instanceof Error
+                ? playerError.message
+                : String(playerError),
+            errorStack:
+              playerError instanceof Error ? playerError.stack : undefined,
+            errorType:
+              playerError instanceof Error
+                ? playerError.constructor.name
+                : typeof playerError,
+            audioPlayerType: typeof AudioPlayerConstructor,
+            audioPlayerAvailable: !!AudioPlayerConstructor,
+            timestamp: new Date().toISOString(),
+          }
+        );
+        // ✅ Reset state on error
+        this.ringtoneSound = null;
+        this.ringtonePreloaded = false;
+        // ✅ Don't throw - ringtone is non-critical, will load on-demand
+      }
+    } catch (error) {
+      logger.warn('[TwilioVoice] ⚠️ Ringtone preload error (non-critical)', {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString(),
+      });
+      // ✅ Don't throw - ringtone is non-critical
+    }
+  }
+
   private async playRingtone(): Promise<void> {
     try {
       logger.info('[TwilioVoice] 🔔 Playing custom ringtone', {
         volume: RINGTONE_CONFIG.volume,
         shouldLoop: RINGTONE_CONFIG.shouldLoop,
         maxDuration: RINGTONE_CONFIG.maxDuration,
+        isPreloaded: this.ringtonePreloaded,
         timestamp: new Date().toISOString(),
       });
 
-      // ✅ Stop any existing ringtone first
-      await this.stopRingtone();
+      const playStartTime = Date.now();
 
-      // ✅ Configure audio mode for ringtone
-      await setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true, // ✅ Play even in silent mode
-        staysActiveInBackground: true,
-        shouldDuckAndroid: true,
-      });
+      // ✅ If ringtone is already playing, stop it first
+      if (this.ringtoneSound) {
+        logger.debug(
+          '[TwilioVoice] 🔕 Stopping existing ringtone before playing new one',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+        await this.stopRingtone();
+      }
 
-      // ✅ Create and play ringtone
-      const player = new AudioPlayer(RINGTONE_CONFIG.customRingtone, {
-        volume: RINGTONE_CONFIG.volume,
-        isLooping: RINGTONE_CONFIG.shouldLoop,
-        shouldPlay: true, // ✅ Auto-play
-      });
+      // ✅ If ringtone is preloaded, reuse it for instant playback
+      if (this.ringtonePreloaded && this.ringtoneSound) {
+        logger.info(
+          '[TwilioVoice] ⚡ Using preloaded ringtone for instant playback',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
 
-      this.ringtoneSound = player;
+        try {
+          // ✅ Play immediately (file is already loaded and volume is already set)
+          // ✅ No need to set volume again - it was set during preload
+          this.ringtoneSound.play(); // ✅ Play immediately - no loading delay
 
-      logger.info('[TwilioVoice] ✅ Ringtone started', {
-        timestamp: new Date().toISOString(),
-      });
+          const playElapsed = Date.now() - playStartTime;
+          logger.info(
+            '[TwilioVoice] ✅ Ringtone started instantly (preloaded)',
+            {
+              elapsed: `${playElapsed}ms`,
+              timestamp: new Date().toISOString(),
+            }
+          );
+        } catch (playError) {
+          logger.error(
+            '[TwilioVoice] ❌ Failed to play preloaded ringtone',
+            playError,
+            {
+              errorMessage:
+                playError instanceof Error
+                  ? playError.message
+                  : String(playError),
+              timestamp: new Date().toISOString(),
+            }
+          );
+          // ✅ Fallback to creating new player
+          this.ringtonePreloaded = false;
+          this.ringtoneSound = null;
+        }
+      }
+
+      // ✅ If not preloaded or preloaded player failed, create new one
+      if (!this.ringtoneSound) {
+        logger.info(
+          '[TwilioVoice] 🔄 Creating new ringtone player (not preloaded)',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+
+        // ✅ Configure audio mode for ringtone
+        await setAudioModeAsync({
+          allowsRecording: false,
+          playsInSilentMode: true, // ✅ Play even in silent mode
+          interruptionMode: 'duckOthers',
+        });
+
+        // ✅ Create and play ringtone
+        // ✅ FIX: Wrap in try-catch to handle potential AudioPlayer initialization errors
+        try {
+          // ✅ Check if AudioPlayer is available
+          // ✅ Type assertion: AudioPlayer is exported as type but works as constructor at runtime
+          // @ts-expect-error - AudioPlayer is exported as type but works as constructor at runtime
+          const AudioPlayerConstructor = AudioPlayer as any;
+          if (
+            !AudioPlayerConstructor ||
+            typeof AudioPlayerConstructor !== 'function'
+          ) {
+            logger.warn(
+              '[TwilioVoice] ⚠️ AudioPlayer not available, skipping ringtone',
+              {
+                audioPlayerType: typeof AudioPlayerConstructor,
+                audioPlayerAvailable: !!AudioPlayerConstructor,
+                timestamp: new Date().toISOString(),
+              }
+            );
+            return;
+          }
+
+          // ✅ Use AudioPlayerConstructor (already type-asserted above)
+          const player = new AudioPlayerConstructor(
+            RINGTONE_CONFIG.customRingtone,
+            {
+              volume: RINGTONE_CONFIG.volume,
+              isLooping: RINGTONE_CONFIG.shouldLoop,
+              shouldPlay: true, // ✅ Auto-play
+            }
+          );
+
+          this.ringtoneSound = player;
+          this.ringtonePreloaded = false; // ✅ Mark as not preloaded (new instance)
+
+          const playElapsed = Date.now() - playStartTime;
+          logger.info('[TwilioVoice] ✅ Ringtone started (new player)', {
+            elapsed: `${playElapsed}ms`,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (playerError) {
+          // ✅ Type assertion for logging (AudioPlayer is exported as type)
+          // @ts-expect-error - AudioPlayer is exported as type but works as constructor at runtime
+          const AudioPlayerConstructor = AudioPlayer as any;
+          logger.error(
+            '[TwilioVoice] ❌ AudioPlayer creation failed',
+            playerError,
+            {
+              errorMessage:
+                playerError instanceof Error
+                  ? playerError.message
+                  : String(playerError),
+              errorStack:
+                playerError instanceof Error ? playerError.stack : undefined,
+              errorType:
+                playerError instanceof Error
+                  ? playerError.constructor.name
+                  : typeof playerError,
+              audioPlayerType: typeof AudioPlayerConstructor,
+              audioPlayerAvailable: !!AudioPlayerConstructor,
+              timestamp: new Date().toISOString(),
+            }
+          );
+          // ✅ Reset state on error
+          this.ringtoneSound = null;
+          this.ringtonePreloaded = false;
+          // ✅ Don't throw - ringtone is non-critical, continue without it
+          return;
+        }
+      }
 
       // ✅ Auto-stop after max duration
       this.ringtoneTimeout = setTimeout(() => {
@@ -250,17 +499,52 @@ class TwilioVoiceService {
         this.ringtoneTimeout = null;
       }
 
-      // ✅ Stop and unload sound
+      // ✅ Stop sound but keep it preloaded for next time
       if (this.ringtoneSound) {
         logger.info('[TwilioVoice] 🔕 Stopping ringtone', {
+          isPreloaded: this.ringtonePreloaded,
           timestamp: new Date().toISOString(),
         });
 
-        this.ringtoneSound.pause();
-        this.ringtoneSound.remove();
-        this.ringtoneSound = null;
+        try {
+          this.ringtoneSound.pause();
+
+          // ✅ If not preloaded, remove the player (cleanup)
+          // ✅ If preloaded, keep it for next time (just pause)
+          if (!this.ringtonePreloaded) {
+            this.ringtoneSound.remove();
+            this.ringtoneSound = null;
+            logger.debug(
+              '[TwilioVoice] 🗑️ Removed ringtone player (not preloaded)',
+              {
+                timestamp: new Date().toISOString(),
+              }
+            );
+          } else {
+            // ✅ Keep preloaded player (volume stays at RINGTONE_CONFIG.volume for next time)
+            // ✅ No need to reset volume - it will be ready to play immediately
+            logger.debug(
+              '[TwilioVoice] 💾 Kept preloaded ringtone player for next time',
+              {
+                timestamp: new Date().toISOString(),
+              }
+            );
+          }
+        } catch (stopError) {
+          logger.error('[TwilioVoice] ❌ Error stopping ringtone', stopError, {
+            errorMessage:
+              stopError instanceof Error
+                ? stopError.message
+                : String(stopError),
+            timestamp: new Date().toISOString(),
+          });
+          // ✅ Force cleanup on error
+          this.ringtoneSound = null;
+          this.ringtonePreloaded = false;
+        }
 
         logger.info('[TwilioVoice] ✅ Ringtone stopped', {
+          isPreloaded: this.ringtonePreloaded,
           timestamp: new Date().toISOString(),
         });
       }
@@ -269,6 +553,9 @@ class TwilioVoiceService {
         errorMessage: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString(),
       });
+      // ✅ Force cleanup on error
+      this.ringtoneSound = null;
+      this.ringtonePreloaded = false;
     }
   }
 
@@ -670,7 +957,7 @@ class TwilioVoiceService {
           const userFetchStartTime = Date.now();
           const currentUser = await usersService.getCurrentUser();
           const userFetchElapsed = Date.now() - userFetchStartTime;
-          
+
           const callerName = currentUser?.name || 'Someone';
           const callerAvatar = currentUser?.avatar_url || null;
 
@@ -745,7 +1032,10 @@ class TwilioVoiceService {
                 : String(pushError),
             errorStack:
               pushError instanceof Error ? pushError.stack : undefined,
-            errorType: pushError instanceof Error ? pushError.constructor.name : typeof pushError,
+            errorType:
+              pushError instanceof Error
+                ? pushError.constructor.name
+                : typeof pushError,
             totalPushElapsed: `${totalPushElapsed}ms`,
             timestamp: new Date().toISOString(),
           });
@@ -1194,18 +1484,54 @@ class TwilioVoiceService {
     });
 
     const acceptCallStartTime = Date.now();
-    // ✅ Accept with contact handle for proper display name
-    const call = await (callInvite as any).accept({
-      contactHandle: callerDisplayName,
-    });
-    const acceptElapsed = Date.now() - acceptCallStartTime;
+    let call: Call;
+    try {
+      // ✅ Accept with contact handle for proper display name
+      call = await (callInvite as any).accept({
+        contactHandle: callerDisplayName,
+      });
+      const acceptElapsed = Date.now() - acceptCallStartTime;
 
-    logger.info('[TwilioVoice] ✅ Call invite accepted', {
-      debugId: params?.debugId,
-      callId: params?.callId,
-      acceptElapsed: `${acceptElapsed}ms`,
-      timestamp: new Date().toISOString(),
-    });
+      logger.info('[TwilioVoice] ✅ Call invite accepted', {
+        debugId: params?.debugId,
+        callId: params?.callId,
+        acceptElapsed: `${acceptElapsed}ms`,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (acceptError) {
+      const acceptElapsed = Date.now() - acceptCallStartTime;
+      this.isAcceptingCall = false;
+
+      logger.error(
+        '[TwilioVoice] ❌ Failed to accept call invite (may be expired/cancelled)',
+        acceptError,
+        {
+          debugId: params?.debugId,
+          callId: params?.callId,
+          acceptElapsed: `${acceptElapsed}ms`,
+          errorMessage:
+            acceptError instanceof Error
+              ? acceptError.message
+              : String(acceptError),
+          errorStack:
+            acceptError instanceof Error ? acceptError.stack : undefined,
+          errorType:
+            acceptError instanceof Error
+              ? acceptError.constructor.name
+              : typeof acceptError,
+          hasCallInvite: !!this.state.callInvite,
+          callInviteSid: callInvite.getCallSid?.(),
+          timestamp: new Date().toISOString(),
+        }
+      );
+
+      // Clear the call invite from state if accept failed
+      if (this.state.callInvite === callInvite) {
+        this.updateState({ callInvite: null, status: 'idle' });
+      }
+
+      throw acceptError;
+    }
 
     // ✅ NEW: Store DB call ID for incoming calls
     if (params?.callId) {
@@ -1285,6 +1611,53 @@ class TwilioVoiceService {
       params?.ratePerMinute,
       params?.userBalance
     );
+
+    // ✅ FIX: Check if call is already connected (e.g., when accepting from notification)
+    // If so, update start_time immediately since the connect event may not fire
+    try {
+      const callState = (call as any).state || (call as any).getState?.();
+      const isAlreadyConnected =
+        callState === 'connected' || callState === 'CONNECTED';
+
+      if (isAlreadyConnected && params?.callId) {
+        logger.info(
+          '[TwilioVoice] 📞 Call already connected after accept, updating start_time',
+          {
+            debugId: params?.debugId,
+            callId: params?.callId,
+            callState,
+            timestamp: new Date().toISOString(),
+          }
+        );
+
+        // Update start_time immediately
+        void this.updateCallOnConnect(params.callId, params?.debugId);
+
+        // Also update state and start tracking
+        this.updateState({ status: 'connected' });
+        this.startDurationTracking();
+        if (params?.ratePerMinute && params.ratePerMinute > 0) {
+          this.startPerMinuteBilling(params.ratePerMinute);
+        }
+        if (params?.ratePerMinute && params?.userBalance !== undefined) {
+          BillingService.startTracking(
+            call,
+            params.ratePerMinute,
+            params.userBalance
+          );
+        }
+      }
+    } catch (stateCheckError) {
+      logger.warn('[TwilioVoice] ⚠️ Could not check call state after accept', {
+        debugId: params?.debugId,
+        callId: params?.callId,
+        errorMessage:
+          stateCheckError instanceof Error
+            ? stateCheckError.message
+            : String(stateCheckError),
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     this.isAcceptingCall = false;
     const totalElapsed = Date.now() - acceptStartTime;
@@ -1495,10 +1868,17 @@ class TwilioVoiceService {
         return;
       }
 
+      // ✅ FIX: Store wasConnected BEFORE state reset
+      const wasConnected =
+        this.state.status === 'connected' || this.state.duration > 0;
+      this.lastDisconnectWasConnected = wasConnected;
+
       logger.info('[TwilioVoice] 📞 Disconnecting call...', {
         callSid:
           (this.activeCall as any)?.callSid ?? (this.activeCall as any)?.sid,
         currentStatus: this.state.status,
+        wasConnected,
+        duration: this.state.duration,
         timestamp: new Date().toISOString(),
       });
 
@@ -2229,7 +2609,24 @@ class TwilioVoiceService {
     // ✅ FIX: Store Disconnected listener
     const disconnectedHandler = async (error?: any) => {
       const previousStatus = this.state.status;
-      const wasConnected = previousStatus === 'connected';
+      // ✅ FIX: Better detection of connected state - check status, duration, and call state
+      // Duration > 0 indicates the call was connected (duration only increases when connected)
+      // Also check if call state was 'connected' before the disconnect event
+      // ✅ FIX: Use lastDisconnectWasConnected if available (set in disconnect() before state reset)
+      // ✅ FIX: Call.state and call._state are not accessible via TypeScript, use any type
+      const callState = (call as any)?.state || (call as any)?._state;
+      // ✅ FIX: Use stored value from disconnect() if available (set before state reset)
+      const storedWasConnected = this.lastDisconnectWasConnected;
+      const wasConnected =
+        storedWasConnected || // ✅ Use stored value from disconnect()
+        previousStatus === 'connected' ||
+        this.state.duration > 0 ||
+        callState === 'connected' ||
+        callState === 'open';
+
+      // ✅ Reset the stored value after using it
+      this.lastDisconnectWasConnected = false;
+
       logger.info('[TwilioVoice] 📞 Call disconnected event', {
         debugId,
         callId,
@@ -2240,6 +2637,8 @@ class TwilioVoiceService {
           : null,
         wasConnected,
         previousStatus,
+        duration: this.state.duration,
+        usedStoredValue: storedWasConnected, // Log if we used stored value
         timestamp: new Date().toISOString(),
       });
 
@@ -2264,11 +2663,14 @@ class TwilioVoiceService {
       // ✅ Send local push notification to caller when call ends
       if (wasConnected && callId) {
         try {
-          logger.info('[TwilioVoice] 📬 Sending call ended notification to caller', {
-            debugId,
-            callId,
-            timestamp: new Date().toISOString(),
-          });
+          logger.info(
+            '[TwilioVoice] 📬 Sending call ended notification to caller',
+            {
+              debugId,
+              callId,
+              timestamp: new Date().toISOString(),
+            }
+          );
 
           // Fetch call record to get caller_id and professional info
           const { data: callRecord } = await supabase
@@ -2295,22 +2697,31 @@ class TwilioVoiceService {
                   call_sid: call.getSid(),
                 }
               );
-              logger.info('[TwilioVoice] ✅ Call ended notification sent to caller', {
-                debugId,
-                callId,
-                callerId: callRecord.caller_id,
-                professionalName,
-                timestamp: new Date().toISOString(),
-              });
+              logger.info(
+                '[TwilioVoice] ✅ Call ended notification sent to caller',
+                {
+                  debugId,
+                  callId,
+                  callerId: callRecord.caller_id,
+                  professionalName,
+                  timestamp: new Date().toISOString(),
+                }
+              );
             }
           }
         } catch (notifError) {
-          logger.warn('[TwilioVoice] ⚠️ Failed to send call ended notification', {
-            debugId,
-            callId,
-            error: notifError instanceof Error ? notifError.message : String(notifError),
-            timestamp: new Date().toISOString(),
-          });
+          logger.warn(
+            '[TwilioVoice] ⚠️ Failed to send call ended notification',
+            {
+              debugId,
+              callId,
+              error:
+                notifError instanceof Error
+                  ? notifError.message
+                  : String(notifError),
+              timestamp: new Date().toISOString(),
+            }
+          );
         }
       }
 
@@ -2396,10 +2807,118 @@ class TwilioVoiceService {
       timestamp: new Date().toISOString(),
     });
 
+    // ✅ FIX: Check if callId is UUID or Twilio Call SID
+    // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 chars with dashes)
+    // Call SID format: CA... (34 chars, starts with CA)
+    const isCallSid = callId.startsWith('CA') && callId.length === 34;
+    const isUuid = callId.includes('-') && callId.length === 36;
+
+    logger.debug('[TwilioVoice] 🔍 Detected callId format (connect)', {
+      debugId,
+      callId: callId.substring(0, 20) + '...',
+      isCallSid,
+      isUuid,
+      callIdLength: callId.length,
+      timestamp: new Date().toISOString(),
+    });
+
+    // ✅ FIX: If it's a Call SID, query by call_sid and get the UUID
+    let dbCallId = callId;
+    if (isCallSid) {
+      logger.debug('[TwilioVoice] 🔍 Querying by call_sid to get UUID', {
+        debugId,
+        callId: callId.substring(0, 20) + '...',
+        timestamp: new Date().toISOString(),
+      });
+
+      const { data: callRow, error: queryError } = await supabase
+        .from('calls')
+        .select('id')
+        .eq('call_sid', callId)
+        .maybeSingle();
+
+      if (queryError || !callRow) {
+        logger.warn('[TwilioVoice] ⚠️ Call record not found by call_sid', {
+          debugId,
+          callId: callId.substring(0, 20) + '...',
+          errorMessage: queryError?.message,
+          timestamp: new Date().toISOString(),
+        });
+        // ✅ FIX: If call record not found, try updating by call_sid directly
+        // This handles cases where the call record exists but we couldn't find it by UUID
+        logger.debug('[TwilioVoice] 🔄 Trying to update by call_sid directly', {
+          debugId,
+          callId: callId.substring(0, 20) + '...',
+          timestamp: new Date().toISOString(),
+        });
+
+        const startedAt = new Date().toISOString();
+        const startResBySid = await supabase
+          .from('calls')
+          .update({ start_time: startedAt })
+          .eq('call_sid', callId);
+
+        if (startResBySid.error) {
+          logger.error(
+            '[TwilioVoice] ❌ Failed updating call start_time by call_sid',
+            startResBySid.error,
+            {
+              debugId,
+              callId: callId.substring(0, 20) + '...',
+              errorMessage: startResBySid.error.message,
+              errorCode: startResBySid.error.code,
+              timestamp: new Date().toISOString(),
+            }
+          );
+        } else {
+          logger.info('[TwilioVoice] ✅ Call start_time updated by call_sid', {
+            debugId,
+            callSid: callId.substring(0, 20) + '...',
+            startedAt,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        // Try status update by call_sid as well
+        const candidates: string[] = ['active', 'in-progress', 'in_progress'];
+        for (const status of candidates) {
+          const res = await supabase
+            .from('calls')
+            .update({ status })
+            .eq('call_sid', callId);
+
+          if (!res.error) {
+            logger.info('[TwilioVoice] ✅ Call status updated by call_sid', {
+              debugId,
+              callSid: callId.substring(0, 20) + '...',
+              status,
+              timestamp: new Date().toISOString(),
+            });
+            return;
+          }
+        }
+
+        logger.warn('[TwilioVoice] ⚠️ Failed to update call by call_sid', {
+          debugId,
+          callSid: callId.substring(0, 20) + '...',
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      } else {
+        dbCallId = callRow.id;
+        logger.info('[TwilioVoice] ✅ Found UUID from call_sid', {
+          debugId,
+          callSid: callId.substring(0, 20) + '...',
+          dbCallId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+
     const startedAt = new Date().toISOString();
     logger.debug('[TwilioVoice] 💾 Updating call start_time', {
       debugId,
-      callId,
+      callId: dbCallId,
       startedAt,
       timestamp: new Date().toISOString(),
     });
@@ -2407,7 +2926,7 @@ class TwilioVoiceService {
     const startRes = await supabase
       .from('calls')
       .update({ start_time: startedAt })
-      .eq('id', callId);
+      .eq('id', dbCallId);
 
     if (startRes.error) {
       logger.error(
@@ -2415,7 +2934,8 @@ class TwilioVoiceService {
         startRes.error,
         {
           debugId,
-          callId,
+          callId: dbCallId,
+          originalCallId: callId,
           errorMessage: startRes.error.message,
           errorCode: startRes.error.code,
           timestamp: new Date().toISOString(),
@@ -2424,7 +2944,7 @@ class TwilioVoiceService {
     } else {
       logger.info('[TwilioVoice] ✅ Call start_time updated', {
         debugId,
-        callId,
+        callId: dbCallId,
         startedAt,
         timestamp: new Date().toISOString(),
       });
@@ -2433,7 +2953,7 @@ class TwilioVoiceService {
     const candidates: string[] = ['active', 'in-progress', 'in_progress'];
     logger.debug('[TwilioVoice] 🔄 Trying status candidates', {
       debugId,
-      callId,
+      callId: dbCallId,
       candidates,
       timestamp: new Date().toISOString(),
     });
@@ -2441,7 +2961,7 @@ class TwilioVoiceService {
     for (const status of candidates) {
       logger.debug('[TwilioVoice] 🔄 Trying status', {
         debugId,
-        callId,
+        callId: dbCallId,
         status,
         timestamp: new Date().toISOString(),
       });
@@ -2449,13 +2969,13 @@ class TwilioVoiceService {
       const res = await supabase
         .from('calls')
         .update({ status })
-        .eq('id', callId);
+        .eq('id', dbCallId);
 
       if (!res.error) {
         const totalElapsed = Date.now() - updateStartTime;
         logger.info('[TwilioVoice] ✅ Call record updated (connected)', {
           debugId,
-          callId,
+          callId: dbCallId,
           status,
           totalElapsed: `${totalElapsed}ms`,
           timestamp: new Date().toISOString(),
@@ -2464,7 +2984,7 @@ class TwilioVoiceService {
       } else {
         logger.debug('[TwilioVoice] ⚠️ Status update failed, trying next', {
           debugId,
-          callId,
+          callId: dbCallId,
           status,
           errorMessage: res.error.message,
           timestamp: new Date().toISOString(),
@@ -2477,7 +2997,8 @@ class TwilioVoiceService {
       '[TwilioVoice] ⚠️ Failed to update call status (all candidates failed)',
       {
         debugId,
-        callId,
+        callId: dbCallId,
+        originalCallId: callId,
         candidates,
         totalElapsed: `${totalElapsed}ms`,
         timestamp: new Date().toISOString(),
@@ -2501,23 +3022,133 @@ class TwilioVoiceService {
     const endedAt = new Date().toISOString();
     let startTime: string | null = null;
     let querySucceeded = false;
+    let callRecord: any = null; // ✅ Store full call record for rate calculation
 
     logger.debug('[TwilioVoice] 🔍 Loading call record to check start_time', {
       debugId,
       callId,
+      callIdLength: callId.length,
+      callIdPrefix: callId.substring(0, 10),
+      timestamp: new Date().toISOString(),
+    });
+
+    // ✅ FIX: Check if callId is UUID or Twilio Call SID
+    // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 chars with dashes)
+    // Call SID format: CA... (34 chars, starts with CA)
+    const isCallSid = callId.startsWith('CA') && callId.length === 34;
+    const isUuid = callId.includes('-') && callId.length === 36;
+
+    logger.debug('[TwilioVoice] 🔍 Detected callId format', {
+      debugId,
+      callId,
+      isCallSid,
+      isUuid,
+      callIdLength: callId.length,
       timestamp: new Date().toISOString(),
     });
 
     try {
       const loadStartTime = Date.now();
-      const { data: row, error: loadErr } = await supabase
+      let query = supabase
         .from('calls')
-        .select('start_time, status')
-        .eq('id', callId)
-        .maybeSingle();
+        .select('start_time, status, id, rate_per_minute, call_type');
+
+      // ✅ FIX: Query by call_sid if it's a Call SID, otherwise by id (UUID)
+      if (isCallSid) {
+        logger.debug(
+          '[TwilioVoice] 🔍 Querying by call_sid (Twilio Call SID)',
+          {
+            debugId,
+            callId: callId.substring(0, 20) + '...',
+            timestamp: new Date().toISOString(),
+          }
+        );
+        query = query.eq('call_sid', callId);
+      } else if (isUuid) {
+        logger.debug('[TwilioVoice] 🔍 Querying by id (UUID)', {
+          debugId,
+          callId,
+          timestamp: new Date().toISOString(),
+        });
+        query = query.eq('id', callId);
+      } else {
+        // ✅ Try both if format is unclear
+        logger.warn('[TwilioVoice] ⚠️ Unclear callId format, trying both', {
+          debugId,
+          callId,
+          callIdLength: callId.length,
+          timestamp: new Date().toISOString(),
+        });
+        // Try UUID first, then Call SID
+        query = query.eq('id', callId);
+      }
+
+      const { data: row, error: loadErr } = await query.maybeSingle();
       const loadElapsed = Date.now() - loadStartTime;
 
-      if (loadErr) {
+      // ✅ FIX: If UUID query failed and it might be a Call SID, try call_sid
+      if (loadErr && isUuid && !row) {
+        logger.debug(
+          '[TwilioVoice] 🔄 UUID query failed, trying call_sid as fallback',
+          {
+            debugId,
+            callId,
+            errorMessage: loadErr.message,
+            timestamp: new Date().toISOString(),
+          }
+        );
+
+        const { data: rowBySid, error: sidErr } = await supabase
+          .from('calls')
+          .select('start_time, status, id, rate_per_minute, call_type')
+          .eq('call_sid', callId)
+          .maybeSingle();
+
+        if (!sidErr && rowBySid) {
+          logger.info(
+            '[TwilioVoice] ✅ Call record found via call_sid (fallback)',
+            {
+              debugId,
+              callId: callId.substring(0, 20) + '...',
+              dbCallId: rowBySid.id,
+              startTime: rowBySid.start_time,
+              status: rowBySid.status,
+              elapsed: `${Date.now() - loadStartTime}ms`,
+              timestamp: new Date().toISOString(),
+            }
+          );
+          startTime = (rowBySid as any)?.start_time ?? null;
+          callRecord = rowBySid; // ✅ Store call record for rate calculation
+          querySucceeded = true;
+          // ✅ Update callId to the actual UUID for subsequent operations
+          callId = rowBySid.id;
+        } else {
+          logger.warn(
+            '[TwilioVoice] ⚠️ Failed to load call record (both UUID and call_sid)',
+            {
+              debugId,
+              callId,
+              uuidError: loadErr.message,
+              sidError: sidErr?.message,
+              elapsed: `${Date.now() - loadStartTime}ms`,
+              timestamp: new Date().toISOString(),
+            }
+          );
+
+          if (wasConnected === true) {
+            startTime = 'connected';
+            querySucceeded = false;
+            logger.debug(
+              '[TwilioVoice] ℹ️ Assuming connected (wasConnected=true)',
+              {
+                debugId,
+                callId,
+                timestamp: new Date().toISOString(),
+              }
+            );
+          }
+        }
+      } else if (loadErr) {
         logger.warn('[TwilioVoice] ⚠️ Failed to load call record', {
           debugId,
           callId,
@@ -2541,15 +3172,21 @@ class TwilioVoiceService {
         }
       } else {
         startTime = (row as any)?.start_time ?? null;
+        callRecord = row; // ✅ Store call record for rate calculation
         querySucceeded = true;
         logger.debug('[TwilioVoice] ✅ Call record loaded', {
           debugId,
-          callId,
+          callId: isCallSid ? callId.substring(0, 20) + '...' : callId,
+          dbCallId: (row as any)?.id,
           startTime,
           status: (row as any)?.status,
           elapsed: `${loadElapsed}ms`,
           timestamp: new Date().toISOString(),
         });
+        // ✅ Update callId to the actual UUID if we queried by call_sid
+        if (isCallSid && (row as any)?.id) {
+          callId = (row as any).id;
+        }
       }
     } catch (e) {
       logger.error('[TwilioVoice] ❌ Exception loading call record', e, {
@@ -2573,7 +3210,39 @@ class TwilioVoiceService {
       }
     }
 
-    const neverConnected = !startTime;
+    // ✅ FIX: If call was connected but start_time is null, set it retroactively
+    // Calculate start_time based on end_time and duration (if available)
+    if (!startTime && wasConnected) {
+      logger.warn(
+        '[TwilioVoice] ⚠️ Call was connected but start_time is null, setting retroactively',
+        {
+          debugId,
+          callId,
+          wasConnected,
+          timestamp: new Date().toISOString(),
+        }
+      );
+
+      // Try to calculate start_time from end_time and duration
+      // If we have duration from state, use it; otherwise assume minimum 1 minute
+      const callDuration = this.state.duration || 60; // Default to 1 minute if unknown
+      const endTimeDate = new Date(endedAt);
+      const calculatedStartTime = new Date(
+        endTimeDate.getTime() - callDuration * 1000
+      );
+      startTime = calculatedStartTime.toISOString();
+
+      logger.info('[TwilioVoice] ✅ Calculated start_time retroactively', {
+        debugId,
+        callId,
+        calculatedStartTime: startTime,
+        endTime: endedAt,
+        callDuration,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const neverConnected = !startTime && !wasConnected;
     logger.debug('[TwilioVoice] 🔍 Determining call status', {
       debugId,
       callId,
@@ -2583,6 +3252,115 @@ class TwilioVoiceService {
       querySucceeded,
       timestamp: new Date().toISOString(),
     });
+
+    // ✅ Calculate duration_minutes and total_cost if we have start_time and end_time
+    let durationMinutes: number | null = null;
+    let totalCost: number | null = null;
+    let ratePerMinute: number | null = null;
+
+    // ✅ FIX: Handle case where startTime is 'connected' string or null but call was connected
+    // Try to get actual start_time from database if we have callRecord
+    let actualStartTime: string | null = null;
+    if (startTime && startTime !== 'connected') {
+      actualStartTime = startTime;
+    } else if (callRecord && (callRecord as any)?.start_time) {
+      actualStartTime = (callRecord as any).start_time;
+      logger.debug('[TwilioVoice] 🔍 Using start_time from callRecord', {
+        debugId,
+        callId,
+        actualStartTime,
+        startTimeWas: startTime,
+        timestamp: new Date().toISOString(),
+      });
+    } else if (wasConnected && this.state.duration > 0) {
+      // ✅ Fallback: Calculate start_time from end_time and state duration
+      const callDuration = this.state.duration;
+      const endTimeDate = new Date(endedAt);
+      const calculatedStartTime = new Date(
+        endTimeDate.getTime() - callDuration * 1000
+      );
+      actualStartTime = calculatedStartTime.toISOString();
+      logger.debug(
+        '[TwilioVoice] 🔍 Calculated start_time from state duration',
+        {
+          debugId,
+          callId,
+          actualStartTime,
+          callDuration,
+          endTime: endedAt,
+          timestamp: new Date().toISOString(),
+        }
+      );
+    }
+
+    if (actualStartTime) {
+      try {
+        const startTimeDate = new Date(actualStartTime);
+        const endTimeDate = new Date(endedAt);
+        const durationSeconds = Math.floor(
+          (endTimeDate.getTime() - startTimeDate.getTime()) / 1000
+        );
+
+        // ✅ Per-minute billing: charge for the full minute upon entering it
+        // Math.floor(durationSeconds / 60) + 1 ensures we charge for at least 1 minute
+        durationMinutes = Math.max(1, Math.floor(durationSeconds / 60) + 1);
+
+        // ✅ Get rate_per_minute from call record
+        // Note: rate_per_minute is already the correct rate based on call type (video/voice) and urgency (urgent/normal)
+        // It was calculated in callsService.initiateCall() based on:
+        // - Video call: video_call_rate_per_minute from availability
+        // - Voice call: price_per_minute from availability
+        // - Urgent call: urgent availability rates
+        // - Normal call: active availability window rates
+        if (callRecord) {
+          ratePerMinute = callRecord.rate_per_minute
+            ? parseFloat(callRecord.rate_per_minute)
+            : null;
+
+          // ✅ Calculate total_cost if we have rate
+          if (ratePerMinute && ratePerMinute > 0) {
+            totalCost = parseFloat(
+              (durationMinutes * ratePerMinute).toFixed(2)
+            );
+          }
+        }
+
+        logger.debug('[TwilioVoice] 💰 Calculated duration and cost', {
+          debugId,
+          callId,
+          durationSeconds,
+          durationMinutes,
+          ratePerMinute,
+          totalCost,
+          actualStartTime,
+          endTime: endedAt,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (e) {
+        logger.warn('[TwilioVoice] ⚠️ Failed to calculate duration', {
+          debugId,
+          callId,
+          actualStartTime,
+          endTime: endedAt,
+          errorMessage: e instanceof Error ? e.message : String(e),
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } else if (wasConnected) {
+      logger.warn(
+        '[TwilioVoice] ⚠️ Call was connected but cannot calculate duration',
+        {
+          debugId,
+          callId,
+          startTime,
+          callRecordHasStartTime: !!(
+            callRecord && (callRecord as any)?.start_time
+          ),
+          stateDuration: this.state.duration,
+          timestamp: new Date().toISOString(),
+        }
+      );
+    }
 
     if (neverConnected) {
       logger.info('[TwilioVoice] 🗑️ Call cancelled (never connected)', {
@@ -2610,25 +3388,164 @@ class TwilioVoiceService {
       return;
     }
 
+    // ✅ FIX: If we calculated start_time retroactively or need to update it, update it in the database
+    // Update if: (1) startTime was 'connected' and we calculated actualStartTime, or
+    //            (2) startTime was calculated retroactively and querySucceeded === false
+    const needsStartTimeUpdate =
+      (startTime === 'connected' &&
+        actualStartTime &&
+        actualStartTime !== startTime) ||
+      (startTime && startTime !== 'connected' && querySucceeded === false);
+
+    if (needsStartTimeUpdate && actualStartTime) {
+      // ✅ If we don't have callRecord, fetch it to get rate_per_minute
+      // Note: rate_per_minute is already the correct rate based on call type (video/voice) and urgency (urgent/normal)
+      if (!callRecord) {
+        const { data: retroCallRecord } = await supabase
+          .from('calls')
+          .select('rate_per_minute, call_type, start_time')
+          .eq('id', callId)
+          .maybeSingle();
+
+        if (retroCallRecord) {
+          callRecord = retroCallRecord;
+
+          // ✅ Use actualStartTime from database if available, otherwise use calculated one
+          if ((retroCallRecord as any)?.start_time) {
+            actualStartTime = (retroCallRecord as any).start_time;
+            logger.debug('[TwilioVoice] 🔍 Using start_time from database', {
+              debugId,
+              callId,
+              actualStartTime,
+              timestamp: new Date().toISOString(),
+            });
+          }
+
+          // ✅ Recalculate duration_minutes and total_cost with the fetched rate
+          if (actualStartTime) {
+            try {
+              const startTimeDate = new Date(actualStartTime);
+              const endTimeDate = new Date(endedAt);
+              const durationSeconds = Math.floor(
+                (endTimeDate.getTime() - startTimeDate.getTime()) / 1000
+              );
+              durationMinutes = Math.max(
+                1,
+                Math.floor(durationSeconds / 60) + 1
+              );
+
+              // ✅ rate_per_minute is already the correct rate (video/voice, urgent/normal)
+              ratePerMinute = callRecord.rate_per_minute
+                ? parseFloat(callRecord.rate_per_minute)
+                : null;
+
+              if (ratePerMinute && ratePerMinute > 0) {
+                totalCost = parseFloat(
+                  (durationMinutes * ratePerMinute).toFixed(2)
+                );
+              }
+            } catch (e) {
+              logger.warn(
+                '[TwilioVoice] ⚠️ Failed to recalculate duration/cost',
+                {
+                  debugId,
+                  callId,
+                  errorMessage: e instanceof Error ? e.message : String(e),
+                  timestamp: new Date().toISOString(),
+                }
+              );
+            }
+          }
+        }
+      }
+
+      logger.info(
+        '[TwilioVoice] 💾 Updating start_time retroactively in database',
+        {
+          debugId,
+          callId,
+          originalStartTime: startTime,
+          actualStartTime,
+          durationMinutes,
+          totalCost,
+          timestamp: new Date().toISOString(),
+        }
+      );
+
+      const retroUpdateStartTime = Date.now();
+      const retroUpdateData: any = { start_time: actualStartTime };
+
+      // ✅ Also update duration_minutes and total_cost if calculated
+      if (durationMinutes !== null) {
+        retroUpdateData.duration_minutes = durationMinutes;
+      }
+      if (totalCost !== null) {
+        retroUpdateData.total_cost = totalCost;
+      }
+
+      const { error: retroUpdateError } = await supabase
+        .from('calls')
+        .update(retroUpdateData)
+        .eq('id', callId);
+
+      if (retroUpdateError) {
+        logger.error(
+          '[TwilioVoice] ❌ Failed to update start_time retroactively',
+          retroUpdateError,
+          {
+            debugId,
+            callId,
+            actualStartTime,
+            errorMessage: retroUpdateError.message,
+            timestamp: new Date().toISOString(),
+          }
+        );
+      } else {
+        logger.info('[TwilioVoice] ✅ start_time updated retroactively', {
+          debugId,
+          callId,
+          actualStartTime,
+          durationMinutes,
+          totalCost,
+          elapsed: `${Date.now() - retroUpdateStartTime}ms`,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+
     logger.info('[TwilioVoice] ✅ Call completed', {
       debugId,
       callId,
       endedAt,
       startTime,
+      durationMinutes,
+      totalCost,
       timestamp: new Date().toISOString(),
     });
 
     const completeStartTime = Date.now();
-    await supabase
-      .from('calls')
-      .update({ status: DbCallStatus.COMPLETED, end_time: endedAt })
-      .eq('id', callId);
+    const updateData: any = {
+      status: DbCallStatus.COMPLETED,
+      end_time: endedAt,
+    };
+
+    // ✅ Add duration_minutes and total_cost if calculated
+    if (durationMinutes !== null) {
+      updateData.duration_minutes = durationMinutes;
+    }
+    if (totalCost !== null) {
+      updateData.total_cost = totalCost;
+    }
+
+    await supabase.from('calls').update(updateData).eq('id', callId);
     const completeElapsed = Date.now() - completeStartTime;
     const totalElapsed = Date.now() - updateStartTime;
 
     logger.info('[TwilioVoice] ✅ Call record updated as COMPLETED', {
       debugId,
       callId,
+      durationMinutes,
+      totalCost,
       completeElapsed: `${completeElapsed}ms`,
       totalElapsed: `${totalElapsed}ms`,
       timestamp: new Date().toISOString(),
@@ -2777,8 +3694,18 @@ class TwilioVoiceService {
       this.stopDurationTracking();
       this.stopPerMinuteBilling();
 
-      // 🔔 Stop ringtone
+      // 🔔 Stop ringtone and cleanup preloaded player
       await this.stopRingtone();
+      // ✅ Force cleanup of preloaded ringtone on service cleanup
+      if (this.ringtoneSound) {
+        try {
+          this.ringtoneSound.remove();
+        } catch (e) {
+          // Ignore errors during cleanup
+        }
+        this.ringtoneSound = null;
+        this.ringtonePreloaded = false;
+      }
 
       // ✅ FIX: Clear all state update timeouts
       logger.debug('[TwilioVoice] 🧹 Clearing state update timeouts', {

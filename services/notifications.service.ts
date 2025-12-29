@@ -3,7 +3,7 @@ import { usersService } from './supabase/user.service';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import { Platform, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   Notification as ExpoNotification,
@@ -40,6 +40,17 @@ if (Platform.OS !== 'web') {
       const content = notification.request.content;
       const data = (content?.data || {}) as any;
 
+      // ✅ Check multiple possible paths for incoming call type
+      const isIncomingCall =
+        data?.type === 'incoming_call' ||
+        data?.call_type === 'incoming_call' ||
+        content?.title?.includes('Incoming Call') ||
+        content?.title?.includes('📞');
+
+      // ✅ Check if app is in foreground
+      const appState = AppState.currentState;
+      const isAppInForeground = appState === 'active';
+
       logger.info(
         '[NotificationService] 📬 Foreground notification handler called',
         {
@@ -49,9 +60,52 @@ if (Platform.OS !== 'web') {
           notificationId: notification.request.identifier,
           dataKeys: Object.keys(data || {}),
           dataType: data?.type,
+          dataStringified: JSON.stringify(data || {}).substring(0, 200),
+          isIncomingCall,
+          appState,
+          isAppInForeground,
           timestamp: new Date().toISOString(),
         }
       );
+
+      // ✅ BEST PRACTICE: If incoming call and app is in FOREGROUND, suppress notification
+      // IncomingCallHandler modal will show instead (WhatsApp-style behavior)
+      if (isIncomingCall && isAppInForeground) {
+        logger.info(
+          '[NotificationService] 🚫 Suppressing incoming call notification (app is foreground)',
+          {
+            note: 'IncomingCallHandler modal will show instead',
+            timestamp: new Date().toISOString(),
+          }
+        );
+
+        return {
+          shouldShowAlert: false,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+          shouldShowBanner: false,
+          shouldShowList: false,
+        };
+      }
+
+      // ✅ If incoming call and app is in BACKGROUND/CLOSED, show notification
+      if (isIncomingCall && !isAppInForeground) {
+        logger.info(
+          '[NotificationService] ✅ Showing incoming call notification (app is background)',
+          {
+            timestamp: new Date().toISOString(),
+          }
+        );
+
+        return {
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+          shouldShowBanner: true,
+          shouldShowList: true,
+          priority: Notifications.AndroidNotificationPriority.MAX,
+        };
+      }
 
       const isAndroid = Platform.OS === 'android';
       const isLocal = Boolean(data?.is_local);
@@ -63,6 +117,7 @@ if (Platform.OS !== 'web') {
         isLocal,
         isRemotePush,
         triggerType,
+        isIncomingCall,
         timestamp: new Date().toISOString(),
       });
 
@@ -1434,7 +1489,7 @@ class NotificationsService {
       // ✅ FIX: Check if notification was actually updated (might not exist or belong to another user)
       if (!data) {
         logger.warn(
-          '[NotificationService] ⚠️ Notification not found or doesn\'t belong to user',
+          "[NotificationService] ⚠️ Notification not found or doesn't belong to user",
           {
             notificationId,
             userId: currentUser.id,

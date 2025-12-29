@@ -67,17 +67,17 @@ export function useProfile() {
       });
 
       // Update state immediately (React 18+ handles this safely)
-      if (!isMountedRef.current) return;
-      
-      try {
+        if (!isMountedRef.current) return;
+        
+        try {
         // Update state synchronously
-        previousUserIdRef.current = newUserId;
+            previousUserIdRef.current = newUserId;
         setUserId(newUserId);
-        setIsSessionLoading(false);
-      } catch (error) {
-        // Log error but don't throw - React will recover on next render
-        logger.error('[useProfile] Error updating state in auth callback', error);
-      }
+          setIsSessionLoading(false);
+        } catch (error) {
+          // Log error but don't throw - React will recover on next render
+          logger.error('[useProfile] Error updating state in auth callback', error);
+        }
 
       // Handle cache operations
       // ✅ Don't invalidate cache on TOKEN_REFRESHED - it's just a token renewal
