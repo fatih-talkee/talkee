@@ -130,7 +130,7 @@ export default function ActiveCallOverlay() {
             });
           }, delay);
 
-          return retryTimeout;
+          return retryTimeout as unknown as NodeJS.Timeout;
         };
 
         const firstRetryTimeout = scheduleRetry(0);
@@ -471,7 +471,7 @@ export default function ActiveCallOverlay() {
             logger.info(
               '[ActiveCallOverlay] ✅ STEP 2 SUCCESS: Found call record',
               {
-                callId: recentCall.id || 'unknown',
+                callSid: recentCall.call_sid || 'unknown',
                 ratePerMinute: recentCall.rate_per_minute,
                 callerId: recentCall.caller_id,
                 professionalId: recentCall.professional_id,
