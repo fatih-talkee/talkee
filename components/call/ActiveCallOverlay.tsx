@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Modal,
   Platform,
   Animated,
-  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,22 +20,13 @@ import {
   Volume2,
   VolumeX,
   Minimize2,
-  X,
+  PhoneCall,
 } from 'lucide-react-native';
 import { useTwilioVoice } from '@/hooks/useTwilioVoice';
 import { useTheme } from '@/contexts/ThemeContext';
 import { logger } from '@/lib/logger';
-import { supabase } from '@/lib/supabase';
 import { useProfile } from '@/hooks/useProfile';
-
-const { width, height } = Dimensions.get('window');
-
-interface CallDetails {
-  callerName: string;
-  callerAvatar: string | null;
-  category: string | null;
-  ratePerMinute: number;
-}
+import { useCallDetails } from '@/hooks/useCallDetails';
 
 /**
  * ActiveCallOverlay
@@ -43,7 +34,7 @@ interface CallDetails {
  * Custom UI that appears OVER Twilio's native call screen
  * Shows caller info, duration, cost, and controls
  *
- * ✅ Appears when call is connected
+ * ✅ Appears when call is ringing, connecting, or connected
  * ✅ Shows caller avatar, name, category, rate
  * ✅ Shows real-time duration and cost
  * ✅ Mute, Speaker, End Call controls
@@ -55,28 +46,34 @@ export default function ActiveCallOverlay() {
   const { user: currentUser } = useProfile();
   const [showOverlay, setShowOverlay] = useState(false);
   const [minimized, setMinimized] = useState(false);
-  const [callDetails, setCallDetails] = useState<CallDetails | null>(null);
   const [speakerEnabled, setSpeakerEnabled] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
   const [pulseAnim] = useState(new Animated.Value(1));
 
-  // Show overlay when call is connected
+  // ✅ REFACTORED: Use custom hook for call details
+  const { callDetails, isLoading: isLoadingDetails, loadCallDetails } =
+    useCallDetails({
+      call: callState.call,
+      callInvite: callState.callInvite,
+      currentUserId: currentUser?.id,
+    });
+
+  // ✅ Show overlay when call is ringing, connecting, or connected
   useEffect(() => {
-    const isConnected = callState.status === 'connected';
+    const shouldShow =
+      callState.status === 'ringing' ||
+      callState.status === 'connecting' ||
+      callState.status === 'connected';
 
     logger.debug('[ActiveCallOverlay] 🔍 Call state changed', {
       status: callState.status,
-      isConnected,
-      hasCallDetails: !!callDetails,
+      shouldShow,
       timestamp: new Date().toISOString(),
     });
 
-    setShowOverlay(isConnected);
+    setShowOverlay(shouldShow);
 
-    if (isConnected) {
-      // ✅ FIX: Show overlay immediately, load details in background
-      // This ensures overlay appears even if details loading fails
-
+    if (shouldShow) {
       // Fade in animation
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -85,71 +82,28 @@ export default function ActiveCallOverlay() {
       }).start();
 
       // Load call details if not already loaded
-      if (!callDetails) {
-        logger.info(
-          '[ActiveCallOverlay] 📞 Loading call details (overlay already shown)',
-          {
-            timestamp: new Date().toISOString(),
-          }
-        );
-
-        // Load call details immediately
+      if (!callDetails && !isLoadingDetails) {
         loadCallDetails();
 
-        // ✅ Enhanced retry mechanism: Try multiple times with increasing delays
-        // Call record might not be created yet or call_sid might not be saved yet
-        let retryCount = 0;
-        const maxRetries = 3;
-        const retryDelays = [2000, 3000, 4000]; // 2s, 3s, 4s
-
-        const scheduleRetry = (attempt: number): NodeJS.Timeout | null => {
-          if (attempt >= maxRetries) {
-            logger.warn(
-              '[ActiveCallOverlay] ⚠️ Max retries reached, giving up',
-              {
-                maxRetries,
-                timestamp: new Date().toISOString(),
-              }
-            );
-            return null;
-          }
-
-          const delay =
-            retryDelays[attempt] || retryDelays[retryDelays.length - 1];
-          const retryTimeout = setTimeout(() => {
-            retryCount++;
-            logger.info('[ActiveCallOverlay] 🔄 Retrying call details load', {
-              attempt: retryCount,
-              maxRetries,
-              delay: `${delay}ms`,
+        // Retry after 2 seconds if details are still missing
+        const retryTimeout = setTimeout(() => {
+          logger.info(
+            '[ActiveCallOverlay] 🔄 Retrying call details load after delay',
+            {
               timestamp: new Date().toISOString(),
-            });
-            loadCallDetails().then(() => {
-              // If still no callDetails after load, schedule next retry
-              // Note: We check callDetails in the next render cycle
-            });
-          }, delay);
+            }
+          );
+          loadCallDetails();
+        }, 2000);
 
-          return retryTimeout as unknown as NodeJS.Timeout;
-        };
-
-        const firstRetryTimeout = scheduleRetry(0);
-        const secondRetryTimeout = scheduleRetry(1);
-        const thirdRetryTimeout = scheduleRetry(2);
-
-        return () => {
-          if (firstRetryTimeout) clearTimeout(firstRetryTimeout);
-          if (secondRetryTimeout) clearTimeout(secondRetryTimeout);
-          if (thirdRetryTimeout) clearTimeout(thirdRetryTimeout);
-        };
+        return () => clearTimeout(retryTimeout);
       }
     } else {
       // Reset state when call ends
       setMinimized(false);
-      setCallDetails(null);
       fadeAnim.setValue(0);
     }
-  }, [callState.status]);
+  }, [callState.status, callDetails, isLoadingDetails, loadCallDetails, fadeAnim]);
 
   // Pulse animation for active call
   useEffect(() => {
@@ -171,669 +125,10 @@ export default function ActiveCallOverlay() {
       pulse.start();
       return () => pulse.stop();
     }
-  }, [showOverlay, minimized]);
+  }, [showOverlay, minimized, pulseAnim]);
 
-  const loadCallDetails = async () => {
-    const loadStartTime = Date.now();
-    logger.info('[ActiveCallOverlay] 📞 ===== LOADING CALL DETAILS =====', {
-      hasCurrentUser: !!currentUser,
-      currentUserId: currentUser?.id,
-      currentUserName: currentUser?.name,
-      callStatus: callState.status,
-      callDuration: callState.duration,
-      hasCall: !!callState.call,
-      hasCallInvite: !!callState.callInvite,
-      isMuted: callState.isMuted,
-      timestamp: new Date().toISOString(),
-    });
-
-    try {
-      if (!currentUser) {
-        logger.warn('[ActiveCallOverlay] ⚠️ No current user', {
-          timestamp: new Date().toISOString(),
-        });
-        setCallDetails({
-          callerName: 'User',
-          callerAvatar: null,
-          category: null,
-          ratePerMinute: 0,
-        });
-        return;
-      }
-
-      logger.info('[ActiveCallOverlay] 👤 Current user info', {
-        userId: currentUser.id,
-        userName: currentUser.name,
-        hasAvatar: !!currentUser.avatar_url,
-        avatarUrl: currentUser.avatar_url ? 'present' : 'missing',
-        timestamp: new Date().toISOString(),
-      });
-
-      // ✅ OPTIMIZED: Get call record from database using call SID
-      const call = callState.call as any;
-      const callSid =
-        call?.callSid ??
-        call?.sid ??
-        (typeof call?.getSid === 'function' ? call.getSid() : null);
-
-      logger.info('[ActiveCallOverlay] 🔍 Call SID extraction', {
-        hasCall: !!call,
-        callSid: callSid ? callSid.substring(0, 20) + '...' : null,
-        callSidLength: callSid?.length,
-        callSidSource: call?.callSid
-          ? 'callSid'
-          : call?.sid
-          ? 'sid'
-          : typeof call?.getSid === 'function'
-          ? 'getSid()'
-          : 'none',
-        callState: call?.state || call?._state || 'unknown',
-        timestamp: new Date().toISOString(),
-      });
-
-      let otherUserId: string | null = null;
-      let isIncomingCall = false;
-      let callRecordRatePerMinute: number | null = null; // ✅ Get rate from call record
-
-      // Try to get call record from database first (most reliable)
-      if (callSid) {
-        logger.info(
-          '[ActiveCallOverlay] 🔍 STEP 1: Looking up call record by SID',
-          {
-            callSid: callSid.substring(0, 20) + '...',
-            callSidFull: callSid,
-            timestamp: new Date().toISOString(),
-          }
-        );
-
-        // Try to fetch call record by call_sid
-        // Note: call_sid column might not exist in all databases
-        let callRecord: any = null;
-        let callRecordError: any = null;
-
-        try {
-          const result = await supabase
-            .from('calls')
-            .select(
-              'caller_id, professional_id, rate_per_minute, professional:professionals!professional_id(user_id)'
-            )
-            .eq('call_sid', callSid)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          callRecord = result.data;
-          callRecordError = result.error;
-        } catch (err: any) {
-          // Handle case where call_sid column doesn't exist
-          if (
-            err?.message?.includes('column') &&
-            err?.message?.includes('call_sid')
-          ) {
-            logger.debug(
-              '[ActiveCallOverlay] ℹ️ call_sid column does not exist, will use fallback',
-              {
-                timestamp: new Date().toISOString(),
-              }
-            );
-            callRecordError = null; // Reset error to continue with fallback
-          } else {
-            callRecordError = err;
-          }
-        }
-
-        if (callRecordError) {
-          logger.warn(
-            '[ActiveCallOverlay] ⚠️ Failed to fetch call record from DB',
-            {
-              error: callRecordError.message,
-              code: callRecordError.code,
-              callSid: callSid.substring(0, 20) + '...',
-              timestamp: new Date().toISOString(),
-            }
-          );
-        } else if (callRecord) {
-          // ✅ Get rate_per_minute from call record (most reliable - this is the rate charged for this specific call)
-          // Only use if > 0, otherwise treat as null to use professional's rate
-          const recordRate = callRecord.rate_per_minute
-            ? Number(callRecord.rate_per_minute)
-            : 0;
-          callRecordRatePerMinute = recordRate > 0 ? recordRate : null;
-
-          logger.info(
-            '[ActiveCallOverlay] ✅ STEP 1 SUCCESS: Rate from call record (by call_sid)',
-            {
-              ratePerMinute: callRecordRatePerMinute,
-              rawRate: callRecord.rate_per_minute,
-              recordRate,
-              recordRateType: typeof callRecord.rate_per_minute,
-              callSid: callSid.substring(0, 20) + '...',
-              callerId: callRecord.caller_id,
-              professionalId: callRecord.professional_id,
-              professionalUserId: (callRecord.professional as any)?.user_id,
-              timestamp: new Date().toISOString(),
-            }
-          );
-
-          // Determine if this is incoming or outgoing call
-          isIncomingCall = callRecord.caller_id !== currentUser.id;
-
-          if (isIncomingCall) {
-            // Incoming call: other party is the caller
-            otherUserId = callRecord.caller_id;
-            logger.debug('[ActiveCallOverlay] 📥 Incoming call from database', {
-              callerId: otherUserId,
-              ratePerMinute: callRecordRatePerMinute,
-              timestamp: new Date().toISOString(),
-            });
-          } else {
-            // Outgoing call: other party is the professional
-            // Get professional's user_id
-            const professional = callRecord.professional as any;
-            otherUserId = professional?.user_id || callRecord.professional_id;
-            logger.debug('[ActiveCallOverlay] 📤 Outgoing call from database', {
-              professionalId: callRecord.professional_id,
-              professionalUserId: otherUserId,
-              ratePerMinute: callRecordRatePerMinute,
-              timestamp: new Date().toISOString(),
-            });
-          }
-        } else {
-          logger.warn(
-            '[ActiveCallOverlay] ⚠️ STEP 1 FAILED: No call record found by SID',
-            {
-              callSid: callSid.substring(0, 20) + '...',
-              callSidFull: callSid,
-              willTryFallback: true,
-              timestamp: new Date().toISOString(),
-            }
-          );
-        }
-      }
-
-      // ✅ FALLBACK: If call_sid lookup failed, try to find call by caller_id and professional_id
-      // This is useful if call_sid column doesn't exist or hasn't been set yet
-      if (!callRecordRatePerMinute && currentUser) {
-        logger.info(
-          '[ActiveCallOverlay] 🔍 STEP 2: Fallback - Looking up call by caller/professional',
-          {
-            currentUserId: currentUser.id,
-            currentUserName: currentUser.name,
-            callRecordRatePerMinute,
-            timestamp: new Date().toISOString(),
-          }
-        );
-
-        // Try to determine professional_id from call state
-        let professionalId: string | null = null;
-        const call = callState.call as any;
-        if (call) {
-          const customParams =
-            call._customParameters || call.customParameters || {};
-          const toParam = customParams.To || customParams.to || null;
-
-          logger.debug(
-            '[ActiveCallOverlay] 🔍 Extracting professional_id from call state',
-            {
-              hasCustomParams: !!customParams,
-              customParamsKeys: Object.keys(customParams),
-              toParam,
-              timestamp: new Date().toISOString(),
-            }
-          );
-
-          if (toParam) {
-            const toUserId = toParam.replace('client:', '');
-            logger.debug(
-              '[ActiveCallOverlay] 🔍 Looking up professional by user_id',
-              {
-                toUserId,
-                toParam,
-                timestamp: new Date().toISOString(),
-              }
-            );
-
-            // Try to get professional_id from user_id
-            const { data: prof, error: profError } = await supabase
-              .from('professionals')
-              .select('id')
-              .eq('user_id', toUserId)
-              .maybeSingle();
-
-            if (profError) {
-              logger.warn(
-                '[ActiveCallOverlay] ⚠️ Failed to find professional',
-                {
-                  toUserId,
-                  error: profError.message,
-                  timestamp: new Date().toISOString(),
-                }
-              );
-            } else if (prof) {
-              professionalId = prof.id;
-              logger.info('[ActiveCallOverlay] ✅ Found professional_id', {
-                professionalId,
-                toUserId,
-                timestamp: new Date().toISOString(),
-              });
-            } else {
-              logger.debug(
-                '[ActiveCallOverlay] ℹ️ User is not a professional',
-                {
-                  toUserId,
-                  timestamp: new Date().toISOString(),
-                }
-              );
-            }
-          }
-        } else {
-          logger.warn(
-            '[ActiveCallOverlay] ⚠️ No call object available for professional_id lookup',
-            {
-              timestamp: new Date().toISOString(),
-            }
-          );
-        }
-
-        if (professionalId) {
-          // ✅ FIX: Remove status filter to find call record regardless of status
-          // Also try to find by professional_id directly (for incoming calls)
-          logger.info(
-            '[ActiveCallOverlay] 🔍 Querying call record by caller/professional',
-            {
-              callerId: currentUser.id,
-              professionalId,
-              query: `or(and(caller_id.eq.${currentUser.id},professional_id.eq.${professionalId}),and(professional_id.eq.${professionalId},caller_id.eq.${currentUser.id}))`,
-              timestamp: new Date().toISOString(),
-            }
-          );
-
-          const { data: recentCall, error: recentCallError } = await supabase
-            .from('calls')
-            .select(
-              'rate_per_minute, caller_id, professional_id, status, created_at, call_sid'
-            )
-            .or(
-              `and(caller_id.eq.${currentUser.id},professional_id.eq.${professionalId}),and(professional_id.eq.${professionalId},caller_id.eq.${currentUser.id})`
-            )
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (recentCallError) {
-            logger.warn('[ActiveCallOverlay] ⚠️ Error querying call record', {
-              professionalId,
-              error: recentCallError.message,
-              errorCode: recentCallError.code,
-              timestamp: new Date().toISOString(),
-            });
-          } else if (recentCall) {
-            logger.info(
-              '[ActiveCallOverlay] ✅ STEP 2 SUCCESS: Found call record',
-              {
-                callSid: recentCall.call_sid || 'unknown',
-                ratePerMinute: recentCall.rate_per_minute,
-                callerId: recentCall.caller_id,
-                professionalId: recentCall.professional_id,
-                callStatus: recentCall.status,
-                createdAt: recentCall.created_at,
-                hasCallSid: !!recentCall.call_sid,
-                timestamp: new Date().toISOString(),
-              }
-            );
-
-            if (recentCall?.rate_per_minute) {
-              const recentRate = Number(recentCall.rate_per_minute);
-              // Only use if > 0, otherwise treat as null to use professional's rate
-              if (recentRate > 0) {
-                callRecordRatePerMinute = recentRate;
-                logger.info(
-                  '[ActiveCallOverlay] ✅ STEP 2: Found rate from recent call record',
-                  {
-                    ratePerMinute: callRecordRatePerMinute,
-                    rawRate: recentCall.rate_per_minute,
-                    professionalId,
-                    callStatus: recentCall.status,
-                    timestamp: new Date().toISOString(),
-                  }
-                );
-              } else {
-                logger.warn(
-                  '[ActiveCallOverlay] ⚠️ STEP 2: Recent call record has rate 0, will use professional rate',
-                  {
-                    professionalId,
-                    callStatus: recentCall.status,
-                    rawRate: recentCall.rate_per_minute,
-                    timestamp: new Date().toISOString(),
-                  }
-                );
-              }
-            } else {
-              logger.warn(
-                '[ActiveCallOverlay] ⚠️ STEP 2: Call record found but no rate_per_minute field',
-                {
-                  professionalId,
-                  callStatus: recentCall.status,
-                  hasRateField: 'rate_per_minute' in recentCall,
-                  timestamp: new Date().toISOString(),
-                }
-              );
-            }
-          } else {
-            logger.warn(
-              '[ActiveCallOverlay] ⚠️ STEP 2 FAILED: No recent call record found',
-              {
-                professionalId,
-                hasRecentCall: !!recentCall,
-                timestamp: new Date().toISOString(),
-              }
-            );
-          }
-        } else {
-          logger.warn(
-            '[ActiveCallOverlay] ⚠️ STEP 2 SKIPPED: No professional_id found',
-            {
-              timestamp: new Date().toISOString(),
-            }
-          );
-        }
-      }
-
-      if (!callSid) {
-        logger.debug(
-          '[ActiveCallOverlay] ℹ️ No call SID available (will use fallback)',
-          {
-            hasCall: !!call,
-            timestamp: new Date().toISOString(),
-          }
-        );
-      }
-
-      // Fallback: Try to get from call state if database lookup failed
-      if (!otherUserId) {
-        logger.debug(
-          '[ActiveCallOverlay] 🔍 Fallback: Getting user ID from call state',
-          {
-            timestamp: new Date().toISOString(),
-          }
-        );
-
-        // For incoming calls: get from CallInvite or Call object
-        if (callState.callInvite) {
-          const invite = callState.callInvite as any;
-          const fromField = invite._from || invite.from;
-          otherUserId = fromField?.replace('client:', '') || null;
-          isIncomingCall = true;
-
-          logger.debug(
-            '[ActiveCallOverlay] 📥 Incoming call - caller ID from invite',
-            {
-              otherUserId,
-              timestamp: new Date().toISOString(),
-            }
-          );
-        }
-
-        // ✅ FIX: For incoming calls that are already connected, get from Call object
-        if (!otherUserId && call) {
-          const callObj = call as any;
-          const fromField = callObj._from || callObj.from;
-
-          if (fromField) {
-            otherUserId = fromField.replace('client:', '');
-            isIncomingCall = true;
-
-            logger.debug(
-              '[ActiveCallOverlay] 📥 Incoming call - caller ID from call object',
-              {
-                otherUserId,
-                fromField,
-                timestamp: new Date().toISOString(),
-              }
-            );
-          }
-        }
-
-        // For outgoing calls: get from call parameters
-        if (!otherUserId && call) {
-          const customParams =
-            call._customParameters || call.customParameters || {};
-          const toParam = customParams.To || customParams.to || null;
-
-          if (toParam) {
-            otherUserId = toParam.replace('client:', '');
-            isIncomingCall = false;
-          }
-
-          logger.debug(
-            '[ActiveCallOverlay] 📤 Outgoing call - callee ID from params',
-            {
-              toParam,
-              otherUserId,
-              timestamp: new Date().toISOString(),
-            }
-          );
-        }
-      }
-
-      if (!otherUserId) {
-        logger.warn(
-          '[ActiveCallOverlay] ⚠️ Could not determine other party user ID',
-          {
-            hasCall: !!call,
-            hasCallInvite: !!callState.callInvite,
-            hasCallSid: !!callSid,
-            currentUserId: currentUser.id,
-            timestamp: new Date().toISOString(),
-          }
-        );
-
-        // Use placeholder
-        setCallDetails({
-          callerName: 'User',
-          callerAvatar: null,
-          category: null,
-          ratePerMinute: 0,
-        });
-        return;
-      }
-
-      logger.debug(
-        '[ActiveCallOverlay] 🔍 Fetching user and professional details',
-        {
-          userId: otherUserId,
-          isIncomingCall,
-          timestamp: new Date().toISOString(),
-        }
-      );
-
-      // ✅ OPTIMIZED: Fetch user and professional data in parallel
-      const [userResult, professionalResult] = await Promise.all([
-        supabase
-          .from('users')
-          .select('name, avatar_url')
-          .eq('id', otherUserId)
-          .single(),
-        supabase
-          .from('professionals')
-          .select(
-            `
-          rate_per_minute,
-            category_id,
-            categories(id, name)
-          `
-          )
-          .eq('user_id', otherUserId)
-          .maybeSingle(),
-      ]);
-
-      const user = userResult.data;
-      const userError = userResult.error;
-      const professional = professionalResult.data;
-      const professionalError = professionalResult.error;
-
-      // Log errors
-      if (userError) {
-        if (userError.code === 'PGRST116') {
-          logger.warn('[ActiveCallOverlay] ⚠️ User not found in database', {
-            userId: otherUserId,
-            timestamp: new Date().toISOString(),
-          });
-        } else {
-          logger.error('[ActiveCallOverlay] ❌ Failed to load user', {
-            error: userError.message,
-            code: userError.code,
-            userId: otherUserId,
-            timestamp: new Date().toISOString(),
-          });
-        }
-      }
-
-      if (professionalError && professionalError.code !== 'PGRST116') {
-        // PGRST116 = not found, which is OK if user is not a professional
-        logger.warn(
-          '[ActiveCallOverlay] ⚠️ Failed to load professional (expected if not professional)',
-          {
-            error: professionalError.message,
-            code: professionalError.code,
-            userId: otherUserId,
-            timestamp: new Date().toISOString(),
-          }
-        );
-      }
-
-      // ✅ PRIORITY: Use rate from call record if available and > 0 (this is the rate charged for this call)
-      // Otherwise, fallback to professional's current rate
-      logger.info('[ActiveCallOverlay] 💰 STEP 3: Calculating final rate', {
-        callRecordRatePerMinute,
-        callRecordRateValid:
-          callRecordRatePerMinute !== null && callRecordRatePerMinute > 0,
-        professionalRate: professional?.rate_per_minute,
-        professionalRateType: typeof professional?.rate_per_minute,
-        professionalRateNumber: professional?.rate_per_minute
-          ? Number(professional.rate_per_minute)
-          : null,
-        professionalRateValid: professional?.rate_per_minute
-          ? Number(professional.rate_per_minute) > 0
-          : false,
-        hasProfessional: !!professional,
-        isIncomingCall,
-        timestamp: new Date().toISOString(),
-      });
-
-      const ratePerMinute =
-        callRecordRatePerMinute !== null && callRecordRatePerMinute > 0
-          ? callRecordRatePerMinute
-          : professional?.rate_per_minute &&
-            Number(professional.rate_per_minute) > 0
-          ? Number(professional.rate_per_minute)
-          : 0;
-
-      const rateSource =
-        callRecordRatePerMinute !== null && callRecordRatePerMinute > 0
-          ? 'call_record'
-          : professional?.rate_per_minute &&
-            Number(professional.rate_per_minute) > 0
-          ? 'professional'
-          : 'fallback_zero';
-
-      logger.info(
-        '[ActiveCallOverlay] 💰 STEP 3 RESULT: Final rate calculation',
-        {
-          finalRatePerMinute: ratePerMinute,
-          rateSource,
-          callRecordRate: callRecordRatePerMinute,
-          callRecordRateValid:
-            callRecordRatePerMinute !== null && callRecordRatePerMinute > 0,
-          professionalRate: professional?.rate_per_minute
-            ? Number(professional.rate_per_minute)
-            : null,
-          professionalRateValid: professional?.rate_per_minute
-            ? Number(professional.rate_per_minute) > 0
-            : false,
-          hasProfessional: !!professional,
-          isIncomingCall,
-          timestamp: new Date().toISOString(),
-        }
-      );
-
-      // ✅ FIX: Get category name from categories relation
-      // Supabase returns categories as array even for foreign key relations
-      const categoryData = professional?.categories;
-      const category = Array.isArray(categoryData)
-        ? categoryData[0]?.name || null
-        : (categoryData as any)?.name || null;
-
-      const loadElapsed = Date.now() - loadStartTime;
-
-      logger.info('[ActiveCallOverlay] 📊 Fetched data summary', {
-        hasUser: !!user,
-        userName: user?.name || 'N/A',
-        userId: (user as any)?.id,
-        hasAvatar: !!user?.avatar_url,
-        avatarUrl: user?.avatar_url ? 'present' : 'missing',
-        isProfessional: !!professional,
-        professionalId: (professional as any)?.id,
-        professionalUserId: (professional as any)?.user_id,
-        ratePerMinute,
-        rateSource:
-          callRecordRatePerMinute !== null && callRecordRatePerMinute > 0
-            ? 'call_record'
-            : professional?.rate_per_minute &&
-              Number(professional.rate_per_minute) > 0
-            ? 'professional'
-            : 'fallback_zero',
-        category,
-        categoryId: (professional as any)?.category_id,
-        otherUserId,
-        isIncomingCall,
-        loadElapsed: `${loadElapsed}ms`,
-        timestamp: new Date().toISOString(),
-      });
-
-      setCallDetails({
-        callerName: user?.name || 'User',
-        callerAvatar: user?.avatar_url || null,
-        category,
-        ratePerMinute,
-      });
-
-      logger.info('[ActiveCallOverlay] ✅ Call details loaded and set', {
-        callerName: user?.name || 'User',
-        hasAvatar: !!user?.avatar_url,
-        category,
-        ratePerMinute,
-        rateSource:
-          callRecordRatePerMinute !== null && callRecordRatePerMinute > 0
-            ? 'call_record'
-            : professional?.rate_per_minute &&
-              Number(professional.rate_per_minute) > 0
-            ? 'professional'
-            : 'fallback_zero',
-        isProfessional: !!professional,
-        loadElapsed: `${loadElapsed}ms`,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      logger.error(
-        '[ActiveCallOverlay] ❌ Failed to load call details',
-        error,
-        {
-          timestamp: new Date().toISOString(),
-        }
-      );
-
-      // Fallback
-      setCallDetails({
-        callerName: 'User',
-        callerAvatar: null,
-        category: null,
-        ratePerMinute: 0,
-      });
-    }
-  };
-
-  const handleMuteToggle = async () => {
+  // ✅ REFACTORED: Memoized handlers
+  const handleMuteToggle = useCallback(async () => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       await toggleMute();
@@ -844,19 +139,19 @@ export default function ActiveCallOverlay() {
     } catch (error) {
       logger.error('[ActiveCallOverlay] ❌ Failed to toggle mute', error);
     }
-  };
+  }, [toggleMute, callState.isMuted]);
 
-  const handleSpeakerToggle = () => {
+  const handleSpeakerToggle = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // TODO: Implement speaker toggle via Twilio SDK or native audio routing
-    setSpeakerEnabled(!speakerEnabled);
+    setSpeakerEnabled((prev) => !prev);
     logger.info('[ActiveCallOverlay] 🔊 Speaker toggled', {
       enabled: !speakerEnabled,
       timestamp: new Date().toISOString(),
     });
-  };
+  }, [speakerEnabled]);
 
-  const handleEndCall = async () => {
+  const handleEndCall = useCallback(async () => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       logger.info('[ActiveCallOverlay] 📞 Ending call', {
@@ -866,74 +161,52 @@ export default function ActiveCallOverlay() {
     } catch (error) {
       logger.error('[ActiveCallOverlay] ❌ Failed to end call', error);
     }
-  };
+  }, [disconnect]);
 
-  const handleMinimize = () => {
+  const handleMinimize = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setMinimized(true);
-  };
+  }, []);
 
-  const handleExpand = () => {
+  const handleExpand = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setMinimized(false);
-  };
+  }, []);
 
-  const formatDuration = (seconds: number): string => {
+  // ✅ REFACTORED: Memoized formatters
+  const formatDuration = useCallback((seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs
-      .toString()
-      .padStart(2, '0')}`;
-  };
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }, []);
 
-  const calculateCost = (duration: number, rate: number): string => {
-    // ✅ Per-minute billing logic:
-    // - 0 seconds = 1 minute charged (first minute charged immediately when call starts)
-    // - 1-60 seconds = 1 minute charged (still in first minute)
-    // - 61-120 seconds = 2 minutes charged (entered 2nd minute)
-    // - 121-180 seconds = 3 minutes charged (entered 3rd minute)
-    // Formula: Math.floor(duration / 60) + 1
-    // This ensures we charge for the current minute as soon as we enter it
-
+  const calculateCost = useCallback((duration: number, rate: number): string => {
+    // Per-minute billing: Math.floor(duration / 60) + 1
     if (rate <= 0) {
-      logger.warn('[ActiveCallOverlay] ⚠️ Invalid rate for cost calculation', {
-        rate,
-        duration,
-        timestamp: new Date().toISOString(),
-      });
       return '0.00';
     }
-
-    // Calculate minutes: 0s = 1 min, 60s = 2 min, 120s = 3 min, etc.
     const minutes = Math.floor(duration / 60) + 1;
     const cost = minutes * rate;
-
-    logger.debug('[ActiveCallOverlay] 💰 Cost calculation', {
-      duration,
-      rate,
-      minutes,
-      cost: cost.toFixed(2),
-      timestamp: new Date().toISOString(),
-    });
-
     return cost.toFixed(2);
-  };
+  }, []);
 
-  // ✅ FIX: Show overlay even if callDetails is not loaded yet
-  // This ensures overlay appears immediately when call connects
+  // ✅ REFACTORED: Memoized display details
+  const displayDetails = useMemo(
+    () =>
+      callDetails || {
+        callerName: '',
+        callerAvatar: null,
+        category: null,
+        ratePerMinute: 0,
+      },
+    [callDetails]
+  );
+
   if (!showOverlay) {
     return null;
   }
 
-  // Use fallback details if not loaded yet
-  const displayDetails: CallDetails = callDetails || {
-    callerName: 'Calling...',
-    callerAvatar: null,
-    category: null,
-    ratePerMinute: 0,
-  };
-
-  // Minimized view - modern floating bubble
+  // Minimized view
   if (minimized) {
     return (
       <Pressable
@@ -990,19 +263,41 @@ export default function ActiveCallOverlay() {
               />
             </View>
             <View style={styles.minimizedInfo}>
-              <Text
-                style={[styles.minimizedName, { color: theme.colors.text }]}
-                numberOfLines={1}
-              >
-                {displayDetails.callerName || 'Call'}
-              </Text>
+              {isLoadingDetails ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <ActivityIndicator
+                    size="small"
+                    color={theme.colors.textMuted}
+                  />
+                  <Text
+                    style={[
+                      styles.minimizedName,
+                      { color: theme.colors.textMuted, marginLeft: 8 },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    Loading...
+                  </Text>
+                </View>
+              ) : (
+                <Text
+                  style={[styles.minimizedName, { color: theme.colors.text }]}
+                  numberOfLines={1}
+                >
+                  {displayDetails.callerName || 'Call'}
+                </Text>
+              )}
               <Text
                 style={[
                   styles.minimizedDuration,
                   { color: theme.colors.textMuted },
                 ]}
               >
-                {formatDuration(callState.duration)}
+                {callState.status === 'connected'
+                  ? formatDuration(callState.duration)
+                  : callState.status === 'ringing'
+                  ? 'Ringing...'
+                  : 'Connecting...'}
               </Text>
             </View>
             <Phone size={20} color={theme.colors.text} />
@@ -1054,17 +349,61 @@ export default function ActiveCallOverlay() {
                 <Minimize2 size={20} color={theme.colors.textMuted} />
               </Pressable>
               <View style={styles.statusIndicator}>
-                <View
-                  style={[
-                    styles.statusDot,
-                    { backgroundColor: theme.colors.success },
-                  ]}
-                />
-                <Text
-                  style={[styles.statusText, { color: theme.colors.textMuted }]}
-                >
-                  Connected
-                </Text>
+                {callState.status === 'connected' ? (
+                  <>
+                    <View
+                      style={[
+                        styles.statusDot,
+                        { backgroundColor: theme.colors.success },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.statusText,
+                        { color: theme.colors.textMuted },
+                      ]}
+                    >
+                      Connected
+                    </Text>
+                  </>
+                ) : callState.status === 'ringing' ? (
+                  <>
+                    <Animated.View
+                      style={[
+                        styles.statusDot,
+                        {
+                          backgroundColor: theme.colors.warning,
+                          transform: [{ scale: pulseAnim }],
+                        },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.statusText,
+                        { color: theme.colors.warning },
+                      ]}
+                    >
+                      Ringing...
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <View
+                      style={[
+                        styles.statusDot,
+                        { backgroundColor: theme.colors.primary },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.statusText,
+                        { color: theme.colors.primary },
+                      ]}
+                    >
+                      Connecting...
+                    </Text>
+                  </>
+                )}
               </View>
             </View>
 
@@ -1079,7 +418,24 @@ export default function ActiveCallOverlay() {
                     },
                   ]}
                 >
-                  {displayDetails.callerAvatar ? (
+                  {isLoadingDetails ? (
+                    <View
+                      style={[
+                        styles.avatarPlaceholder,
+                        {
+                          borderColor: theme.colors.border,
+                          backgroundColor: theme.colors.card + '40',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        },
+                      ]}
+                    >
+                      <ActivityIndicator
+                        size="large"
+                        color={theme.colors.primary}
+                      />
+                    </View>
+                  ) : displayDetails.callerAvatar ? (
                     <Image
                       source={{ uri: displayDetails.callerAvatar }}
                       style={[
@@ -1106,15 +462,36 @@ export default function ActiveCallOverlay() {
                           { color: theme.colors.text },
                         ]}
                       >
-                        {displayDetails.callerName.charAt(0).toUpperCase()}
+                        {displayDetails.callerName
+                          ? displayDetails.callerName.charAt(0).toUpperCase()
+                          : '?'}
                       </Text>
                     </LinearGradient>
                   )}
                 </Animated.View>
 
-                <Text style={[styles.callerName, { color: theme.colors.text }]}>
-                  {displayDetails.callerName}
-                </Text>
+                {isLoadingDetails ? (
+                  <View style={styles.loadingNameContainer}>
+                    <ActivityIndicator
+                      size="small"
+                      color={theme.colors.textMuted}
+                    />
+                    <Text
+                      style={[
+                        styles.callerName,
+                        { color: theme.colors.textMuted, marginLeft: 8 },
+                      ]}
+                    >
+                      Loading...
+                    </Text>
+                  </View>
+                ) : (
+                  <Text
+                    style={[styles.callerName, { color: theme.colors.text }]}
+                  >
+                    {displayDetails.callerName || 'Unknown'}
+                  </Text>
+                )}
 
                 {displayDetails.category && (
                   <View
@@ -1131,7 +508,22 @@ export default function ActiveCallOverlay() {
                   </View>
                 )}
 
-                {displayDetails.ratePerMinute > 0 && (
+                {isLoadingDetails ? (
+                  <View style={styles.rateContainer}>
+                    <ActivityIndicator
+                      size="small"
+                      color={theme.colors.textMuted}
+                    />
+                    <Text
+                      style={[
+                        styles.rateUnit,
+                        { color: theme.colors.textMuted, marginLeft: 8 },
+                      ]}
+                    >
+                      Loading rate...
+                    </Text>
+                  </View>
+                ) : displayDetails.ratePerMinute > 0 ? (
                   <View style={styles.rateContainer}>
                     <Text
                       style={[styles.rate, { color: theme.colors.textMuted }]}
@@ -1147,136 +539,160 @@ export default function ActiveCallOverlay() {
                       /min
                     </Text>
                   </View>
-                )}
+                ) : null}
               </View>
 
               {/* Call Stats */}
-              <View
-                style={[
-                  styles.statsContainer,
-                  {
-                    backgroundColor: theme.colors.card + '40',
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-              >
-                <Text style={[styles.statText, { color: theme.colors.text }]}>
-                  {formatDuration(callState.duration)}
-                </Text>
-                <Text
+              {callState.status === 'connected' ? (
+                <View
                   style={[
-                    styles.statSeparator,
-                    { color: theme.colors.textMuted },
+                    styles.statsContainer,
+                    {
+                      backgroundColor: theme.colors.card + '40',
+                      borderColor: theme.colors.border,
+                    },
                   ]}
                 >
-                  {' '}
-                  |{' '}
-                </Text>
-                <Text style={[styles.statText, { color: theme.colors.text }]}>
-                  $
-                  {calculateCost(
-                    callState.duration,
-                    displayDetails.ratePerMinute
-                  )}
-                </Text>
-              </View>
-
-              {/* Controls */}
-              <View style={styles.controls}>
-                {/* Mute Button */}
-                <Pressable
-                  onPress={handleMuteToggle}
-                  style={({ pressed }) => [
-                    styles.controlButton,
-                    pressed && styles.buttonPressed,
-                  ]}
-                >
-                  <BlurView
-                    intensity={callState.isMuted ? 30 : 15}
+                  <Text style={[styles.statText, { color: theme.colors.text }]}>
+                    {formatDuration(callState.duration)}
+                  </Text>
+                  <Text
                     style={[
-                      styles.controlButtonContent,
-                      callState.isMuted && {
-                        backgroundColor: theme.colors.error + '40',
-                      },
+                      styles.statSeparator,
+                      { color: theme.colors.textMuted },
                     ]}
                   >
-                    <View
-                      style={[
-                        styles.controlIconContainer,
-                        callState.isMuted && styles.controlIconContainerActive,
-                        {
-                          backgroundColor: callState.isMuted
-                            ? theme.colors.error
-                            : theme.colors.card + '40',
-                        },
-                      ]}
-                    >
-                      {callState.isMuted ? (
-                        <MicOff size={18} color={theme.colors.text} />
-                      ) : (
-                        <Mic size={18} color={theme.colors.text} />
-                      )}
-                    </View>
-                    <Text
-                      style={[
-                        styles.controlLabel,
-                        {
-                          color: theme.colors.text,
-                        },
-                      ]}
-                    >
-                      {callState.isMuted ? 'Muted' : 'Mute'}
-                    </Text>
-                  </BlurView>
-                </Pressable>
-
-                {/* Speaker Button */}
-                <Pressable
-                  onPress={handleSpeakerToggle}
-                  style={({ pressed }) => [
-                    styles.controlButton,
-                    pressed && styles.buttonPressed,
+                    {' '}
+                    |{' '}
+                  </Text>
+                  <Text style={[styles.statText, { color: theme.colors.text }]}>
+                    ${calculateCost(callState.duration, displayDetails.ratePerMinute)}
+                  </Text>
+                </View>
+              ) : (
+                <View
+                  style={[
+                    styles.statsContainer,
+                    {
+                      backgroundColor: theme.colors.card + '40',
+                      borderColor: theme.colors.border,
+                    },
                   ]}
                 >
-                  <BlurView
-                    intensity={speakerEnabled ? 30 : 15}
-                    style={[
-                      styles.controlButtonContent,
-                      speakerEnabled && {
-                        backgroundColor: theme.colors.primary + '40',
-                      },
+                  <PhoneCall
+                    size={20}
+                    color={theme.colors.warning}
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text
+                    style={[styles.statText, { color: theme.colors.textMuted }]}
+                  >
+                    {callState.status === 'ringing'
+                      ? 'Waiting for answer...'
+                      : 'Connecting...'}
+                  </Text>
+                </View>
+              )}
+
+              {/* Controls - Only show when connected */}
+              {callState.status === 'connected' && (
+                <View style={styles.controls}>
+                  {/* Mute Button */}
+                  <Pressable
+                    onPress={handleMuteToggle}
+                    style={({ pressed }) => [
+                      styles.controlButton,
+                      pressed && styles.buttonPressed,
                     ]}
                   >
-                    <View
+                    <BlurView
+                      intensity={callState.isMuted ? 30 : 15}
                       style={[
-                        styles.controlIconContainer,
-                        speakerEnabled && styles.controlIconContainerActive,
-                        {
-                          backgroundColor: speakerEnabled
-                            ? theme.colors.primary
-                            : theme.colors.card + '40',
+                        styles.controlButtonContent,
+                        callState.isMuted && {
+                          backgroundColor: theme.colors.error + '40',
                         },
                       ]}
                     >
-                      {speakerEnabled ? (
-                        <Volume2 size={18} color={theme.colors.text} />
-                      ) : (
-                        <VolumeX size={18} color={theme.colors.text} />
-                      )}
-                    </View>
-                    <Text
+                      <View
+                        style={[
+                          styles.controlIconContainer,
+                          callState.isMuted &&
+                            styles.controlIconContainerActive,
+                          {
+                            backgroundColor: callState.isMuted
+                              ? theme.colors.error
+                              : theme.colors.card + '40',
+                          },
+                        ]}
+                      >
+                        {callState.isMuted ? (
+                          <MicOff size={18} color={theme.colors.text} />
+                        ) : (
+                          <Mic size={18} color={theme.colors.text} />
+                        )}
+                      </View>
+                      <Text
+                        style={[
+                          styles.controlLabel,
+                          {
+                            color: theme.colors.text,
+                          },
+                        ]}
+                      >
+                        {callState.isMuted ? 'Muted' : 'Mute'}
+                      </Text>
+                    </BlurView>
+                  </Pressable>
+
+                  {/* Speaker Button */}
+                  <Pressable
+                    onPress={handleSpeakerToggle}
+                    style={({ pressed }) => [
+                      styles.controlButton,
+                      pressed && styles.buttonPressed,
+                    ]}
+                  >
+                    <BlurView
+                      intensity={speakerEnabled ? 30 : 15}
                       style={[
-                        styles.controlLabel,
-                        {
-                          color: theme.colors.text,
+                        styles.controlButtonContent,
+                        speakerEnabled && {
+                          backgroundColor: theme.colors.primary + '40',
                         },
                       ]}
                     >
-                      Speaker
-                    </Text>
-                  </BlurView>
-                </Pressable>
-              </View>
+                      <View
+                        style={[
+                          styles.controlIconContainer,
+                          speakerEnabled && styles.controlIconContainerActive,
+                          {
+                            backgroundColor: speakerEnabled
+                              ? theme.colors.primary
+                              : theme.colors.card + '40',
+                          },
+                        ]}
+                      >
+                        {speakerEnabled ? (
+                          <Volume2 size={18} color={theme.colors.text} />
+                        ) : (
+                          <VolumeX size={18} color={theme.colors.text} />
+                        )}
+                      </View>
+                      <Text
+                        style={[
+                          styles.controlLabel,
+                          {
+                            color: theme.colors.text,
+                          },
+                        ]}
+                      >
+                        Speaker
+                      </Text>
+                    </BlurView>
+                  </Pressable>
+                </View>
+              )}
 
               {/* End Call Button */}
               <Pressable
@@ -1392,6 +808,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center',
     letterSpacing: -0.5,
+  },
+  loadingNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
   categoryBadge: {
     paddingHorizontal: 16,
@@ -1561,3 +983,4 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
   },
 });
+

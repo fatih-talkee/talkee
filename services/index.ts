@@ -8,3 +8,6 @@ export * from './supabase';
 // Note: calls, reviews, notifications services may need to be implemented or moved to supabase/
 export * from './calls.service';
 export * from './notifications.service';
+export * from './callRecordLookup.service';
+export * from './rateCalculation.service';
+export * from './incomingCallDetails.service';

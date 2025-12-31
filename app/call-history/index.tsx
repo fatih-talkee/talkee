@@ -1,16 +1,17 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useCallHistory } from '@/hooks/useCalls';
+import { useInfiniteCallHistory, useCallHistoryCount } from '@/hooks/useCalls';
 import {
   useBlockedUsers,
   useBlockUser,
@@ -30,14 +31,19 @@ export default function CallHistoryScreen() {
     'all' | 'completed' | 'missed' | 'cancelled'
   >('all');
 
-  // Fetch ALL call history for counts (no filter)
-  const { data: allCallHistory = [], isLoading: isLoadingAll } = useCallHistory(
-    undefined,
-    100,
-    0
-  );
+  // Fetch call history counts using optimized count queries
+  const { data: allCount = 0 } = useCallHistoryCount(undefined);
+  const { data: completedCount = 0 } = useCallHistoryCount({
+    status: CallStatus.COMPLETED,
+  });
+  const { data: missedCount = 0 } = useCallHistoryCount({
+    status: CallStatus.MISSED,
+  });
+  const { data: cancelledCount = 0 } = useCallHistoryCount({
+    status: CallStatus.CANCELLED,
+  });
 
-  // Fetch call history with filter for display
+  // ✅ BEST PRACTICE: Use infinite query for pagination
   const filterStatus = useMemo(() => {
     if (selectedFilter === 'all') return undefined;
     // Map filter to CallStatus enum
@@ -49,15 +55,35 @@ export default function CallHistoryScreen() {
     return statusMap[selectedFilter];
   }, [selectedFilter]);
 
+  // ✅ useInfiniteQuery automatically handles pagination, data merging, and cache
   const {
-    data: callHistory = [],
+    data: infiniteData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
     isLoading,
+    isFetching,
     error,
-  } = useCallHistory(
-    filterStatus ? { status: filterStatus } : undefined,
-    100,
-    0
+  } = useInfiniteCallHistory(
+    filterStatus ? { status: filterStatus } : undefined
   );
+
+  // ✅ Flatten pages into a single array (useInfiniteQuery provides pages array)
+  // React Query best practice: Only depend on infiniteData, not isFetching
+  // This prevents unnecessary re-renders when isFetching changes
+  const allCalls = useMemo(() => {
+    if (!infiniteData?.pages) {
+      return [];
+    }
+    return infiniteData.pages.flat();
+  }, [infiniteData]);
+
+  // ✅ Load more function
+  const loadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Fetch blocked users
   const { data: blockedUsers = [] } = useBlockedUsers();
@@ -71,9 +97,9 @@ export default function CallHistoryScreen() {
     [blockedUsers]
   );
 
-  // Filter call history by search query
+  // Filter call history by search query (client-side filtering)
   const filteredHistory = useMemo(() => {
-    return callHistory.filter((call) => {
+    return allCalls.filter((call) => {
       const professionalName =
         call.professional?.users?.name?.toLowerCase() || '';
       const categoryName =
@@ -85,28 +111,17 @@ export default function CallHistoryScreen() {
         categoryName.includes(searchLower)
       );
     });
-  }, [callHistory, searchQuery]);
+  }, [allCalls, searchQuery]);
 
-  // Calculate filter counts from ALL call history (not filtered)
+  // Calculate filter counts from count queries (optimized)
   const filters = useMemo(() => {
-    const allCount = allCallHistory.length;
-    const completedCount = allCallHistory.filter(
-      (c) => c.status === 'completed'
-    ).length;
-    const missedCount = allCallHistory.filter(
-      (c) => c.status === 'missed'
-    ).length;
-    const cancelledCount = allCallHistory.filter(
-      (c) => c.status === 'cancelled'
-    ).length;
-
     return [
       { key: 'all', label: 'All Calls', count: allCount },
       { key: 'completed', label: 'Completed', count: completedCount },
       { key: 'missed', label: 'Missed', count: missedCount },
       { key: 'cancelled', label: 'Cancelled', count: cancelledCount },
     ];
-  }, [allCallHistory]);
+  }, [allCount, completedCount, missedCount, cancelledCount]);
 
   // Handle block/unblock user
   const handleToggleBlock = async (userId: string, shouldBlock: boolean) => {
@@ -117,7 +132,7 @@ export default function CallHistoryScreen() {
           title: 'User Blocked',
           message: 'This user can no longer contact you',
         });
-    } else {
+      } else {
         await unblockUserMutation.mutateAsync(userId);
         toast.success({
           title: 'User Unblocked',
@@ -151,7 +166,9 @@ export default function CallHistoryScreen() {
     );
   };
 
-  if (isLoading || isLoadingAll) {
+  // ✅ React Query best practice: isLoading means initial load with no data
+  // Show loading screen only during initial load (isLoading = true means no data exists yet)
+  if (isLoading) {
     return (
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -184,13 +201,15 @@ export default function CallHistoryScreen() {
       <Header showLogo showBack />
 
       <SearchBar
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search call history..."
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        placeholder="Search call history..."
         showTabButtons={true}
         tabOptions={filters}
         selectedTabKey={selectedFilter}
-        onTabSelect={(key) => setSelectedFilter(key as any)}
+        onTabSelect={(key) =>
+          setSelectedFilter(key as 'all' | 'completed' | 'missed' | 'cancelled')
+        }
       />
 
       <FlatList
@@ -199,17 +218,38 @@ export default function CallHistoryScreen() {
         renderItem={renderCallItem}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Clock size={48} color={theme.colors.textMuted} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
-              No call history
-            </Text>
-            <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
-              Your call history will appear here once you start connecting with
-              professionals
-            </Text>
-          </View>
+          isLoading ? null : (
+            <View style={styles.emptyState}>
+              <Clock size={48} color={theme.colors.textMuted} />
+              <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+                No call history
+              </Text>
+              <Text
+                style={[styles.emptyText, { color: theme.colors.textMuted }]}
+              >
+                Your call history will appear here once you start connecting
+                with professionals
+              </Text>
+            </View>
+          )
+        }
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <View style={styles.footerLoader}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+              <Text
+                style={[
+                  styles.footerLoaderText,
+                  { color: theme.colors.textMuted },
+                ]}
+              >
+                Loading more...
+              </Text>
+            </View>
+          ) : null
         }
       />
     </SafeAreaView>
@@ -255,5 +295,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: 40,
+  },
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  footerLoaderText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
   },
 });

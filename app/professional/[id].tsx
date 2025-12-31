@@ -417,6 +417,12 @@ export default function ProfessionalProfileScreen() {
   }, [callState.status]);
 
   const handleVoiceCall = async () => {
+    // ✅ SECURITY: Check authentication FIRST before any other checks
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to make a call');
+      return;
+    }
+
     // Check balance before making call
     if (!hasSufficientBalance) {
       setInsufficientBalanceModalVisible(true);
@@ -428,13 +434,14 @@ export default function ProfessionalProfileScreen() {
 
       logger.info('[ProfessionalProfile] Initiating voice call', {
         professionalId: id,
+        userId: currentUser.id,
       });
 
       const effectiveRatePerMinute = currentAvailability
         ? currentAvailability.availability.price_per_minute
         : professional?.rate_per_minute || 0;
 
-      // ✅ Get user data
+      // ✅ Double-check user authentication (defense in depth)
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) {
         setIsCalling(false); // ✅ Reset on error
@@ -470,6 +477,12 @@ export default function ProfessionalProfileScreen() {
   };
 
   const handleVideoCall = async () => {
+    // ✅ SECURITY: Check authentication FIRST before any other checks
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to make a call');
+      return;
+    }
+
     // Check balance before making call
     if (!hasSufficientBalance) {
       setInsufficientBalanceModalVisible(true);
@@ -481,6 +494,7 @@ export default function ProfessionalProfileScreen() {
 
       logger.info('[ProfessionalProfile] Initiating video call', {
         professionalId: id,
+        userId: currentUser.id,
       });
 
       // ✅ Get video call rate if enabled, otherwise use voice rate
@@ -491,7 +505,7 @@ export default function ProfessionalProfileScreen() {
           : currentAvailability.availability.price_per_minute
         : professional?.rate_per_minute || 0;
 
-      // ✅ Get user data
+      // ✅ Double-check user authentication (defense in depth)
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) {
         setIsCalling(false); // ✅ Reset on error
@@ -527,6 +541,12 @@ export default function ProfessionalProfileScreen() {
   };
 
   const handleUrgentCall = async () => {
+    // ✅ SECURITY: Check authentication FIRST before any other checks
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to make a call');
+      return;
+    }
+
     // Check balance before making call
     if (!hasSufficientBalance) {
       setInsufficientBalanceModalVisible(true);
@@ -538,16 +558,32 @@ export default function ProfessionalProfileScreen() {
 
       logger.info('[ProfessionalProfile] Initiating urgent call', {
         professionalId: id,
+        userId: currentUser.id,
       });
 
-      // Safely get rate per minute
+      // ✅ Get urgent call rate per minute
+      // Priority: 1. Urgent availability price_per_minute, 2. Professional default rate_per_minute
       let effectiveRatePerMinute = 0;
 
-      if (currentAvailability?.availability?.price_per_minute) {
-        effectiveRatePerMinute =
-          currentAvailability.availability.price_per_minute;
+      // First, try to find urgent availability
+      const urgentAvail = availabilitiesData.find(
+        (avail) => avail.available_at === 'urgent'
+      );
+
+      if (urgentAvail?.price_per_minute != null) {
+        effectiveRatePerMinute = Number(urgentAvail.price_per_minute);
+        logger.debug('[ProfessionalProfile] Using urgent availability rate', {
+          professionalId: id,
+          ratePerMinute: effectiveRatePerMinute,
+          urgentAvailabilityId: urgentAvail.id,
+        });
       } else if (professional?.rate_per_minute) {
         effectiveRatePerMinute = Number(professional.rate_per_minute) || 0;
+        logger.debug('[ProfessionalProfile] Using professional default rate for urgent call', {
+          professionalId: id,
+          ratePerMinute: effectiveRatePerMinute,
+          hasUrgentAvailability: !!urgentAvail,
+        });
       }
 
       // Validate professional data before navigation
@@ -563,7 +599,7 @@ export default function ProfessionalProfileScreen() {
         return;
       }
 
-      // ✅ Get user data
+      // ✅ Double-check user authentication (defense in depth)
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) {
         setIsCalling(false); // ✅ Reset on error
@@ -625,13 +661,15 @@ export default function ProfessionalProfileScreen() {
   }, [currentUser?.id, professional?.user_id]);
 
   // Buttons enabled if:
-  // 1. User is logged in (currentUser exists)
+  // 1. User is logged in (currentUser exists and has id)
   // 2. NOT viewing own profile (can't call yourself)
   // 3. Professional has NOT blocked us
   // 4. Scheduled availability + online, OR
   // 5. Urgent call availability + online
+  // ✅ SECURITY: Explicitly check that currentUser exists and has an id
   const buttonsEnabled =
     !!currentUser &&
+    !!currentUser.id &&
     !isOwnProfile &&
     !isBlockedByProfessional &&
     ((isAvailable && isOnline && !isUrgentCallAvailability) ||

@@ -382,6 +382,7 @@ export interface Call {
   professional_id: string;
   status: CallStatus;
   call_type: CallType;
+  call_sid: string | null; // Twilio Call SID for voice calls
   start_time: string | null;
   end_time: string | null;
   duration_minutes: number;

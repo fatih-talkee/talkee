@@ -560,4 +560,4 @@ const styles = StyleSheet.create({
 });
 
 // Default export to prevent Expo Router from treating this as a route
-export default null;
+export default Step5Availability;

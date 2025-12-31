@@ -6,6 +6,7 @@ export * from './useFavorites';
 export * from './useProfessionals';
 export * from './useUser';
 export * from './useCalls';
+export * from './useCallDetails';
 export * from './useReviews';
 export * from './useDonations';
 export * from './useCharity';

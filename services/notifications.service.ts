@@ -2156,6 +2156,11 @@ class NotificationsService {
       Notifications.addNotificationResponseReceivedListener((response) => {
         const data = response.notification.request.content.data;
         const timestamp = Date.now();
+        const actionIdentifier = response.actionIdentifier;
+        const notificationTitle =
+          response.notification.request.content.title || '';
+        const notificationBody =
+          response.notification.request.content.body || '';
 
         logger.info('[NotificationService] 🔔 Notification tap received', {
           notificationId: data?.notification_id,
@@ -2163,9 +2168,106 @@ class NotificationsService {
           professional_id: data?.professional_id,
           action_url: data?.action_url,
           call_id: data?.call_id,
+          actionIdentifier, // ✅ Log action identifier
+          title: notificationTitle,
+          body: notificationBody.substring(0, 50),
           timestamp: new Date(timestamp).toISOString(),
           dataKeys: Object.keys(data || {}),
         });
+
+        // ✅ CRITICAL FIX: Comprehensive incoming call detection at the VERY START
+        // This prevents ANY navigation for incoming calls, regardless of action type
+        // Check multiple indicators to catch all possible incoming call scenarios
+        
+        // 0. FIRST: Check Twilio state for active incoming call (most reliable)
+        // This must be checked FIRST before any other logic
+        let hasActiveIncomingCall = false;
+        let twilioState: any = null;
+        try {
+          const {
+            twilioVoiceService,
+          } = require('@/services/twilioVoice.service');
+          twilioState = twilioVoiceService.getState();
+          hasActiveIncomingCall = !!(
+            twilioState.callInvite ||
+            twilioState.status === 'ringing' ||
+            twilioState.status === 'connecting' ||
+            twilioState.status === 'connected'
+          );
+        } catch (twilioCheckError) {
+          // If we can't check Twilio state, we'll rely on other indicators
+          logger.debug(
+            '[NotificationService] ⚠️ Could not check Twilio state',
+            {
+              errorMessage:
+                twilioCheckError instanceof Error
+                  ? twilioCheckError.message
+                  : String(twilioCheckError),
+              timestamp: new Date().toISOString(),
+            }
+          );
+        }
+        
+        // 1. Check action identifiers (Accept/Decline buttons)
+        const isAcceptDeclineAction =
+          actionIdentifier === 'ACCEPT_CALL' ||
+          actionIdentifier === 'DECLINE_CALL';
+        
+        // 2. Check notification data type
+        const isIncomingCallByType =
+          data?.type === 'incoming_call' ||
+          data?.call_type === 'incoming_call' ||
+          data?.type === 'call_request' ||
+          data?.type === 'call_started';
+        
+        // 3. Check notification content (title/body)
+        const isIncomingCallByContent =
+          notificationTitle.includes('Incoming Call') ||
+          notificationTitle.includes('📞') ||
+          notificationTitle.toLowerCase().includes('calling') ||
+          notificationBody.toLowerCase().includes('incoming call') ||
+          notificationBody.toLowerCase().includes('calling you') ||
+          notificationBody.toLowerCase().includes('is calling') ||
+          notificationBody.toLowerCase().includes('wants to call');
+        
+        // 4. Check for call_id in data (strong indicator of call notification)
+        const hasCallId = !!(data?.call_id || data?.callId || data?.id);
+        
+        // 5. Check if default tap on notification with call_id (user tapped notification body, not button)
+        const isDefaultTapOnCallNotification =
+          (actionIdentifier === 'expo.modules.notifications.actions.DEFAULT' || !actionIdentifier) &&
+          hasCallId;
+        
+        // ✅ COMBINED CHECK: If ANY indicator suggests incoming call, skip navigation
+        // Priority: Twilio state > Action buttons > Data type > Content > Call ID
+        const isIncomingCallNotification =
+          hasActiveIncomingCall || // ✅ HIGHEST PRIORITY: Active call state
+          isAcceptDeclineAction ||
+          isIncomingCallByType ||
+          isIncomingCallByContent ||
+          isDefaultTapOnCallNotification;
+        
+        if (isIncomingCallNotification) {
+          logger.info(
+            '[NotificationService] ⏭️ SKIPPING NAVIGATION - Incoming call detected (handled by setupNotificationResponseListener)',
+            {
+              actionIdentifier,
+              isAcceptDeclineAction,
+              isIncomingCallByType,
+              isIncomingCallByContent,
+              hasCallId,
+              isDefaultTapOnCallNotification,
+              hasActiveIncomingCall,
+              twilioStatus: twilioState?.status || 'unknown',
+              twilioHasCallInvite: !!twilioState?.callInvite,
+              dataType: data?.type,
+              callType: data?.call_type,
+              call_id: data?.call_id,
+              timestamp: new Date().toISOString(),
+            }
+          );
+          return; // ✅ CRITICAL: Don't navigate - setupNotificationResponseListener will handle it
+        }
 
         // Ignore browser referrer taps (these are not real notifications, just browser metadata)
         const isBrowserReferrerTap =
@@ -2212,6 +2314,9 @@ class NotificationsService {
           notificationId: data?.notification_id,
           type: data?.type,
         });
+
+        // ✅ NOTE: Incoming call checks are now at the very beginning of this listener
+        // No need to check again here - if we reach this point, it's not an incoming call
 
         // Handle navigation based on notification data
         if (data?.professional_id) {

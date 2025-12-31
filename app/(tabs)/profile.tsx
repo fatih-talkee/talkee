@@ -8,7 +8,10 @@ import {
   Image,
   Share,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import {
   Settings,
   Heart,
@@ -279,7 +282,7 @@ export default function ProfileScreen() {
               console.error('Navigation error:', error);
             }
           },
-          badge: stats.favorites_count?.toString(),
+          badge: stats?.favorites_count?.toString(),
         },
         {
           id: 'history',
@@ -292,7 +295,7 @@ export default function ProfileScreen() {
               console.error('Navigation error:', error);
             }
           },
-          badge: stats.total_calls?.toString(),
+          badge: stats?.total_calls?.toString(),
         },
         {
           id: 'invoices',
@@ -305,7 +308,7 @@ export default function ProfileScreen() {
               console.error('Navigation error:', error);
             }
           },
-          badge: stats.invoices_count?.toString(),
+          badge: stats?.invoices_count?.toString(),
         },
         // TODO: Recordings feature - to be developed later
         // {
@@ -328,7 +331,7 @@ export default function ProfileScreen() {
                     console.error('Navigation error:', error);
                   }
                 },
-                badge: stats.blocked_users_count?.toString(),
+                badge: stats?.blocked_users_count?.toString(),
               },
             ]
           : []),
@@ -489,7 +492,10 @@ export default function ProfileScreen() {
               <Text
                 style={[styles.memberSince, { color: theme.colors.textMuted }]}
               >
-                Member since {formatMemberSince(stats.member_since)}
+                Member since{' '}
+                {stats?.member_since
+                  ? formatMemberSince(stats.member_since)
+                  : 'N/A'}
               </Text>
             </View>
           </View>
@@ -499,7 +505,7 @@ export default function ProfileScreen() {
           >
             <View style={styles.stat}>
               <Text style={[styles.statNumber, { color: theme.colors.text }]}>
-                {stats.total_calls || 0}
+                {stats?.total_calls || 0}
               </Text>
               <Text
                 style={[
@@ -518,7 +524,7 @@ export default function ProfileScreen() {
             />
             <View style={styles.stat}>
               <Text style={[styles.statNumber, { color: theme.colors.text }]}>
-                {stats.favorites_count || 0}
+                {stats?.favorites_count || 0}
               </Text>
               <Text
                 style={[

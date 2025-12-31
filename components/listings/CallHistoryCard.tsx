@@ -22,6 +22,7 @@ import {
 } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useIsFavorite } from '@/hooks/useFavorites';
+import { useProfile } from '@/hooks/useProfile';
 import type { CallWithRelations } from '@/types/database.types';
 
 interface CallHistoryCardProps {
@@ -36,22 +37,77 @@ export function CallHistoryCard({
   onToggleBlock,
 }: CallHistoryCardProps) {
   const { theme } = useTheme();
+  const { user: currentUser, isLoading: isProfileLoading } = useProfile();
   const [avatarError, setAvatarError] = useState(false);
 
-  // Get professional data
+  // Get professional and caller data first
   const professional = call.professional;
-  if (!professional || !professional.users) {
+  const caller = call.caller;
+
+  // ✅ CRITICAL FIX: Calculate professionalId for useIsFavorite hook
+  // This must be calculated BEFORE the hook is called, and must always return a string
+  // Use call.professional?.id directly to ensure consistency
+  const professionalIdForFavorite = professional?.id || '';
+
+  // ✅ CRITICAL FIX: All hooks must be called before any early returns
+  // Check if favorited (only for professional, not caller)
+  // Must be called before early return to maintain hooks order
+  // Always pass a string (empty string if no professional) to ensure hook is always called
+  const { data: isFavorite = false } = useIsFavorite(professionalIdForFavorite);
+
+  // Reset avatar error when avatar URL changes
+  // Must be called before early return to maintain hooks order
+  // Dependencies: currentUser?.id (determines which avatar to show) and call data
+  useEffect(() => {
+    setAvatarError(false);
+  }, [
+    currentUser?.id,
+    call.caller_id,
+    call.professional?.users?.avatar_url,
+    call.caller?.avatar_url,
+  ]);
+
+  // ✅ FIX: Don't render until currentUser is loaded to prevent showing wrong avatar
+  if (isProfileLoading || !currentUser) {
+    return null; // Or show a loading skeleton
+  }
+
+  // ✅ FIX: Determine if currentUser is caller or professional (callee)
+  // Calculate displayProfessional AFTER early return check
+  let displayProfessional: any = null;
+
+  // ✅ FIX: Determine if currentUser is caller or professional (callee)
+  const isCaller = currentUser.id === call.caller_id;
+  const isProfessional = currentUser.id === professional?.user_id;
+
+  // ✅ FIX: Determine call direction and which user to display
+  // If currentUser is caller: show professional info, direction = 'outgoing', expense
+  // If currentUser is professional: show caller info, direction = 'incoming', earning
+  const direction: 'incoming' | 'outgoing' = isCaller ? 'outgoing' : 'incoming';
+
+  let displayUser: any = null;
+
+  if (isCaller) {
+    // CurrentUser is caller: show professional info
+    displayUser = professional?.users;
+    displayProfessional = professional;
+  } else if (isProfessional) {
+    // CurrentUser is professional: show caller info
+    displayUser = caller;
+    displayProfessional = professional; // Still show professional for category, etc.
+  } else {
+    // Fallback: show professional info (old behavior)
+    displayUser = professional?.users;
+    displayProfessional = professional;
+  }
+
+  if (!displayUser || !displayProfessional) {
     return null;
   }
 
-  const userName = professional.users.name || 'Unknown';
-  const userAvatar = professional.users.avatar_url || '';
-  const isVerified = professional.users.is_verified || false;
-
-  // Reset avatar error when avatar URL changes
-  useEffect(() => {
-    setAvatarError(false);
-  }, [userAvatar]);
+  const userName = displayUser.name || 'Unknown';
+  const userAvatar = displayUser.avatar_url || '';
+  const isVerified = displayUser.is_verified || false;
 
   // ✅ Get user initials for avatar
   const getInitials = (name: string): string => {
@@ -85,17 +141,20 @@ export function CallHistoryCard({
     return colors[Math.abs(hash) % colors.length];
   };
 
-  // Check if favorited
-  const { data: isFavorite = false } = useIsFavorite(professional.id);
-
-  // Calculate online status
-  const isOnline = professional.is_active && professional.is_available;
+  // Calculate online status (only for professional)
+  const isOnline =
+    displayProfessional?.is_active && displayProfessional?.is_available;
 
   // Get category data
-  const categoryName = professional.categories?.name || 'Professional';
+  const categoryName = displayProfessional.categories?.name || 'Professional';
 
-  // Determine call direction (outgoing for caller)
-  const direction: 'incoming' | 'outgoing' = 'outgoing';
+  // ✅ FIX: Calculate expense/earning based on user role
+  // Caller pays full cost, professional earns 80% (20% platform fee)
+  // Convert total_cost to number (it might come as string from database)
+  const fullCost = Number(call.total_cost) || 0;
+  const professionalEarning = fullCost * 0.8; // 80% to professional
+  const displayAmount = isCaller ? fullCost : professionalEarning; // Expense for caller, earning for professional
+  const isExpense = isCaller; // True for caller (expense), false for professional (earning)
 
   // Format date with time
   const formatDateTime = (dateString: string) => {
@@ -126,30 +185,35 @@ export function CallHistoryCard({
   };
 
   // Format duration.
-  // If duration_minutes is 0 but we have start/end timestamps, show seconds (< 1 min) instead of "0 min".
+  // ✅ FIX: Prefer duration_minutes from database (set by Twilio webhook or fallback calculation)
+  // Fallback to start_time/end_time calculation if duration_minutes is not available
+  // For missed calls or calls that never connected, start_time will be null - don't show duration
   const formatDuration = () => {
-    const minutes = call.duration_minutes ?? 0;
-
-    if (minutes <= 0) {
-      const start = call.start_time
-        ? new Date(call.start_time).getTime()
-        : null;
-      const end = call.end_time ? new Date(call.end_time).getTime() : null;
-
-      if (
-        start != null &&
-        end != null &&
-        Number.isFinite(start) &&
-        Number.isFinite(end)
-      ) {
-        const seconds = Math.max(0, Math.floor((end - start) / 1000));
-        if (seconds < 60) return `${seconds} sec`;
-        return `${Math.ceil(seconds / 60)} min`;
-      }
-
-      return '0 min';
+    // ✅ Priority 1: Use duration_minutes from database (most accurate, set by Twilio webhook)
+    if (call.duration_minutes && call.duration_minutes > 0) {
+      const minutes = call.duration_minutes;
+      if (minutes < 60) return `${minutes} min`;
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
     }
 
+    // ✅ Priority 2: Calculate from start_time and end_time (fallback)
+    // start_time is only set when call connects, not when caller initiates
+    if (!call.start_time || !call.end_time) {
+      return null; // Call never connected, no duration to show
+    }
+
+    const start = new Date(call.start_time).getTime();
+    const end = new Date(call.end_time).getTime();
+
+    if (!Number.isFinite(start) || !Number.isFinite(end)) {
+      return null; // Invalid timestamps
+    }
+
+    const seconds = Math.max(0, Math.floor((end - start) / 1000));
+    if (seconds < 60) return `${seconds} sec`;
+    const minutes = Math.floor(seconds / 60);
     if (minutes < 60) return `${minutes} min`;
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
@@ -199,21 +263,32 @@ export function CallHistoryCard({
   };
 
   const handlePress = () => {
-    if (!professional?.id) {
-      console.error('Professional ID is missing');
-      return;
-    }
-    try {
-      router.push(`/professional/${professional.id}`);
-    } catch (error) {
-      console.error('Navigation error:', error);
+    // ✅ FIX: Navigate to the OTHER party's profile
+    // If currentUser is caller: navigate to professional
+    // If currentUser is professional: navigate to caller (if they are also a professional)
+    if (isCaller && displayProfessional?.id) {
+      // CurrentUser is caller: navigate to professional
+      try {
+        router.push(`/professional/${displayProfessional.id}`);
+      } catch (error) {
+        console.error('Navigation error:', error);
+      }
+    } else if (isProfessional && displayProfessional?.id) {
+      // CurrentUser is professional: navigate to professional (for now, same as caller case)
+      // TODO: If caller is also a professional, navigate to their profile
+      try {
+        router.push(`/professional/${displayProfessional.id}`);
+      } catch (error) {
+        console.error('Navigation error:', error);
+      }
     }
   };
 
   const handleBlockPress = (event: any) => {
     event.stopPropagation();
-    if (professional.users) {
-      onToggleBlock(professional.users.id, !isBlocked);
+    // ✅ FIX: Block the OTHER party (displayUser)
+    if (displayUser?.id) {
+      onToggleBlock(displayUser.id, !isBlocked);
     }
   };
 
@@ -459,59 +534,65 @@ export function CallHistoryCard({
 
         <View style={styles.footer}>
           <View style={styles.callStatsSection}>
-            {/* Completed calls: show cost and duration prominently */}
+            {/* ✅ FIX: Show duration only for completed calls that actually connected (have start_time) */}
+            {callStatus === 'completed' && formatDuration() && (
+              <View
+                style={[
+                  styles.statBadge,
+                  {
+                    backgroundColor: theme.colors.textMuted + '15',
+                    borderColor: theme.colors.textMuted,
+                    borderWidth: 1,
+                  },
+                ]}
+              >
+                <Clock size={14} color={theme.colors.textMuted} />
+                <Text
+                  style={[
+                    styles.statText,
+                    {
+                      color: theme.colors.textMuted,
+                    },
+                  ]}
+                >
+                  {formatDuration()}
+                </Text>
+              </View>
+            )}
+            {/* ✅ FIX: Show cost for completed calls (even if 0, to show it was free) */}
             {callStatus === 'completed' && (
-              <>
-                {call.duration_minutes != null &&
-                  call.duration_minutes >= 0 && (
-                    <View
-                      style={[
-                        styles.statBadge,
-                        {
-                          backgroundColor: theme.colors.textMuted + '15',
-                          borderColor: theme.colors.textMuted,
-                          borderWidth: 1,
-                        },
-                      ]}
-                    >
-                      <Clock size={14} color={theme.colors.textMuted} />
-                      <Text
-                        style={[
-                          styles.statText,
-                          {
-                            color: theme.colors.textMuted,
-                          },
-                        ]}
-                      >
-                        {formatDuration()}
-                      </Text>
-                    </View>
-                  )}
-                {call.total_cost != null && call.total_cost >= 0 && (
-                  <View
-                    style={[
-                      styles.statBadge,
-                      {
-                        backgroundColor: theme.colors.primary + '15',
-                        borderColor: theme.colors.primary,
-                        borderWidth: 1,
-                      },
-                    ]}
-                  >
-                    <DollarSign size={14} color={theme.colors.primary} />
-                    <Text
-                      style={[
-                        styles.statText,
-                        {
-                          color: theme.colors.primary,
-                        },
-                      ]}
-                    >
-                      ${call.total_cost.toFixed(2)}
-                    </Text>
-                  </View>
+              <View
+                style={[
+                  styles.statBadge,
+                  {
+                    backgroundColor:
+                      (isExpense ? theme.colors.error : theme.colors.success) +
+                      '15',
+                    borderColor: isExpense
+                      ? theme.colors.error
+                      : theme.colors.success,
+                    borderWidth: 1,
+                  },
+                ]}
+              >
+                {isExpense ? (
+                  <ArrowDown size={14} color={theme.colors.error} />
+                ) : (
+                  <ArrowUp size={14} color={theme.colors.success} />
                 )}
-              </>
+                <Text
+                  style={[
+                    styles.statText,
+                    {
+                      color: isExpense
+                        ? theme.colors.error
+                        : theme.colors.success,
+                    },
+                  ]}
+                >
+                  {isExpense ? '-' : '+'}${displayAmount.toFixed(2)}
+                </Text>
+              </View>
             )}
           </View>
           <TouchableOpacity

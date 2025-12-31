@@ -457,8 +457,20 @@ serve(async (req: Request) => {
           updated_at: nowIso,
         };
 
-        if (status === 'in-progress') {
+        // ✅ FIX: Only set start_time if it's not already set by client-side
+        // This ensures start_time is set when the call actually connects (not when initiated)
+        // Both caller and callee will have the same start_time (when connected event fires)
+        if (status === 'in-progress' && !existingCall.start_time) {
           updatePayload.start_time = nowIso;
+          console.log('📊 [twilio-webhook] Setting start_time (client-side not set yet)', {
+            CallId: callId,
+            startTime: nowIso,
+          });
+        } else if (status === 'in-progress' && existingCall.start_time) {
+          console.log('📊 [twilio-webhook] start_time already set by client-side, skipping', {
+            CallId: callId,
+            existingStartTime: existingCall.start_time,
+          });
         }
         if (isEnded) {
           updatePayload.end_time = nowIso;

@@ -335,4 +335,4 @@ export const validateAvailability = (
 };
 
 // Default export to prevent Expo Router from treating this as a route
-export default null;
+export default {};
