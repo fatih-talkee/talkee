@@ -3,41 +3,70 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ProfileService } from '@/services/supabase/profile.service';
-import { supabase } from '@/lib/supabase';
 import { useEffect, useState, useRef } from 'react';
 import { CACHE_CONFIG } from '@/lib/cacheConfig';
 import { clearUserCache, invalidateUserQueries } from '@/lib/cacheUtils';
 import { logger } from '@/lib/logger';
+import { authStateManager } from '@/lib/authStateManager';
+
+// ✅ FIX: Global processed users set (shared across all useProfile instances)
+const processedUsersRef = new Set<string>();
+
+// ✅ FIX: Global initialization flag (shared across all useProfile instances)
+// This ensures we only fetch session once, even if multiple components use useProfile
+let hasInitialized = false;
 
 export function useProfile() {
   const queryClient = useQueryClient();
-  // ✅ FIX: Track processed users to prevent duplicate cache invalidations
-  const processedUsersRef = useRef<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const previousUserIdRef = useRef<string | null>(null);
   const isMountedRef = useRef(true);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
   // Get current user from Supabase session
   useEffect(() => {
     isMountedRef.current = true;
-    let subscription: { unsubscribe: () => void } | null = null;
 
+    // ✅ FIX: Only fetch session once globally (prevents duplicate fetches across all components)
     const getCurrentUser = async () => {
       if (!isMountedRef.current) return;
+      
+      // If we've already initialized globally, skip fetching (auth state manager will handle updates)
+      if (hasInitialized) {
+        // ✅ FIX: Don't log every skip - too verbose. Only log on first skip per component instance
+        setIsSessionLoading(false);
+        // Still set userId from authStateManager if available (for this component instance)
+        try {
+          const { data: { session } } = await authStateManager.getSession();
+          const newUserId = session?.user?.id || null;
+          if (previousUserIdRef.current !== newUserId) {
+            setUserId(newUserId);
+            previousUserIdRef.current = newUserId;
+          }
+        } catch (error) {
+          // Silent fail - auth state manager will handle it
+        }
+        return;
+      }
 
       setIsSessionLoading(true);
+      hasInitialized = true; // Mark as initialized BEFORE async call (prevents race conditions)
 
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        const { data: { session } } = await authStateManager.getSession();
 
         if (!isMountedRef.current) return;
 
         const newUserId = session?.user?.id || null;
-        setUserId(newUserId);
-        previousUserIdRef.current = newUserId;
+        
+        // Only update state if userId actually changed
+        if (previousUserIdRef.current !== newUserId) {
+          setUserId(newUserId);
+          previousUserIdRef.current = newUserId;
+        }
+        
+        setIsSessionLoading(false);
 
         logger.info('[useProfile] Session loaded:', {
           authenticated: !!newUserId,
@@ -45,7 +74,6 @@ export function useProfile() {
         });
       } catch (error) {
         logger.error('[useProfile] Session error:', error);
-      } finally {
         if (isMountedRef.current) {
           setIsSessionLoading(false);
         }
@@ -54,10 +82,8 @@ export function useProfile() {
 
     getCurrentUser();
 
-    // Listen for auth changes
-    const {
-      data: { subscription: authSubscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    // ✅ FIX: Use singleton auth state manager instead of creating new listener
+    const unsubscribe = authStateManager.subscribe((event, session) => {
       if (!isMountedRef.current) return;
 
       const newUserId = session?.user?.id || null;
@@ -66,20 +92,17 @@ export function useProfile() {
       logger.info('[useProfile] Auth changed:', {
         event,
         authenticated: !!newUserId,
+        previousUserId: previousUserId?.substring(0, 8),
+        newUserId: newUserId?.substring(0, 8),
       });
 
-      // Update state immediately (React 18+ handles this safely)
-        if (!isMountedRef.current) return;
-        
-        try {
-        // Update state synchronously
-            previousUserIdRef.current = newUserId;
+      // ✅ FIX: Only update state if userId actually changed
+      if (previousUserId !== newUserId) {
+        previousUserIdRef.current = newUserId;
         setUserId(newUserId);
-          setIsSessionLoading(false);
-        } catch (error) {
-          // Log error but don't throw - React will recover on next render
-          logger.error('[useProfile] Error updating state in auth callback', error);
-        }
+      }
+      
+      setIsSessionLoading(false);
 
       // Handle cache operations
       // ✅ Don't invalidate cache on TOKEN_REFRESHED - it's just a token renewal
@@ -93,6 +116,23 @@ export function useProfile() {
           return;
         }
 
+        // ✅ FIX: Skip INITIAL_SESSION if user hasn't changed (most common case)
+        if (event === 'INITIAL_SESSION' && previousUserId === newUserId && newUserId) {
+          // Check if we already processed this user during this session
+          if (processedUsersRef.has(newUserId)) {
+            logger.debug('[useProfile] ⏭️ INITIAL_SESSION for already processed user, skipping cache invalidation', {
+              userId: newUserId.substring(0, 8) + '...',
+            });
+            return;
+          }
+          // Mark as processed but don't invalidate cache (data is already fresh)
+          processedUsersRef.add(newUserId);
+          logger.debug('[useProfile] ⏭️ INITIAL_SESSION for same user, marking as processed (no invalidation)', {
+            userId: newUserId.substring(0, 8) + '...',
+          });
+          return;
+        }
+
         if (previousUserId !== newUserId) {
           if (previousUserId && !newUserId) {
             // Logout: Clear all cache
@@ -101,7 +141,7 @@ export function useProfile() {
               logger.error('[useProfile] Cache clear error:', err);
             });
             // Clear processed users on logout
-            processedUsersRef.current.clear();
+            processedUsersRef.clear();
           } else if (
             previousUserId &&
             newUserId &&
@@ -116,37 +156,34 @@ export function useProfile() {
               logger.error('[useProfile] Cache clear error:', err);
             });
             // Clear processed users on switch
-            processedUsersRef.current.clear();
+            processedUsersRef.clear();
           } else if (!previousUserId && newUserId) {
             // New login: Invalidate to ensure fresh data (only once)
             // ✅ FIX: Check if we already processed this user to prevent duplicate invalidations
-            if (!processedUsersRef.current.has(newUserId)) {
+            if (!processedUsersRef.has(newUserId)) {
               logger.info('[useProfile] New user logged in, invalidating cache', {
                 userId: newUserId.substring(0, 8) + '...',
               });
-              invalidateUserQueries(queryClient, newUserId);
-              processedUsersRef.current.add(newUserId);
+              // ✅ FIX: Exclude calls from invalidation to prevent call history refresh loops
+              invalidateUserQueries(queryClient, newUserId, [['calls']]);
+              processedUsersRef.add(newUserId);
             } else {
               logger.debug('[useProfile] ⏭️ Already processed this user, skipping cache invalidation', {
                 userId: newUserId.substring(0, 8) + '...',
               });
             }
           }
-        } else if (previousUserId === newUserId && event === 'INITIAL_SESSION') {
-          // ✅ FIX: Skip cache invalidation for INITIAL_SESSION if user hasn't changed
-          logger.debug('[useProfile] ⏭️ INITIAL_SESSION for same user, skipping cache invalidation', {
-            userId: newUserId?.substring(0, 8) + '...',
-          });
         }
       }, 0);
     });
 
-    subscription = authSubscription;
+    unsubscribeRef.current = unsubscribe;
 
     return () => {
       isMountedRef.current = false;
-      if (subscription) {
-        subscription.unsubscribe();
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
       }
     };
   }, [queryClient]);

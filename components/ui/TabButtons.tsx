@@ -83,10 +83,10 @@ export function TabButtons({
                 },
               ]}
             >
-              {option.label}
+              {String(option.label || '')}
               {option.count !== undefined &&
                 option.count !== null &&
-                ` (${option.count.toString()})`}
+                ` (${String(option.count)})`}
             </Text>
           </TouchableOpacity>
         );

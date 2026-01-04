@@ -162,7 +162,9 @@ export function useInfiniteCallHistory(filters?: CallFilters) {
     refetchOnMount: false, // ✅ FIX: Don't refetch on mount (prevents loops)
     refetchOnWindowFocus: false, // ✅ FIX: Don't refetch on window focus
     refetchInterval: false, // ✅ FIX: Disable auto-refetch interval
-    placeholderData: undefined, // Don't use placeholder data
+    // ✅ FIX: Removed placeholderData to match invoices behavior - isLoading should be false when data exists
+    retry: 1, // ✅ FIX: Only retry once on error
+    retryOnMount: false, // ✅ FIX: Don't retry on mount if error exists
   });
 }
 
@@ -213,6 +215,9 @@ export function useCallHistoryCount(filters?: CallFilters) {
     refetchOnMount: false, // ✅ FIX: Prevent unnecessary refetches on mount
     refetchOnWindowFocus: false, // ✅ FIX: Prevent refresh loops on focus
     refetchInterval: false, // ✅ FIX: Disable auto-refetch interval (prevents 3-5s refresh)
+    placeholderData: (previousData) => previousData, // ✅ FIX: Keep previous data while refetching
+    retry: 1, // ✅ FIX: Only retry once on error
+    retryOnMount: false, // ✅ FIX: Don't retry on mount if error exists
   });
 }
 

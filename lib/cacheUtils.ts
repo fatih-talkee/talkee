@@ -27,8 +27,13 @@ export async function clearUserCache(queryClient: QueryClient) {
 /**
  * Invalidate all user-specific queries
  * Use this when user data might have changed but user is still logged in
+ * @param excludeKeys - Query keys to exclude from invalidation (e.g., ['calls'] to avoid invalidating call history)
  */
-export function invalidateUserQueries(queryClient: QueryClient, userId?: string | null) {
+export function invalidateUserQueries(
+  queryClient: QueryClient,
+  userId?: string | null,
+  excludeKeys: string[][] = []
+) {
   // Invalidate all user-related query keys
   const userQueryKeys = [
     ['profile'],
@@ -55,13 +60,21 @@ export function invalidateUserQueries(queryClient: QueryClient, userId?: string 
     );
   }
 
+  // Filter out excluded keys
+  const keysToInvalidate = userQueryKeys.filter((key) => {
+    return !excludeKeys.some((excludeKey) => {
+      // Check if the key matches the exclude pattern
+      return excludeKey.every((part, index) => key[index] === part);
+    });
+  });
+
   // Invalidate all matching queries
-  userQueryKeys.forEach((key) => {
+  keysToInvalidate.forEach((key) => {
     queryClient.invalidateQueries({ queryKey: key });
   });
 
   // Also remove from cache
-  userQueryKeys.forEach((key) => {
+  keysToInvalidate.forEach((key) => {
     queryClient.removeQueries({ queryKey: key });
   });
 }
