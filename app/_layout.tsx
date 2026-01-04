@@ -35,17 +35,24 @@ import {
   setSupabaseSession,
   ensureSupabaseSession,
 } from '../lib/supabase';
-import IncomingCallHandler from '../components/call/IncomingCallHandler';
+// ✅ OPTIMIZED: Lazy load heavy call components to reduce initial bundle size
+import { lazy, Suspense } from 'react';
+const IncomingCallHandler = lazy(
+  () => import('../components/call/IncomingCallHandler')
+);
+const ActiveCallOverlay = lazy(
+  () => import('@/components/call/ActiveCallOverlay')
+);
+import { GlobalLoadingOverlay } from '@/components/ui/GlobalLoadingOverlay';
+
 // ✅ NEW: Import notification setup with response listener
 import {
   setupNotificationHandler,
   requestNotificationPermissions,
   setupNotificationResponseListener,
 } from '@/lib/notificationSetup';
-// ✅ NEW: Import ActiveCallOverlay
-import ActiveCallOverlay from '@/components/call/ActiveCallOverlay';
 // ✅ NEW: Import notification handlers (extracted to separate file for better organization)
-import { createNotificationHandlers } from './_layout-notification-handlers';
+import { createNotificationHandlers } from '@/lib/_layout-notification-handlers';
 
 // Initialize Sentry (make it idempotent)
 try {
@@ -104,14 +111,15 @@ const queryClient = new QueryClient({
         }
         return failureCount < 1;
       },
-      refetchOnWindowFocus: false,
       networkMode: 'offlineFirst',
-      staleTime: 30 * 1000,
+      staleTime: 60 * 1000, // Increased from 30s to 60s - data stays fresh longer
       gcTime: 5 * 60 * 1000,
       // ✅ OPTIMIZED: Don't refetch on mount if data is fresh (within staleTime)
       // This prevents unnecessary queries on app startup
       refetchOnMount: false, // Use stale data if available, only refetch if stale
       refetchOnReconnect: true,
+      // ✅ OPTIMIZED: Don't refetch on window focus - reduces unnecessary network calls
+      refetchOnWindowFocus: false,
     },
     mutations: {
       retry: (failureCount, error: any) => {
@@ -172,15 +180,29 @@ function AutoAvailabilityWrapper({ children }: { children: React.ReactNode }) {
 
 // ✅ OPTIMIZED: Separate component for professional-only features
 // This only mounts when user is actually a professional
+// Deferred to prevent initial profile query on app startup
 function ProfessionalFeaturesWrapper({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // ✅ OPTIMIZED: Defer profile check - only check after initial render
+  const [shouldCheckProfile, setShouldCheckProfile] = useState(false);
   const { isProfessional, profileData } = useProfile();
 
+  // Defer profile check to after initial render
+  useEffect(() => {
+    // Small delay to allow app to render first
+    const timer = setTimeout(() => {
+      setShouldCheckProfile(true);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Only enable auto availability if profile check is done and user is professional
   useAutoAvailability({
-    enabled: isProfessional && !!profileData?.professional?.id,
+    enabled:
+      shouldCheckProfile && isProfessional && !!profileData?.professional?.id,
     setOnlineOnForeground: true,
     setOfflineOnBackground: true,
     backgroundDelay: 30000,
@@ -213,6 +235,8 @@ export default function RootLayout() {
   // ✅ Use ref to ensure setup only happens once
   const notificationSetupRef = useRef(false);
 
+  // ✅ OPTIMIZED: Defer notification setup to after initial render
+  // This allows app to render faster, notifications can initialize in background
   useEffect(() => {
     // ✅ Prevent duplicate setup
     if (notificationSetupRef.current) {
@@ -220,39 +244,42 @@ export default function RootLayout() {
       return;
     }
 
-    logger.info('[App] 🔧 Setting up notifications', {
-      timestamp: new Date().toISOString(),
-    });
+    // Defer notification setup slightly to prioritize UI rendering
+    const setupTimer = setTimeout(() => {
+      logger.info('[App] 🔧 Setting up notifications', {
+        timestamp: new Date().toISOString(),
+      });
 
-    notificationSetupRef.current = true;
+      notificationSetupRef.current = true;
 
-    // ✅ NOTE: Notification handler is already configured in services/notifications.service.ts
-    // setupNotificationHandler() is now a no-op for backward compatibility
-    // The handler in notifications.service.ts handles incoming call suppression in foreground
+      // ✅ NOTE: Notification handler is already configured in services/notifications.service.ts
+      // setupNotificationHandler() is now a no-op for backward compatibility
+      // The handler in notifications.service.ts handles incoming call suppression in foreground
 
-    // Request permissions (async, non-blocking)
-    (async () => {
-      try {
-        const granted = await requestNotificationPermissions();
-        if (granted) {
-          logger.info('[App] ✅ Notification permissions granted', {
-            timestamp: new Date().toISOString(),
-          });
-        } else {
-          logger.warn('[App] ⚠️ Notification permissions denied', {
-            timestamp: new Date().toISOString(),
-          });
-        }
-      } catch (error) {
-        logger.error(
-          '[App] ❌ Failed to request notification permissions',
-          error,
-          {
-            timestamp: new Date().toISOString(),
+      // Request permissions (async, non-blocking)
+      (async () => {
+        try {
+          const granted = await requestNotificationPermissions();
+          if (granted) {
+            logger.info('[App] ✅ Notification permissions granted', {
+              timestamp: new Date().toISOString(),
+            });
+          } else {
+            logger.warn('[App] ⚠️ Notification permissions denied', {
+              timestamp: new Date().toISOString(),
+            });
           }
-        );
-      }
-    })();
+        } catch (error) {
+          logger.error(
+            '[App] ❌ Failed to request notification permissions',
+            error,
+            {
+              timestamp: new Date().toISOString(),
+            }
+          );
+        }
+      })();
+    }, 100); // Small delay to allow initial render
 
     // ✅ NEW: Setup notification response listener
     // ✅ REFACTORED: Extract notification handlers to separate file
@@ -273,7 +300,8 @@ export default function RootLayout() {
     );
 
     return () => {
-      // Cleanup notification listener
+      // Cleanup: clear timeout and remove notification listener
+      clearTimeout(setupTimer);
       if (notificationSubscription) {
         notificationSubscription.remove();
       }
@@ -402,16 +430,23 @@ export default function RootLayout() {
     };
   }, []);
 
+  // ✅ OPTIMIZED: Font loading with error handling
+  // Fonts are loaded asynchronously, app can render with system fonts first
   const [fontsLoaded, fontError] = useFonts({
     'Inter-Regular': Inter_400Regular,
     'Inter-Medium': Inter_500Medium,
     'Inter-Bold': Inter_700Bold,
   });
 
+  // ✅ OPTIMIZED: Allow app to render even if fonts fail to load
+  // System fonts will be used as fallback
+
   const splashHiddenRef = useRef(false);
 
+  // ✅ OPTIMIZED: Faster splash screen hiding
+  // Reduced MAX_WAIT_TIME and more aggressive hiding strategy
   useEffect(() => {
-    const MAX_WAIT_TIME = 1000;
+    const MAX_WAIT_TIME = 500; // Reduced from 1000ms to 500ms
     const startTime = Date.now();
 
     const hideSplash = () => {
@@ -433,10 +468,15 @@ export default function RootLayout() {
       const elapsed = Date.now() - startTime;
       const fontsReady = fontsLoaded || fontError || fontForcedReady;
 
-      if ((fontsReady && i18nReady) || elapsed >= MAX_WAIT_TIME) {
-        if (elapsed >= MAX_WAIT_TIME && (!fontsReady || !i18nReady)) {
-          if (!fontsReady) setFontForcedReady(true);
-          if (!i18nReady) setI18nReady(true);
+      // ✅ OPTIMIZED: Hide splash as soon as fonts are ready (i18n can load in background)
+      // Don't wait for i18n - it's not critical for initial render
+      if (fontsReady || elapsed >= MAX_WAIT_TIME) {
+        if (elapsed >= MAX_WAIT_TIME && !fontsReady) {
+          setFontForcedReady(true);
+        }
+        // i18n is not blocking - set ready if not already set
+        if (!i18nReady) {
+          setI18nReady(true);
         }
         hideSplash();
       }
@@ -455,7 +495,7 @@ export default function RootLayout() {
     const timeout2 = setTimeout(() => {
       clearInterval(interval);
       if (!splashHiddenRef.current) hideSplash();
-    }, MAX_WAIT_TIME + 500);
+    }, MAX_WAIT_TIME + 200); // Reduced from 500ms to 200ms
 
     return () => {
       clearInterval(interval);
@@ -464,31 +504,39 @@ export default function RootLayout() {
     };
   }, [fontsLoaded, fontError, fontForcedReady, i18nReady]);
 
+  // ✅ OPTIMIZED: Defer i18n initialization to after initial render
+  // This allows app to render faster, i18n can load in background
   useEffect(() => {
     let mounted = true;
     let timeoutId: number | null = null;
 
+    // Set ready immediately to allow app to render
+    // i18n will load in background
     setI18nReady(true);
 
-    (async () => {
-      try {
-        const initPromise = initI18n();
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutId = setTimeout(() => {
-            reject(new Error('i18n initialization timeout'));
-          }, 1000);
-        });
+    // Defer actual initialization slightly to prioritize UI rendering
+    const initTimer = setTimeout(() => {
+      (async () => {
+        try {
+          const initPromise = initI18n();
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => {
+              reject(new Error('i18n initialization timeout'));
+            }, 2000); // Increased timeout since it's deferred
+          });
 
-        await Promise.race([initPromise, timeoutPromise]);
-        if (mounted && timeoutId) clearTimeout(timeoutId);
-      } catch (error) {
-        if (timeoutId) clearTimeout(timeoutId);
-        logger.error('[App] ❌ Failed to initialize i18n', error);
-      }
-    })();
+          await Promise.race([initPromise, timeoutPromise]);
+          if (mounted && timeoutId) clearTimeout(timeoutId);
+        } catch (error) {
+          if (timeoutId) clearTimeout(timeoutId);
+          logger.error('[App] ❌ Failed to initialize i18n', error);
+        }
+      })();
+    }, 50); // Small delay to allow initial render
 
     return () => {
       mounted = false;
+      clearTimeout(initTimer);
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, []);
@@ -548,11 +596,17 @@ export default function RootLayout() {
                 <OfflineBanner />
                 <ToastStack />
 
-                {/* ✅ Incoming Call Handler - Shows modal for incoming calls */}
-                <IncomingCallHandler />
+                {/* ✅ OPTIMIZED: Lazy loaded call components - reduces initial bundle size */}
+                <Suspense fallback={null}>
+                  {/* ✅ Incoming Call Handler - Shows modal for incoming calls */}
+                  <IncomingCallHandler />
 
-                {/* ✅ Active Call Overlay - Shows custom UI during active call */}
-                <ActiveCallOverlay />
+                  {/* ✅ Active Call Overlay - Shows custom UI during active call */}
+                  <ActiveCallOverlay />
+                </Suspense>
+
+                {/* ✅ Global Loading Overlay - Shows loading when app is processing */}
+                <GlobalLoadingOverlay />
               </ProfessionalFeaturesWrapper>
             </AutoAvailabilityWrapper>
           </ThemeProvider>

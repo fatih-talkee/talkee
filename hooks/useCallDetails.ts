@@ -73,10 +73,33 @@ export function useCallDetails({
         currentUserId
       );
 
-      if (!metadata.otherUserId) {
+      // ✅ FIX: If otherUserId is not found, try to get it from call record
+      let finalOtherUserId = metadata.otherUserId;
+      if (!finalOtherUserId && metadata.callRecord) {
+        const isIncoming = metadata.callRecord.caller_id !== currentUserId;
+        finalOtherUserId = isIncoming
+          ? metadata.callRecord.caller_id
+          : metadata.callRecord.professional?.user_id || null;
+
+        if (finalOtherUserId) {
+          logger.info(
+            '[useCallDetails] 🔄 Found otherUserId from call record',
+            {
+              otherUserId: finalOtherUserId.substring(0, 20) + '...',
+              isIncoming,
+              timestamp: new Date().toISOString(),
+            }
+          );
+        }
+      }
+
+      if (!finalOtherUserId) {
         logger.warn(
           '[useCallDetails] ⚠️ Could not determine other party user ID',
           {
+            hasCall: !!call,
+            hasCallInvite: !!callInvite,
+            hasCallRecord: !!metadata.callRecord,
             timestamp: new Date().toISOString(),
           }
         );
@@ -100,7 +123,7 @@ export function useCallDetails({
         } else {
           // Outgoing call: otherUserId is the callee (professional)
           professionalId = await lookupProfessionalIdForCallee(
-            metadata.otherUserId
+            finalOtherUserId
           );
         }
       }
@@ -110,7 +133,7 @@ export function useCallDetails({
         supabase
           .from('users')
           .select('id, name, avatar_url')
-          .eq('id', metadata.otherUserId)
+          .eq('id', finalOtherUserId)
           .single(),
         supabase
           .from('professionals')
@@ -123,7 +146,7 @@ export function useCallDetails({
             categories(id, name)
           `
           )
-          .eq('user_id', metadata.otherUserId)
+          .eq('user_id', finalOtherUserId)
           .maybeSingle(),
       ]);
 
@@ -134,7 +157,7 @@ export function useCallDetails({
       if (userResult.error && userResult.error.code !== 'PGRST116') {
         logger.error('[useCallDetails] ❌ Failed to load user', {
           error: userResult.error.message,
-          userId: metadata.otherUserId,
+          userId: finalOtherUserId,
           timestamp: new Date().toISOString(),
         });
       }
@@ -147,7 +170,7 @@ export function useCallDetails({
           '[useCallDetails] ⚠️ Failed to load professional (expected if not professional)',
           {
             error: professionalResult.error.message,
-            userId: metadata.otherUserId,
+            userId: finalOtherUserId,
             timestamp: new Date().toISOString(),
           }
         );

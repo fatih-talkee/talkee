@@ -6,6 +6,8 @@
  */
 
 import { logger } from '@/lib/logger';
+import { router } from 'expo-router';
+import { setGlobalLoading } from '@/components/ui/GlobalLoadingOverlay';
 
 interface NotificationHandlersConfig {
   onAccept: (callId: string) => Promise<void>;
@@ -27,6 +29,10 @@ export function createNotificationHandlers(
       callId,
       timestamp: new Date().toISOString(),
     });
+
+    // ✅ NEW: Show loading indicator immediately
+    setGlobalLoading(true, 'Açılıyor...');
+    let loadingCleared = false;
 
     try {
       // Check if accept is already in progress
@@ -205,7 +211,100 @@ export function createNotificationHandlers(
                 totalElapsed: `${totalElapsed}ms`,
                 timestamp: new Date().toISOString(),
               });
+
+              // ✅ FIX: Navigate to active call screen after accepting
+              // Wait for call state to update, then navigate based on call state
+              const navigateToCallScreen = async () => {
+                try {
+                  // Wait a bit for call state to update
+                  await new Promise((resolve) => setTimeout(resolve, 800));
+
+                  const { twilioVoiceService } = await import('@/services/twilioVoice.service');
+                  const currentState = twilioVoiceService.getState();
+
+                  logger.info('[App] 🔍 Checking call state for navigation', {
+                    callId,
+                    status: currentState.status,
+                    hasCall: !!currentState.call,
+                    hasCallInvite: !!currentState.callInvite,
+                    timestamp: new Date().toISOString(),
+                  });
+
+                  // If call is connected or connecting, navigate to call screen
+                  if (
+                    currentState.status === 'connected' ||
+                    currentState.status === 'connecting' ||
+                    currentState.call
+                  ) {
+                    // Try to get call record to find professional_id for route
+                    try {
+                      const { supabase } = await import('@/lib/supabase');
+                      const { data: callRecord } = await supabase
+                        .from('calls')
+                        .select('id, professional_id')
+                        .or(`id.eq.${callId},call_sid.eq.${callId}`)
+                        .maybeSingle();
+
+                      if (callRecord?.professional_id) {
+                        logger.info('[App] 🧭 Navigating to active call screen', {
+                          callId,
+                          professionalId: callRecord.professional_id,
+                          status: currentState.status,
+                          timestamp: new Date().toISOString(),
+                        });
+                        router.push(`/call/${callRecord.professional_id}`);
+                      } else {
+                        // Fallback: navigate to home, ActiveCallOverlay will show
+                        logger.info(
+                          '[App] 🧭 Navigating to home (ActiveCallOverlay will show)',
+                          {
+                            callId,
+                            status: currentState.status,
+                            timestamp: new Date().toISOString(),
+                          }
+                        );
+                        router.push('/(tabs)/');
+                      }
+                    } catch (dbError) {
+                      logger.error('[App] ❌ Error fetching call record for navigation', dbError, {
+                        callId,
+                        timestamp: new Date().toISOString(),
+                      });
+                      // Fallback: navigate to home
+                      router.push('/(tabs)/');
+                    }
+                  } else {
+                    // Call not connected yet, navigate to home anyway (ActiveCallOverlay will show when connected)
+                    logger.info(
+                      '[App] 🧭 Navigating to home (call not connected yet, ActiveCallOverlay will show when connected)',
+                      {
+                        callId,
+                        status: currentState.status,
+                        timestamp: new Date().toISOString(),
+                      }
+                    );
+                    router.push('/(tabs)/');
+                  }
+                } catch (navError) {
+                  logger.error('[App] ❌ Navigation error', navError, {
+                    callId,
+                    errorMessage:
+                      navError instanceof Error ? navError.message : String(navError),
+                    timestamp: new Date().toISOString(),
+                  });
+                  // Fallback: navigate to home
+                  router.push('/(tabs)/');
+                }
+              };
+
+              // Start navigation in background (non-blocking)
+              navigateToCallScreen();
+
               ongoingAcceptOperations.delete(callId);
+              if (!loadingCleared) {
+                setGlobalLoading(false);
+                loadingCleared = true;
+              }
               break;
             } catch (acceptError) {
               const errorMessage =
@@ -280,8 +379,16 @@ export function createNotificationHandlers(
       }
 
       ongoingAcceptOperations.delete(callId);
+      if (!loadingCleared) {
+        setGlobalLoading(false);
+        loadingCleared = true;
+      }
     } catch (error) {
       const totalElapsed = Date.now() - acceptStartTime;
+      if (!loadingCleared) {
+        setGlobalLoading(false);
+        loadingCleared = true;
+      }
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('already in progress')) {
         logger.info(

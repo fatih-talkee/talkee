@@ -1,17 +1,26 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   ActivityIndicator,
+  AppState,
+  AppStateStatus,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Clock } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useInfiniteCallHistory, useCallHistoryCount } from '@/hooks/useCalls';
+import {
+  useInfiniteCallHistory,
+  useCallHistoryCount,
+  useInvalidateCallHistory,
+} from '@/hooks/useCalls';
+import { useTwilioVoice } from '@/hooks/useTwilioVoice';
 import {
   useBlockedUsers,
   useBlockUser,
@@ -22,14 +31,26 @@ import { useToast } from '@/lib/toastService';
 import type { CallWithRelations } from '@/types/database.types';
 import { CallStatus } from '@/types/database.types';
 import { PageLoading } from '@/components/ui/PageLoading';
+import { logger } from '@/lib/logger';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function CallHistoryScreen() {
   const { theme } = useTheme();
   const toast = useToast();
+  const queryClient = useQueryClient();
+  const invalidateCallHistory = useInvalidateCallHistory();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<
     'all' | 'completed' | 'missed' | 'cancelled'
   >('all');
+  
+  // ✅ FIX: Track last focus time to prevent excessive refetches
+  const lastFocusTimeRef = useRef<number>(0);
+  const MIN_REFETCH_INTERVAL_MS = 5000; // 5 seconds minimum between refetches
+  
+  // ✅ FIX: Listen to call state changes to invalidate cache when calls complete
+  const { callState } = useTwilioVoice();
+  const previousCallStatusRef = useRef<string | null>(null);
 
   // Fetch call history counts using optimized count queries
   const { data: allCount = 0 } = useCallHistoryCount(undefined);
@@ -64,9 +85,107 @@ export default function CallHistoryScreen() {
     isLoading,
     isFetching,
     error,
+    refetch: refetchHistory,
   } = useInfiniteCallHistory(
     filterStatus ? { status: filterStatus } : undefined
   );
+  
+  // ✅ FIX: Manual refetch function with throttling
+  const handleManualRefetch = useCallback(() => {
+    const now = Date.now();
+    const timeSinceLastFocus = now - lastFocusTimeRef.current;
+    
+    if (timeSinceLastFocus < MIN_REFETCH_INTERVAL_MS) {
+      logger.debug('[CallHistoryScreen] ⏭️ Skipping refetch (too soon)', {
+        timeSinceLastFocus: `${timeSinceLastFocus}ms`,
+        minInterval: `${MIN_REFETCH_INTERVAL_MS}ms`,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+    
+    lastFocusTimeRef.current = now;
+    logger.debug('[CallHistoryScreen] 🔄 Manual refetch triggered', {
+      timestamp: new Date().toISOString(),
+    });
+    
+    // Refetch all count queries and history
+    queryClient.refetchQueries({ queryKey: ['calls', 'history'] });
+  }, [queryClient]);
+  
+  // ✅ FIX: Refetch on screen focus (with throttling)
+  useFocusEffect(
+    useCallback(() => {
+      logger.debug('[CallHistoryScreen] 📱 Screen focused', {
+        timestamp: new Date().toISOString(),
+      });
+      
+      // Only refetch if data is stale (older than 2 minutes)
+      const queryState = queryClient.getQueryState(['calls', 'history', 'infinite']);
+      const isStale = queryState?.dataUpdatedAt
+        ? Date.now() - queryState.dataUpdatedAt > 1000 * 60 * 2
+        : true;
+      
+      if (isStale) {
+        logger.debug('[CallHistoryScreen] 🔄 Data is stale, refetching', {
+          dataUpdatedAt: queryState?.dataUpdatedAt
+            ? new Date(queryState.dataUpdatedAt).toISOString()
+            : 'never',
+          timestamp: new Date().toISOString(),
+        });
+        handleManualRefetch();
+      } else {
+        logger.debug('[CallHistoryScreen] ✅ Data is fresh, skipping refetch', {
+          dataUpdatedAt: queryState?.dataUpdatedAt
+            ? new Date(queryState.dataUpdatedAt).toISOString()
+            : 'never',
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }, [handleManualRefetch, queryClient])
+  );
+  
+  // ✅ FIX: Listen to app state changes (foreground/background)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        logger.debug('[CallHistoryScreen] 📱 App became active', {
+          timestamp: new Date().toISOString(),
+        });
+        // Don't auto-refetch on app state change - let useFocusEffect handle it
+      }
+    });
+    
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+  
+  // ✅ FIX: Invalidate cache when call completes (status changes from 'connected' to 'idle')
+  useEffect(() => {
+    const currentStatus = callState.status;
+    const previousStatus = previousCallStatusRef.current;
+    
+    // If call just completed (was connected, now idle), invalidate cache
+    if (previousStatus === 'connected' && currentStatus === 'idle') {
+      logger.debug('[CallHistoryScreen] 📞 Call completed, invalidating cache', {
+        previousStatus,
+        currentStatus,
+        timestamp: new Date().toISOString(),
+      });
+      
+      // Invalidate cache after a short delay to allow webhook to process
+      setTimeout(() => {
+        invalidateCallHistory();
+        logger.debug('[CallHistoryScreen] ✅ Cache invalidated after call completion', {
+          timestamp: new Date().toISOString(),
+        });
+      }, 2000); // 2 seconds delay to allow webhook to update DB
+    }
+    
+    // Update previous status
+    previousCallStatusRef.current = currentStatus;
+  }, [callState.status, invalidateCallHistory]);
 
   // ✅ Flatten pages into a single array (useInfiniteQuery provides pages array)
   // React Query best practice: Only depend on infiniteData, not isFetching
@@ -84,6 +203,32 @@ export default function CallHistoryScreen() {
       fetchNextPage();
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  
+  // ✅ FIX: Manual refresh handler with cache invalidation
+  const handleRefresh = useCallback(async () => {
+    logger.debug('[CallHistoryScreen] 🔄 Manual refresh triggered', {
+      timestamp: new Date().toISOString(),
+    });
+    
+    try {
+      // Invalidate cache first
+      invalidateCallHistory();
+      
+      // Then refetch all queries
+      await Promise.all([
+        refetchHistory(),
+        queryClient.refetchQueries({ queryKey: ['calls', 'history', 'count'] }),
+      ]);
+      
+      logger.debug('[CallHistoryScreen] ✅ Refresh completed', {
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error('[CallHistoryScreen] ❌ Refresh failed', error, {
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }, [invalidateCallHistory, refetchHistory, queryClient]);
 
   // Fetch blocked users
   const { data: blockedUsers = [] } = useBlockedUsers();
@@ -220,6 +365,16 @@ export default function CallHistoryScreen() {
         showsVerticalScrollIndicator={false}
         onEndReached={loadMore}
         onEndReachedThreshold={0.5}
+        refreshing={isFetching && !isLoading}
+        onRefresh={handleRefresh}
+        refreshControl={
+          <RefreshControl
+            refreshing={isFetching && !isLoading}
+            onRefresh={handleRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
         ListEmptyComponent={
           isLoading ? null : (
             <View style={styles.emptyState}>

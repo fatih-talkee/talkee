@@ -11,6 +11,8 @@ import { logger } from '@/lib/logger';
 
 export function useProfile() {
   const queryClient = useQueryClient();
+  // ✅ FIX: Track processed users to prevent duplicate cache invalidations
+  const processedUsersRef = useRef<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const previousUserIdRef = useRef<string | null>(null);
@@ -98,21 +100,43 @@ export function useProfile() {
             clearUserCache(queryClient).catch((err) => {
               logger.error('[useProfile] Cache clear error:', err);
             });
+            // Clear processed users on logout
+            processedUsersRef.current.clear();
           } else if (
             previousUserId &&
             newUserId &&
             previousUserId !== newUserId
           ) {
             // User switched: Clear cache
-            logger.info('[useProfile] User switched, clearing cache');
+            logger.info('[useProfile] User switched, clearing cache', {
+              previousUserId: previousUserId.substring(0, 8) + '...',
+              newUserId: newUserId.substring(0, 8) + '...',
+            });
             clearUserCache(queryClient).catch((err) => {
               logger.error('[useProfile] Cache clear error:', err);
             });
+            // Clear processed users on switch
+            processedUsersRef.current.clear();
           } else if (!previousUserId && newUserId) {
-            // New login: Invalidate to ensure fresh data
-            logger.info('[useProfile] New user logged in, invalidating cache');
-            invalidateUserQueries(queryClient, newUserId);
+            // New login: Invalidate to ensure fresh data (only once)
+            // ✅ FIX: Check if we already processed this user to prevent duplicate invalidations
+            if (!processedUsersRef.current.has(newUserId)) {
+              logger.info('[useProfile] New user logged in, invalidating cache', {
+                userId: newUserId.substring(0, 8) + '...',
+              });
+              invalidateUserQueries(queryClient, newUserId);
+              processedUsersRef.current.add(newUserId);
+            } else {
+              logger.debug('[useProfile] ⏭️ Already processed this user, skipping cache invalidation', {
+                userId: newUserId.substring(0, 8) + '...',
+              });
+            }
           }
+        } else if (previousUserId === newUserId && event === 'INITIAL_SESSION') {
+          // ✅ FIX: Skip cache invalidation for INITIAL_SESSION if user hasn't changed
+          logger.debug('[useProfile] ⏭️ INITIAL_SESSION for same user, skipping cache invalidation', {
+            userId: newUserId?.substring(0, 8) + '...',
+          });
         }
       }, 0);
     });

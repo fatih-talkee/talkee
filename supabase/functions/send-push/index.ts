@@ -85,10 +85,18 @@ serve(async (req) => {
       title: body.title,
       body: body.body?.substring(0, 50) + '...',
       has_data: !!body.data,
+      data: body.data,
+      dataKeys: body.data ? Object.keys(body.data) : [],
+      hasCallId: !!(body.data?.call_id),
+      callId: body.data?.call_id,
+      hasCallSid: !!(body.data?.call_sid),
+      callSid: body.data?.call_sid,
+      dataType: body.data?.type,
       sound: body.sound,
       priority: body.priority,
       channelId: body.channelId,
       category: body.category,
+      timestamp: new Date().toISOString(),
     });
 
     let user_id: string = body.user_id;
@@ -285,7 +293,19 @@ serve(async (req) => {
     }
 
     // Create messages
-    console.log('📝 [SEND-PUSH] Creating push messages...');
+    console.log('📝 [SEND-PUSH] Creating push messages...', {
+      ValidTokensCount: validTokens.length,
+      Title: title,
+      Body: messageBody,
+      Data: data,
+      DataKeys: data ? Object.keys(data) : [],
+      HasCallId: !!(data?.call_id),
+      CallId: data?.call_id,
+      HasCallSid: !!(data?.call_sid),
+      CallSid: data?.call_sid,
+      DataType: data?.type,
+      Timestamp: new Date().toISOString(),
+    });
     const messages: PushMessage[] = validTokens.map((token) => ({
       to: token,
       sound: sound ?? 'default',

@@ -1,9 +1,7 @@
 import { Voice, Call } from '@twilio/voice-react-native-sdk';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
-import { AppState } from 'react-native';
 import { callsService } from '@/services/calls.service';
-import { notificationsService } from '@/services/notifications.service';
 import { usersService } from '@/services/supabase/user.service';
 import { CallStatus as DbCallStatus, CallType } from '@/types/database.types';
 import { PermissionManager, CallSidExtractor, getCallState } from '../utils';
@@ -134,47 +132,20 @@ export class OutgoingCallHandler {
         timestamp: new Date().toISOString(),
       });
 
-      // ✅ Send push notification ONLY if app is in background/closed
-      const currentAppState = AppState.currentState;
-      const isAppInForeground = currentAppState === 'active';
-
-      logger.info('[OutgoingCallHandler] 🔍 Push notification decision', {
-        debugId,
-        callId: callRecord.id,
-        currentAppState,
-        isAppInForeground,
-        callType: type,
-        urgent,
-        professionalUserId,
-        timestamp: new Date().toISOString(),
-      });
-
-      if (!isAppInForeground) {
-        await this.sendPushNotification(
-          {
-            debugId,
-            callId: callRecord.id,
-            professionalUserId,
-            callerId,
-            type,
-            urgent,
-          },
-          currentUser
-        );
-      } else {
-        logger.info(
-          '[OutgoingCallHandler] ℹ️ Skipping push notification (app is foreground)',
-          {
-            debugId,
-            callId: callRecord.id,
-            note: 'IncomingCallHandler modal will show instead',
-            appState: currentAppState,
-            callType: type,
-            urgent,
-            timestamp: new Date().toISOString(),
-          }
-        );
-      }
+      // ✅ REMOVED: Push notification sending
+      // Twilio Voice SDK already sends its own push notification when an incoming call arrives.
+      // Sending an additional push notification would be redundant and could cause duplicate notifications.
+      // The Twilio push notification is handled by the Twilio Voice SDK and triggers the CallInvite event.
+      logger.debug(
+        '[OutgoingCallHandler] ⏭️ Skipping push notification - Twilio SDK handles incoming call push',
+        {
+          debugId,
+          callId: callRecord.id,
+          professionalUserId,
+          note: 'Twilio Voice SDK sends push notification automatically when call invite is received',
+          timestamp: new Date().toISOString(),
+        }
+      );
 
       if (!voice) {
         logger.error(
@@ -301,88 +272,6 @@ export class OutgoingCallHandler {
       });
 
       throw error;
-    }
-  }
-
-  private async sendPushNotification(
-    params: {
-      debugId?: string;
-      callId: string;
-      professionalUserId: string;
-      callerId: string;
-      type: 'voice' | 'video';
-      urgent: boolean;
-    },
-    currentUser: any
-  ): Promise<void> {
-    const pushStartTime = Date.now();
-    try {
-      logger.info(
-        '[OutgoingCallHandler] 🔔 Sending incoming call notification (app is background)',
-        {
-          debugId: params.debugId,
-          callId: params.callId,
-          professionalUserId: params.professionalUserId,
-          callType: params.type,
-          urgent: params.urgent,
-          timestamp: new Date().toISOString(),
-        }
-      );
-
-      const callerName = currentUser?.name || 'Someone';
-      const callerAvatar = currentUser?.avatar_url || null;
-
-      logger.info('[OutgoingCallHandler] 👤 Caller info fetched', {
-        debugId: params.debugId,
-        callerName,
-        callerId: params.callerId,
-        hasAvatar: !!callerAvatar,
-        timestamp: new Date().toISOString(),
-      });
-
-      const pushData = {
-        type: 'incoming_call',
-        call_id: params.callId,
-        caller_id: params.callerId,
-        caller_name: callerName,
-        caller_avatar: callerAvatar,
-        call_type: params.type,
-        urgent: params.urgent,
-        sent_at: new Date().toISOString(),
-      };
-
-      const pushResult = await notificationsService.sendPushNotification(
-        params.professionalUserId,
-        '📞 Incoming Call',
-        `${callerName} is calling you`,
-        pushData,
-        'INCOMING_CALL',
-        'talkee-default-v2'
-      );
-
-      const totalPushElapsed = Date.now() - pushStartTime;
-      logger.info('[OutgoingCallHandler] ✅ Push notification sent', {
-        debugId: params.debugId,
-        callId: params.callId,
-        success: pushResult,
-        totalPushElapsed: `${totalPushElapsed}ms`,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (pushError) {
-      const totalPushElapsed = Date.now() - pushStartTime;
-      logger.error(
-        '[OutgoingCallHandler] ❌ Push notification error',
-        pushError,
-        {
-          debugId: params.debugId,
-          callId: params.callId,
-          professionalUserId: params.professionalUserId,
-          errorMessage:
-            pushError instanceof Error ? pushError.message : String(pushError),
-          totalPushElapsed: `${totalPushElapsed}ms`,
-          timestamp: new Date().toISOString(),
-        }
-      );
     }
   }
 

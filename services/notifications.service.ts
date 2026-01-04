@@ -2266,7 +2266,13 @@ class NotificationsService {
               timestamp: new Date().toISOString(),
             }
           );
-          return; // ✅ CRITICAL: Don't navigate - setupNotificationResponseListener will handle it
+          // ✅ CRITICAL: Don't navigate - setupNotificationResponseListener will handle it
+          // But don't return here - let setupNotificationResponseListener also receive the event
+          // The return is moved to after the navigation logic to allow both listeners to process
+          // However, we still need to skip navigation, so we'll set a flag
+          // Actually, we should just return here to skip navigation, but setupNotificationResponseListener
+          // should still be called because it's a separate listener registration
+          return; // Skip navigation, but setupNotificationResponseListener will still be called
         }
 
         // Ignore browser referrer taps (these are not real notifications, just browser metadata)

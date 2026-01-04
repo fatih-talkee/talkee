@@ -99,8 +99,10 @@ export interface AcceptIncomingCallParams {
     debugId?: string,
     callSid?: string
   ) => Promise<void>;
-  startDurationTracking: (timestamp: number) => void;
-  startPerMinuteBilling: (ratePerMinute: number) => void;
+  // ✅ REMOVED: startDurationTracking and startPerMinuteBilling
+  // These are now handled by CallEventListener when the 'connected' event fires
+  // This ensures duration tracking only starts when the call is actually connected,
+  // not when accept is called (which may happen before the call is fully connected)
   getCallRepository: (debugId?: string) => CallRepository;
 }
 

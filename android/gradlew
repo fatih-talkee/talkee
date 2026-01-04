@@ -88,6 +88,21 @@ APP_BASE_NAME=${0##*/}
 # Discard cd standard output in case $CDPATH is set (https://github.com/gradle/gradle/issues/25036)
 APP_HOME=$( cd -P "${APP_HOME:-./}" > /dev/null && printf '%s\n' "$PWD" ) || exit
 
+# Source nvm to ensure node is available for Gradle and Expo plugins
+export NVM_DIR="$HOME/.nvm"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  . "$NVM_DIR/nvm.sh"
+fi
+# Ensure node is in PATH (fallback if nvm.sh doesn't work or nvm isn't loaded)
+if [ -d "$HOME/.nvm/versions/node/v22.12.0/bin" ]; then
+  export PATH="$HOME/.nvm/versions/node/v22.12.0/bin:$PATH"
+fi
+# Verify node is available (for debugging)
+if ! command -v node >/dev/null 2>&1; then
+  warn "WARNING: node command not found in PATH. Expo autolinking may fail."
+  warn "PATH: $PATH"
+fi
+
 # Use the maximum available, or set MAX_FD != -1 to use that value.
 MAX_FD=maximum
 

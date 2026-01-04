@@ -271,11 +271,11 @@ async function lookupByCallerProfessional(
 /**
  * Extract other user ID from call state
  */
-function extractOtherUserId(
+async function extractOtherUserId(
   call: Call | null,
   callInvite: CallInvite | null,
   currentUserId: string
-): { otherUserId: string | null; isIncomingCall: boolean } {
+): Promise<{ otherUserId: string | null; isIncomingCall: boolean }> {
   // For incoming calls: get from CallInvite
   if (callInvite) {
     const fromField = getCallInviteFrom(callInvite);
@@ -285,8 +285,32 @@ function extractOtherUserId(
     }
   }
 
-  // For outgoing calls: get from call parameters
+  // For outgoing calls: try to get from call record first (more reliable)
   if (call) {
+    const callSid = CallSidExtractor.extractFromCall(call, 'extractOtherUserId');
+    if (callSid) {
+      const callRecord = await lookupByCallSid(callSid);
+      if (callRecord) {
+        // Outgoing call: currentUserId is caller, so otherUserId is professional's user_id
+        if (callRecord.caller_id === currentUserId) {
+          // Get professional's user_id
+          if (callRecord.professional?.user_id) {
+            return { otherUserId: callRecord.professional.user_id, isIncomingCall: false };
+          }
+          // Fallback: try to fetch professional's user_id
+          const { data: prof } = await supabase
+            .from('professionals')
+            .select('user_id')
+            .eq('id', callRecord.professional_id)
+            .maybeSingle();
+          if (prof?.user_id) {
+            return { otherUserId: prof.user_id, isIncomingCall: false };
+          }
+        }
+      }
+    }
+
+    // Fallback: try to get from call parameters
     let customParams: Record<string, string> = {};
     try {
       const callAny = call as any;
@@ -384,7 +408,7 @@ export async function lookupCallMetadata(
 
     // Step 4: If still no call record, extract from call state
     if (!otherUserId) {
-      const extracted = extractOtherUserId(call, callInvite, currentUserId);
+      const extracted = await extractOtherUserId(call, callInvite, currentUserId);
       otherUserId = extracted.otherUserId;
       isIncomingCall = extracted.isIncomingCall;
     }

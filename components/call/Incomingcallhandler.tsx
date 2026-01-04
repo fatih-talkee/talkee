@@ -145,14 +145,23 @@ export default function IncomingCallHandler() {
       return;
     }
 
-    const shouldShow = callState.status === 'ringing' && !!callState.callInvite;
+    // ✅ FIX: Show modal if we have a callInvite, even if status is not exactly 'ringing'
+    // This handles cases where status might be 'connecting' or other states but callInvite exists
+    const shouldShow = !!callState.callInvite && 
+      (callState.status === 'ringing' || callState.status === 'connecting');
 
-    logger.debug('[IncomingCallHandler] 🔍 Checking if should show modal', {
+    logger.info('[IncomingCallHandler] 🔍 Checking if should show modal', {
       status: callState.status,
       hasCallInvite: !!callState.callInvite,
       hasCurrentUser: !!currentUser,
       shouldShow,
       currentShowModal: showModal,
+      callInviteSid: callState.callInvite
+        ? CallSidExtractor.extractFromCallInvite(
+            callState.callInvite,
+            'IncomingCallHandler-check'
+          )?.substring(0, 20) + '...'
+        : null,
       timestamp: new Date().toISOString(),
     });
 
@@ -524,19 +533,23 @@ export default function IncomingCallHandler() {
                 </LinearGradient>
               </Pressable>
 
-              {/* Accept Button */}
+              {/* Accept Button - Always render, but disable if no callInvite */}
               <Pressable
                 onPress={handleAccept}
-                disabled={loading || !callDetails}
+                disabled={loading || !callState.callInvite}
                 style={({ pressed }) => [
                   styles.button,
                   styles.acceptButton,
                   pressed && styles.buttonPressed,
-                  (!callDetails || loading) && styles.buttonDisabled,
+                  (loading || !callState.callInvite) && styles.buttonDisabled,
                 ]}
               >
                 <LinearGradient
-                  colors={[theme.colors.success, theme.colors.success + 'DD']}
+                  colors={
+                    loading || !callState.callInvite
+                      ? [theme.colors.textMuted, theme.colors.textMuted + 'DD']
+                      : [theme.colors.success, theme.colors.success + 'DD']
+                  }
                   style={styles.buttonGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
@@ -682,4 +695,3 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 });
-

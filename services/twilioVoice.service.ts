@@ -20,6 +20,7 @@ import {
   VoiceEventListenerDependencies,
 } from './twilioVoice/types';
 import { OUTGOING_CALL_TIMEOUT_MS } from './twilioVoice/constants';
+import { PermissionManager } from './twilioVoice/utils';
 
 class TwilioVoiceService {
   private voice: Voice | null = null;
@@ -268,6 +269,23 @@ class TwilioVoiceService {
           throw new Error('Voice SDK not initialized');
         }
 
+        // ✅ FIX: Ensure microphone permission before registering (Android)
+        try {
+          await PermissionManager.ensureMicrophonePermission('register');
+        } catch (permissionError) {
+          logger.warn(
+            '[TwilioVoice] ⚠️ Microphone permission not granted, but continuing with register',
+            {
+              errorMessage:
+                permissionError instanceof Error
+                  ? permissionError.message
+                  : String(permissionError),
+              timestamp: new Date().toISOString(),
+            }
+          );
+          // Don't throw - let register attempt proceed, it will handle the error
+        }
+
         const tokenStartTime = Date.now();
         const token = await this.getAccessToken();
         const tokenElapsed = Date.now() - tokenStartTime;
@@ -295,6 +313,29 @@ class TwilioVoiceService {
 
         const errorMessage =
           error instanceof Error ? error.message : String(error);
+        
+        // ✅ FIX: Handle PermissionDeniedError (31401) gracefully
+        if (
+          errorMessage.includes('31401') ||
+          errorMessage.includes('PermissionDeniedError') ||
+          errorMessage.includes('Missing permissions')
+        ) {
+          logger.error(
+            '[TwilioVoice] ❌ Registration failed - Missing permissions (31401)',
+            error,
+            {
+              elapsed: `${totalElapsed}ms`,
+              errorMessage,
+              note: 'Device cannot receive incoming calls without microphone permission',
+              timestamp: new Date().toISOString(),
+            }
+          );
+          // Don't mark as registered - user needs to grant permission
+          this.isRegistered = false;
+          // Don't throw - allow app to continue, but incoming calls won't work
+          return;
+        }
+
         if (
           errorMessage.includes('31409') ||
           errorMessage.includes('Conflict')
@@ -565,10 +606,10 @@ class TwilioVoiceService {
         debugId?: string,
         callSid?: string
       ) => this.updateCallOnConnect(callId, debugId, callSid),
-      startDurationTracking: (timestamp: number) =>
-        this.startDurationTracking(timestamp),
-      startPerMinuteBilling: (ratePerMinute: number) =>
-        this.startPerMinuteBilling(ratePerMinute),
+      // ✅ REMOVED: startDurationTracking and startPerMinuteBilling
+      // These are now handled by CallEventListener when the 'connected' event fires
+      // This ensures duration tracking only starts when the call is actually connected,
+      // not when accept is called (which may happen before the call is fully connected)
       getCallRepository: (debugId?: string) => this.getCallRepository(debugId),
     });
 
@@ -907,7 +948,18 @@ class TwilioVoiceService {
     }
 
     const onDurationUpdate: DurationUpdateCallback = (duration: number) => {
-      this.updateState({ duration });
+      // ✅ FIX: Only update duration if call is actually connected
+      // This prevents duration from updating during ringing/connecting states
+      const currentState = this.stateManager.getState();
+      if (currentState.status === 'connected') {
+        this.updateState({ duration });
+      } else {
+        logger.debug('[TwilioVoice] ⏭️ Skipping duration update - call not connected', {
+          currentStatus: currentState.status,
+          duration,
+          timestamp: new Date().toISOString(),
+        });
+      }
     };
 
     this.durationTracker = new DurationTracker(onDurationUpdate);

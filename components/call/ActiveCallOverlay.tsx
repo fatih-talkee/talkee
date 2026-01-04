@@ -42,7 +42,7 @@ import { useCallDetails } from '@/hooks/useCallDetails';
  */
 export default function ActiveCallOverlay() {
   const { theme } = useTheme();
-  const { callState, toggleMute, disconnect } = useTwilioVoice();
+  const { callState, toggleMute, disconnect, rejectIncomingCall } = useTwilioVoice();
   const { user: currentUser } = useProfile();
   const [showOverlay, setShowOverlay] = useState(false);
   const [minimized, setMinimized] = useState(false);
@@ -155,13 +155,26 @@ export default function ActiveCallOverlay() {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       logger.info('[ActiveCallOverlay] 📞 Ending call', {
+        status: callState.status,
+        hasCall: !!callState.call,
+        hasCallInvite: !!callState.callInvite,
         timestamp: new Date().toISOString(),
       });
-      await disconnect();
+
+      // ✅ FIX: If ringing (has callInvite but no active call), reject the callInvite
+      if (callState.status === 'ringing' && callState.callInvite && !callState.call) {
+        logger.info('[ActiveCallOverlay] 📞 Rejecting incoming call (ringing state)', {
+          timestamp: new Date().toISOString(),
+        });
+        await rejectIncomingCall();
+      } else {
+        // Otherwise, disconnect the active call
+        await disconnect();
+      }
     } catch (error) {
       logger.error('[ActiveCallOverlay] ❌ Failed to end call', error);
     }
-  }, [disconnect]);
+  }, [disconnect, rejectIncomingCall, callState.status, callState.call, callState.callInvite]);
 
   const handleMinimize = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -542,7 +555,7 @@ export default function ActiveCallOverlay() {
                 ) : null}
               </View>
 
-              {/* Call Stats */}
+              {/* Call Stats - Only show duration/cost when connected */}
               {callState.status === 'connected' ? (
                 <View
                   style={[

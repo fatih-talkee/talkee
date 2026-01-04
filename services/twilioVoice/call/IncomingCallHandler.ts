@@ -23,8 +23,6 @@ export class IncomingCallHandler {
       setupCallListeners,
       updateState,
       updateCallOnConnect,
-      startDurationTracking,
-      startPerMinuteBilling,
       getCallRepository,
     } = params;
 
@@ -179,15 +177,19 @@ export class IncomingCallHandler {
           const callSid = CallSidExtractor.extractFromCallInvite(callInvite, debugId);
           await updateCallOnConnect(callId, debugId, callSid || undefined);
 
-          // Also update state and start tracking
-          updateState({ status: 'connected' });
-          startDurationTracking(Date.now());
-          if (ratePerMinute && ratePerMinute > 0) {
-            startPerMinuteBilling(ratePerMinute);
-          }
-          if (ratePerMinute && userBalance !== undefined) {
-            BillingService.startTracking(call, ratePerMinute, userBalance);
-          }
+          // ✅ REMOVED: Don't update state to 'connected' or start duration tracking here
+          // CallEventListener will handle this when the 'connected' event fires
+          // This ensures duration tracking only starts when the call is actually connected,
+          // not when accept is called (which may happen before the call is fully connected)
+          // The same applies to billing - CallEventListener will start it on the connected event
+          logger.debug(
+            '[IncomingCallHandler] ⏭️ Skipping state update and duration tracking - CallEventListener will handle on connected event',
+            {
+              debugId,
+              callId,
+              timestamp: new Date().toISOString(),
+            }
+          );
         }
       } catch (stateCheckError) {
         logger.warn(
