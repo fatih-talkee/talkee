@@ -11,8 +11,8 @@
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
-		68F4D2B816E748F5AE2D861B /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 6D211524B3C94D518358B684 /* GoogleService-Info.plist */; };
-		0F76B00F97DD448BA7F789AB /* noop-file.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BACB785AA754F60AA37DFE6 /* noop-file.swift */; };
+		108BA7056822479BBD28B0B6 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = C35980BE0F824C6C9869653C /* GoogleService-Info.plist */; };
+		27AE192266F646038E789925 /* noop-file.swift in Sources */ = {isa = PBXBuildFile; fileRef = 092424A63AC6494C9BC5D8AF /* noop-file.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -24,8 +24,8 @@
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Talkee/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Talkee-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Talkee-Bridging-Header.h"; path = "Talkee/Talkee-Bridging-Header.h"; sourceTree = "<group>"; };
-		6D211524B3C94D518358B684 /* GoogleService-Info.plist */ = {isa = PBXFileReference; name = "GoogleService-Info.plist"; path = "Talkee/GoogleService-Info.plist"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = text.plist.xml; explicitFileType = undefined; includeInIndex = 0; };
-		1BACB785AA754F60AA37DFE6 /* noop-file.swift */ = {isa = PBXFileReference; name = "noop-file.swift"; path = "Talkee/noop-file.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
+		C35980BE0F824C6C9869653C /* GoogleService-Info.plist */ = {isa = PBXFileReference; name = "GoogleService-Info.plist"; path = "Talkee/GoogleService-Info.plist"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = text.plist.xml; explicitFileType = undefined; includeInIndex = 0; };
+		092424A63AC6494C9BC5D8AF /* noop-file.swift */ = {isa = PBXFileReference; name = "noop-file.swift"; path = "Talkee/noop-file.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -48,8 +48,8 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				6D211524B3C94D518358B684 /* GoogleService-Info.plist */,
-				1BACB785AA754F60AA37DFE6 /* noop-file.swift */,
+				C35980BE0F824C6C9869653C /* GoogleService-Info.plist */,
+				092424A63AC6494C9BC5D8AF /* noop-file.swift */,
 			);
 			name = Talkee;
 			sourceTree = "<group>";
@@ -112,7 +112,7 @@
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				E36BB4303B6A4816B95F9A60 /* Upload Debug Symbols to Sentry */,
+				F6C241B5EA6B45F29B973B32 /* Upload Debug Symbols to Sentry */,
 			);
 			buildRules = (
 			);
@@ -162,7 +162,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				68F4D2B816E748F5AE2D861B /* GoogleService-Info.plist in Resources */,
+				108BA7056822479BBD28B0B6 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -230,7 +230,7 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Talkee/Pods-Talkee-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		E36BB4303B6A4816B95F9A60 /* Upload Debug Symbols to Sentry */ = {
+		F6C241B5EA6B45F29B973B32 /* Upload Debug Symbols to Sentry */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -252,7 +252,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				0F76B00F97DD448BA7F789AB /* noop-file.swift in Sources */,
+				27AE192266F646038E789925 /* noop-file.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

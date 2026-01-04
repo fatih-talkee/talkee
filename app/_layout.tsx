@@ -10,7 +10,6 @@ import {
   Inter_500Medium,
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
-import * as SplashScreen from 'expo-splash-screen';
 import { initI18n } from '../lib/i18n';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
@@ -84,8 +83,7 @@ try {
   logger.error('[App] ❌ Failed to register Sentry adapter', e);
 }
 
-logger.info('[App] 🔧 Preventing splash screen auto-hide');
-SplashScreen.preventAutoHideAsync();
+// Android native splash screen is used - no need for expo-splash-screen
 
 // Create AsyncStorage persister for React Query cache
 logger.info('[App] 🔧 Creating AsyncStorage persister for React Query...');
@@ -441,68 +439,8 @@ export default function RootLayout() {
   // ✅ OPTIMIZED: Allow app to render even if fonts fail to load
   // System fonts will be used as fallback
 
-  const splashHiddenRef = useRef(false);
-
-  // ✅ OPTIMIZED: Faster splash screen hiding
-  // Reduced MAX_WAIT_TIME and more aggressive hiding strategy
-  useEffect(() => {
-    const MAX_WAIT_TIME = 500; // Reduced from 1000ms to 500ms
-    const startTime = Date.now();
-
-    const hideSplash = () => {
-      if (splashHiddenRef.current) return;
-      splashHiddenRef.current = true;
-
-      requestAnimationFrame(() => {
-        SplashScreen.hideAsync()
-          .then(() => logger.info('[App] ✅ Splash screen hidden'))
-          .catch((error) =>
-            logger.error('[App] ❌ Error hiding splash', error)
-          );
-      });
-    };
-
-    const checkAndHide = () => {
-      if (splashHiddenRef.current) return;
-
-      const elapsed = Date.now() - startTime;
-      const fontsReady = fontsLoaded || fontError || fontForcedReady;
-
-      // ✅ OPTIMIZED: Hide splash as soon as fonts are ready (i18n can load in background)
-      // Don't wait for i18n - it's not critical for initial render
-      if (fontsReady || elapsed >= MAX_WAIT_TIME) {
-        if (elapsed >= MAX_WAIT_TIME && !fontsReady) {
-          setFontForcedReady(true);
-        }
-        // i18n is not blocking - set ready if not already set
-        if (!i18nReady) {
-          setI18nReady(true);
-        }
-        hideSplash();
-      }
-    };
-
-    checkAndHide();
-    const interval = setInterval(checkAndHide, 50);
-    const timeout1 = setTimeout(() => {
-      if (!splashHiddenRef.current) {
-        setFontForcedReady(true);
-        setI18nReady(true);
-        hideSplash();
-      }
-    }, MAX_WAIT_TIME);
-
-    const timeout2 = setTimeout(() => {
-      clearInterval(interval);
-      if (!splashHiddenRef.current) hideSplash();
-    }, MAX_WAIT_TIME + 200); // Reduced from 500ms to 200ms
-
-    return () => {
-      clearInterval(interval);
-      clearTimeout(timeout1);
-      clearTimeout(timeout2);
-    };
-  }, [fontsLoaded, fontError, fontForcedReady, i18nReady]);
+  // Android native splash screen is used - no need to manually hide it
+  // The native splash screen will automatically hide when the app is ready
 
   // ✅ OPTIMIZED: Defer i18n initialization to after initial render
   // This allows app to render faster, i18n can load in background

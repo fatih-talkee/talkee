@@ -7,11 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "net.talkee.app",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/images/splash.png",
-      "resizeMode": "cover",
-      "backgroundColor": "#000000"
-    },
     "newArchEnabled": false,
     "ios": {
       "bundleIdentifier": "net.talkee.app",
@@ -76,11 +71,6 @@
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#000000",
         "monochromeImage": "./assets/images/icon.png"
-      },
-      "splash": {
-        "image": "./assets/images/splash.png",
-        "resizeMode": "cover",
-        "backgroundColor": "#000000"
       }
     },
     "plugins": [
