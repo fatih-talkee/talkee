@@ -15,8 +15,10 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
+import com.twiliovoicereactnative.VoiceApplicationProxy
 
 class MainApplication : Application(), ReactApplication {
+  private val voiceApplicationProxy = VoiceApplicationProxy(this)
 
   override val reactNativeHost: ReactNativeHost = ReactNativeHostWrapper(
       this,
@@ -40,6 +42,7 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    voiceApplicationProxy.onCreate()
     DefaultNewArchitectureEntryPoint.releaseLevel = try {
       ReleaseLevel.valueOf(BuildConfig.REACT_NATIVE_RELEASE_LEVEL.uppercase())
     } catch (e: IllegalArgumentException) {
@@ -47,6 +50,11 @@ class MainApplication : Application(), ReactApplication {
     }
     loadReactNative(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
+  }
+
+  override fun onTerminate() {
+    voiceApplicationProxy.onTerminate()
+    super.onTerminate()
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {

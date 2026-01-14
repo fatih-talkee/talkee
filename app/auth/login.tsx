@@ -73,29 +73,34 @@ export default function LoginScreen() {
   }, []);
 
   const handleDeepLink = async (event: { url: string }) => {
-    logger.info('[OAuth] Deep link received:', { url: event.url });
+    logger.info('[OAuth] 🔗 RAW Deep link received:', { url: event.url });
 
     try {
       const url = event.url;
 
-      // Only process auth callback URLs
-      if (!url.includes('auth/callback')) {
-        logger.info('[OAuth] Not an auth callback, ignoring');
+      // Handle both standard callback and direct scheme
+      if (!url.includes('auth/callback') && !url.includes('access_token=')) {
+        logger.info('[OAuth] ⏭️ Not an auth callback or missing tokens, ignoring');
         return;
       }
 
-      // Extract tokens from URL
-      const fragment = url.includes('#')
-        ? url.split('#')[1]
-        : url.split('?')[1];
-      if (!fragment) {
-        logger.info('[OAuth] No params in URL');
-        return;
-      }
+      // Extract tokens from URL (more robustly)
+      let accessToken = '';
+      let refreshToken = '';
 
-      const params = new URLSearchParams(fragment);
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
+      if (url.includes('#')) {
+        const hash = url.split('#')[1];
+        const params = new URLSearchParams(hash);
+        accessToken = params.get('access_token') || '';
+        refreshToken = params.get('refresh_token') || '';
+      } 
+      
+      if (!accessToken && url.includes('?')) {
+        const query = url.split('?')[1];
+        const params = new URLSearchParams(query);
+        accessToken = params.get('access_token') || '';
+        refreshToken = params.get('refresh_token') || '';
+      }
 
       logger.info('[OAuth] Parsed tokens:', {
         hasAccessToken: !!accessToken,
@@ -110,24 +115,28 @@ export default function LoginScreen() {
           refresh_token: refreshToken,
         });
 
-        if (error) throw error;
+        if (error) {
+          logger.error('[OAuth] Supabase setSession error:', error);
+          throw error;
+        }
 
         logger.info('[OAuth] Session set successfully!');
 
         // Wait a bit to ensure session is fully propagated
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 800));
 
         logger.info('[OAuth] Navigating to callback...');
         // Use replace to ensure callback page remounts and picks up the session
         router.replace('/auth/callback');
       } else {
-        logger.error('[OAuth] Missing tokens in URL');
+        logger.error('[OAuth] Missing tokens in URL. RAW URL:', url);
+        throw new Error('Could not find access tokens in the callback URL.');
       }
-    } catch (error) {
-      logger.error('[OAuth] Deep link error:', error);
+    } catch (error: any) {
+      logger.error('[OAuth] FATAL Deep link error:', error);
       toast.error({
         title: 'Authentication Failed',
-        message: 'Please try again',
+        message: error.message || 'Please try again',
       });
     }
   };

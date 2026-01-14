@@ -1,6 +1,6 @@
-import { supabase } from '../../lib/supabase';
-import { logger } from '../../lib/logger';
-import type { Category } from '../../types/database.types';
+import { supabase } from '@/lib/supabase';
+import { logger } from '@/lib/logger';
+import type { Category } from '@/types/database.types';
 
 class CategoriesService {
   /**
@@ -197,125 +197,46 @@ class CategoriesService {
     });
 
     try {
-      // ✅ OPTIMIZED: Direct SQL query - count professionals per category, order by count DESC, limit
-      // This is MUCH faster than fetching all categories and counts, then sorting in JavaScript
-      const queryStartTime = Date.now();
-
-      logger.info(
-        '[CategoriesService] 📊 Executing optimized popular categories query...',
-        {
-          limit,
-          timestamp: new Date().toISOString(),
-        }
-      );
-
-      // Use RPC function if available, otherwise fallback to direct query
-      let result: Category[] = [];
-
-      // ✅ OPTIMIZED: Use RPC function to get top categories directly from SQL
-      // This is MUCH faster - SQL does the counting, sorting, and limiting
-      const rpcStartTime = Date.now();
-      logger.debug(
-        '[CategoriesService] 🔍 Calling RPC function get_top_categories_by_professional_count',
-        {
-          limit,
-          timestamp: new Date().toISOString(),
-        }
-      );
-
+      logger.info('[CategoriesService] 📊 Executing RPC query...');
+      
       const { data: rpcData, error: rpcError } = await supabase.rpc(
         'get_top_categories_by_professional_count',
         { limit_count: limit }
       );
-      const rpcElapsed = Date.now() - rpcStartTime;
 
       if (rpcError) {
-        logger.warn(
-          '[CategoriesService] ⚠️ RPC function failed, using simple fallback',
-          {
-            errorMessage: rpcError.message,
-            errorCode: rpcError.code,
-            errorDetails: (rpcError as any)?.details,
-            errorHint: (rpcError as any)?.hint,
-            rpcElapsed: `${rpcElapsed}ms`,
-            timestamp: new Date().toISOString(),
-          }
-        );
+        logger.warn('[CategoriesService] ⚠️ RPC failed, using fallback', {
+          errorMessage: rpcError.message,
+          errorCode: rpcError.code,
+        });
 
-        // Fallback: Just get categories ordered by sort_order (only fields needed for list display)
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('categories')
-          .select(
-            'id, name, slug, icon_name, sort_order, is_active, created_at, updated_at'
-          )
+          .select('id, name, slug, icon_name, sort_order')
           .eq('is_active', true)
           .order('sort_order', { ascending: true })
           .limit(limit);
 
         if (fallbackError) {
+          logger.error('[CategoriesService] ❌ Fallback query failed', fallbackError);
           throw fallbackError;
         }
 
-        result = (fallbackData || []) as Category[];
-      } else if (rpcData && Array.isArray(rpcData)) {
-        result = rpcData as Category[];
-        logger.info(
-          '[CategoriesService] ✅ Popular categories fetched via RPC',
-          {
-            duration: `${rpcElapsed}ms`,
-            count: result.length,
-            limit,
-            timestamp: new Date().toISOString(),
-          }
-        );
-      } else {
-        logger.warn(
-          '[CategoriesService] ⚠️ RPC returned unexpected data format',
-          {
-            hasData: !!rpcData,
-            dataType: typeof rpcData,
-            timestamp: new Date().toISOString(),
-          }
-        );
-        result = [];
+        return (fallbackData || []) as Category[];
       }
 
       const totalDuration = Date.now() - startTime;
       logger.info('[CategoriesService] ✅ getPopularCategories completed', {
-        totalDuration: `${totalDuration}ms`,
-        resultCount: result.length,
-        limit,
-        timestamp: new Date().toISOString(),
+        duration: `${totalDuration}ms`,
+        count: rpcData?.length || 0,
       });
 
-      return result;
+      return (rpcData || []) as Category[];
     } catch (error: any) {
       const totalDuration = Date.now() - startTime;
-      let errorMessage = 'Unknown error';
-      try {
-        if (error?.message) {
-          errorMessage = error.message;
-        } else if (typeof error === 'string') {
-          errorMessage = error;
-        } else if (error?.toString && error.toString() !== '[object Object]') {
-          errorMessage = error.toString();
-        } else {
-          errorMessage = JSON.stringify(
-            error,
-            Object.getOwnPropertyNames(error)
-          );
-        }
-      } catch {
-        errorMessage = String(error);
-      }
-
       logger.error('[CategoriesService] ❌ Error in getPopularCategories', {
-        error: errorMessage,
-        errorType: error?.constructor?.name || typeof error,
+        message: error?.message || String(error),
         duration: `${totalDuration}ms`,
-        limit,
-        stack: error?.stack?.substring(0, 500) || 'No stack trace',
-        timestamp: new Date().toISOString(),
       });
       return [];
     }

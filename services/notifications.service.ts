@@ -19,8 +19,10 @@ import { logger } from '../lib/logger';
 // NotificationSettings is already in database.types.ts
 export type { NotificationSettings } from '../types/database.types';
 
-// Configure notification behavior globally
-if (Platform.OS !== 'web') {
+// Configure notification behavior
+export const setupNotificationHandler = () => {
+  if (Platform.OS === 'web') return;
+
   logger.info(
     '[NotificationService] 🔧 Setting up global notification handler',
     {

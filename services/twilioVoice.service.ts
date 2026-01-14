@@ -1,7 +1,7 @@
-import { Voice, Call, CallInvite } from '@twilio/voice-react-native-sdk';
+// import { Voice, Call, CallInvite } from '@twilio/voice-react-native-sdk';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { usersService } from '@/services/supabase/user.service';
 import BillingService from '@/services/billingService';
 import { DurationTracker, PerMinuteBilling } from './twilioVoice/billing';
@@ -51,18 +51,65 @@ class TwilioVoiceService {
 
   async initialize(): Promise<void> {
     const initStartTime = Date.now();
-    logger.info('[TwilioVoice] 🎬 Initializing Twilio Voice SDK...', {
+    logger.info('[TwilioVoice] 🎬 Initializing Twilio Voice SDK (delayed)...', {
       hasVoice: !!this.voice,
       timestamp: new Date().toISOString(),
     });
 
     try {
+      // ✅ FIX: Wait for React Native context to be fully ready before loading native module
+      // This prevents the NullPointerException: jsEventEmitter on null object
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // ✅ Dynamic require to avoid early native module instantiation
+      const { Voice } = require('@twilio/voice-react-native-sdk');
+      const { NativeModules } = require('react-native');
+
+      logger.debug('[TwilioVoice] 🔧 Checking NativeModules availability', {
+        availableModules: Object.keys(NativeModules).filter(m => m.toLowerCase().includes('twilio') || m.toLowerCase().includes('voice')),
+        timestamp: new Date().toISOString(),
+      });
+
+      // ✅ FIX: Explicitly wait for TwilioVoiceReactNative module to appear if it's missing
+      let moduleCheckRetries = 0;
+      while (!NativeModules.TwilioVoiceReactNative && moduleCheckRetries < 10) {
+        logger.warn(`[TwilioVoice] ⏳ Twilio native module not found, retrying... (${moduleCheckRetries + 1}/10)`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        moduleCheckRetries++;
+      }
+
+      if (!NativeModules.TwilioVoiceReactNative) {
+        logger.error('[TwilioVoice] ❌ Twilio native module (TwilioVoiceReactNative) is missing after retries. Autolinking might be broken or build is incomplete.');
+        this.voice = null;
+        return;
+      } else {
+        logger.info('[TwilioVoice] ✅ Twilio native module found');
+      }
+
       logger.debug('[TwilioVoice] 🔧 Creating Voice instance', {
         timestamp: new Date().toISOString(),
       });
 
       const voiceCreateStartTime = Date.now();
-      this.voice = new Voice();
+      
+      // ✅ FIX: Safely require and instantiate Voice SDK
+      try {
+        const TwilioSDK = require('@twilio/voice-react-native-sdk');
+        if (TwilioSDK && TwilioSDK.Voice) {
+          this.voice = new TwilioSDK.Voice();
+          logger.info('[TwilioVoice] ✅ Voice instance created', {
+            elapsed: `${Date.now() - voiceCreateStartTime}ms`,
+            timestamp: new Date().toISOString(),
+          });
+        } else {
+          logger.warn('[TwilioVoice] ⚠️ Twilio SDK Voice class not found');
+          this.voice = null;
+        }
+      } catch (sdkError) {
+        logger.error('[TwilioVoice] ❌ Failed to instantiate Twilio Voice SDK', sdkError);
+        this.voice = null;
+      }
+      
       const voiceCreateElapsed = Date.now() - voiceCreateStartTime;
 
       logger.info('[TwilioVoice] ✅ Voice instance created', {
@@ -180,14 +227,45 @@ class TwilioVoiceService {
         throw error;
       }
 
-      logger.debug('[TwilioVoice] 📥 Token function response received', {
+      logger.info('[TwilioVoice] 📥 Token function response received', {
         hasData: !!data,
         hasToken: !!data?.token,
         hasIdentity: !!data?.identity,
         hasExpiresAt: !!data?.expiresAt,
+        identity: data?.identity,
         elapsed: `${invokeElapsed}ms`,
         timestamp: new Date().toISOString(),
       });
+      
+      // ✅ DEBUG: Decode and log token claims to verify push_credential_sid
+      if (data?.token) {
+        try {
+          const tokenParts = data.token.split('.');
+          if (tokenParts.length === 3) {
+            const payload = JSON.parse(atob(tokenParts[1]));
+            const hasPushCredential = !!payload?.grants?.voice?.push_credential_sid;
+            logger.info('[TwilioVoice] 🔑 Token claims decoded', {
+              hasGrants: !!payload?.grants,
+              hasVoiceGrant: !!payload?.grants?.voice,
+              hasIncomingAllow: payload?.grants?.voice?.incoming?.allow,
+              hasPushCredentialSid: hasPushCredential,
+              pushCredentialSidPrefix: payload?.grants?.voice?.push_credential_sid?.substring(0, 10) || 'MISSING',
+              timestamp: new Date().toISOString(),
+            });
+            
+            if (!hasPushCredential) {
+              logger.error('[TwilioVoice] ❌ TOKEN MISSING push_credential_sid - Incoming calls will NOT work!', undefined, {
+                timestamp: new Date().toISOString(),
+              });
+            }
+          }
+        } catch (decodeError) {
+          logger.warn('[TwilioVoice] ⚠️ Could not decode token for debugging', {
+            error: decodeError instanceof Error ? decodeError.message : String(decodeError),
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
 
       if (!data?.token) {
         logger.error(
@@ -258,15 +336,31 @@ class TwilioVoiceService {
 
     this.registrationPromise = (async () => {
       try {
-        if (!this.voice) {
-          logger.error(
-            '[TwilioVoice] ❌ Voice SDK not initialized',
-            undefined,
-            {
-              timestamp: new Date().toISOString(),
+        const { NativeModules } = require('react-native');
+        
+        // ✅ FIX: Strict check for native module before calling SDK methods
+        if (!NativeModules.TwilioVoiceReactNative) {
+          logger.error('[TwilioVoice] ❌ Cannot register: Native module TwilioVoiceReactNative is null');
+          return;
+        }
+
+        // ✅ FIX: Enhanced safety check with retries for internal native binding
+        // Sometimes this.voice is not null, but its internal native methods are not yet bound
+        let registerRetryCount = 0;
+        const maxRegisterRetries = 3;
+        
+        while (registerRetryCount < maxRegisterRetries) {
+          try {
+            if (this.voice && typeof (this.voice as any).register === 'function') {
+              // Try a dummy call or check internal state if possible
+              // For now, we'll proceed to the actual register call which we'll wrap in try-catch
+              break; 
             }
-          );
-          throw new Error('Voice SDK not initialized');
+          } catch (e) {
+            logger.warn(`[TwilioVoice] ⏳ Native methods not ready, retrying registration binding... (${registerRetryCount + 1}/${maxRegisterRetries})`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            registerRetryCount++;
+          }
         }
 
         // ✅ FIX: Ensure microphone permission before registering (Android)
@@ -296,8 +390,20 @@ class TwilioVoiceService {
           timestamp: new Date().toISOString(),
         });
 
+        // ✅ FIX: Verify native module one last time before calling SDK register
+        const { NativeModules: FinalCheckModules } = require('react-native');
+        if (!FinalCheckModules.TwilioVoiceReactNative) {
+          logger.error('[TwilioVoice] ❌ Cannot register: TwilioVoiceReactNative native module disappeared or is null');
+          this.isRegistering = false;
+          return;
+        }
+
         const registerCallStartTime = Date.now();
-        await this.voice.register(token);
+        if (this.voice && typeof this.voice.register === 'function') {
+          await this.voice.register(token);
+        } else {
+          throw new Error('this.voice or register method is unexpectedly null');
+        }
         const registerElapsed = Date.now() - registerCallStartTime;
         const totalElapsed = Date.now() - registerStartTime;
 
@@ -419,6 +525,10 @@ class TwilioVoiceService {
     }
   }
 
+  private isVoiceAvailable(): boolean {
+    return !!this.voice && typeof (this.voice as any).register === 'function';
+  }
+
   async makeCall(params: {
     professionalId: string;
     professionalUserId: string;
@@ -429,6 +539,11 @@ class TwilioVoiceService {
     ratePerMinute?: number;
     userBalance?: number;
   }): Promise<Call> {
+    if (!this.isVoiceAvailable()) {
+      logger.error('[TwilioVoice] ❌ Cannot make call: Voice SDK is not available');
+      throw new Error('Voice SDK is not available');
+    }
+
     if (this.isMakingCall) {
       logger.warn('[TwilioVoice] ⚠️ makeCall already in progress, rejecting', {
         debugId: params.debugId,
@@ -501,6 +616,11 @@ class TwilioVoiceService {
     ratePerMinute?: number;
     userBalance?: number;
   }): Promise<Call> {
+    if (!this.isVoiceAvailable()) {
+      logger.error('[TwilioVoice] ❌ Cannot accept call: Voice SDK is not available');
+      throw new Error('Voice SDK is not available');
+    }
+
     if (this.isAcceptingCall) {
       logger.warn(
         '[TwilioVoice] ⚠️ acceptIncomingCall already in progress, rejecting',
@@ -993,6 +1113,12 @@ class TwilioVoiceService {
       });
       return;
     }
+
+    logger.info('[TwilioVoice] 💰 Starting per-minute billing', {
+      callId: this.currentDbCallId,
+      ratePerMinute,
+      timestamp: new Date().toISOString(),
+    });
 
     const getDuration: DurationGetter = () => {
       return this.stateManager.getState().duration;

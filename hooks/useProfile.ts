@@ -116,22 +116,11 @@ export function useProfile() {
           return;
         }
 
-        // ✅ FIX: Skip INITIAL_SESSION if user hasn't changed (most common case)
-        if (event === 'INITIAL_SESSION' && previousUserId === newUserId && newUserId) {
-          // Check if we already processed this user during this session
-          if (processedUsersRef.has(newUserId)) {
-            logger.debug('[useProfile] ⏭️ INITIAL_SESSION for already processed user, skipping cache invalidation', {
-              userId: newUserId.substring(0, 8) + '...',
-            });
-            return;
-          }
-          // Mark as processed but don't invalidate cache (data is already fresh)
-          processedUsersRef.add(newUserId);
-          logger.debug('[useProfile] ⏭️ INITIAL_SESSION for same user, marking as processed (no invalidation)', {
-            userId: newUserId.substring(0, 8) + '...',
-          });
-          return;
-        }
+             // ✅ FIX: Skip INITIAL_SESSION if user hasn't changed
+             if (event === 'INITIAL_SESSION' && previousUserId === newUserId && newUserId) {
+               setIsSessionLoading(false);
+               return;
+             }
 
         if (previousUserId !== newUserId) {
           if (previousUserId && !newUserId) {
@@ -196,19 +185,28 @@ export function useProfile() {
   } = useQuery({
     queryKey: ['profile', userId],
     queryFn: async () => {
-      if (!userId) {
-        logger.warn('[useProfile] ⚠️ userId is null, skipping profile fetch');
+      // ✅ OPTIMIZED: Use the userId we already have from the hook state/listener
+      // Only fallback to session if really needed, to avoid hanging getSession calls
+      let activeUserId = userId;
+      
+      if (!activeUserId) {
+        const { data: { session } } = await authStateManager.getSession();
+        activeUserId = session?.user?.id || null;
+      }
+
+      if (!activeUserId) {
+        logger.warn('[useProfile] ⚠️ No userId available for fetch');
         return null;
       }
 
       logger.info('[useProfile] 🔍 Fetching profile', {
-        userId: userId.substring(0, 8) + '...',
+        userId: activeUserId.substring(0, 8) + '...',
       });
 
       const startTime = Date.now();
 
       try {
-        const result = await ProfileService.getProfileData(userId);
+        const result = await ProfileService.getProfileData(activeUserId);
         const duration = Date.now() - startTime;
 
         logger.info('[useProfile] ✅ Profile fetch completed', {

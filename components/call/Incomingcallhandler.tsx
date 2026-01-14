@@ -35,10 +35,22 @@ interface CallDetails {
 const INCOMING_CALL_TIMEOUT_MS = 60 * 1000;
 
 export default function IncomingCallHandler() {
+  // ✅ DEBUG: Log when component mounts
+  useEffect(() => {
+    logger.info('[IncomingCallHandler] 🎬 Component MOUNTED - Twilio SDK should initialize now', {
+      timestamp: new Date().toISOString(),
+    });
+    return () => {
+      logger.info('[IncomingCallHandler] 🔚 Component UNMOUNTED', {
+        timestamp: new Date().toISOString(),
+      });
+    };
+  }, []);
+
   const { theme } = useTheme();
   const { callState, acceptIncomingCall, rejectIncomingCall } =
     useTwilioVoice();
-  const { user: currentUser } = useProfile();
+  const { user: currentUser, isLoading: profileLoading } = useProfile();
   const [showModal, setShowModal] = useState(false);
   const [callDetails, setCallDetails] = useState<CallDetails | null>(null);
   const [loading, setLoading] = useState(false);
@@ -127,21 +139,27 @@ export default function IncomingCallHandler() {
 
   useEffect(() => {
     // ✅ SECURITY: Don't show incoming call modal if user is not authenticated
-    if (!currentUser) {
-      logger.warn(
-        '[IncomingCallHandler] ⚠️ Incoming call received but user is not authenticated, rejecting',
-        {
-          hasCallInvite: !!callState.callInvite,
-          status: callState.status,
-          timestamp: new Date().toISOString(),
-        }
-      );
+    // But wait for profile loading to finish first to avoid false positives on startup
+    if (!currentUser && !profileLoading) {
       if (callState.callInvite) {
+        logger.warn(
+          '[IncomingCallHandler] ⚠️ Incoming call received but user is not authenticated, rejecting',
+          {
+            hasCallInvite: !!callState.callInvite,
+            status: callState.status,
+            timestamp: new Date().toISOString(),
+          }
+        );
         void rejectIncomingCall();
       }
       setShowModal(false);
       setCallDetails(null);
       lastCallSidRef.current = null;
+      return;
+    }
+
+    // If still loading profile, just wait
+    if (!currentUser && profileLoading) {
       return;
     }
 

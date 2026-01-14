@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+console.log('--- 🚀 JS BUNDLE LOADED AND EXECUTING 🚀 ---');
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '../hooks/useFrameworkReady';
@@ -28,19 +29,32 @@ import NetInfo from '@react-native-community/netinfo';
 import { OfflineBanner } from '../components/ui/OfflineBanner';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as SplashScreen from 'expo-splash-screen';
 import {
   warmSupabaseConnection,
   supabase,
   setSupabaseSession,
   ensureSupabaseSession,
-} from '../lib/supabase';
+} from '@/lib/supabase';
 // ✅ OPTIMIZED: Lazy load heavy call components to reduce initial bundle size
 import { lazy, Suspense } from 'react';
-const IncomingCallHandler = lazy(
-  () => import('../components/call/IncomingCallHandler')
+// ✅ TEMPORARY: Direct import to fix Metro bundler case sensitivity issue
+// Using dynamic import with error handling
+const IncomingCallHandler = lazy(() =>
+  import('../components/call/Incomingcallhandler')
+    .then((module) => ({ default: module.default }))
+    .catch((error) => {
+      console.error('[App] ❌ Failed to load IncomingCallHandler:', error);
+      // Return a fallback component
+      return { default: () => null };
+    })
 );
-const ActiveCallOverlay = lazy(
-  () => import('@/components/call/ActiveCallOverlay')
+const ActiveCallOverlay = lazy(() =>
+  import('@/components/call/ActiveCallOverlay').catch((error) => {
+    logger.error('[App] ❌ Failed to load ActiveCallOverlay', error);
+    // Return a fallback component
+    return { default: () => null };
+  })
 );
 import { GlobalLoadingOverlay } from '@/components/ui/GlobalLoadingOverlay';
 
@@ -53,37 +67,10 @@ import {
 // ✅ NEW: Import notification handlers (extracted to separate file for better organization)
 import { createNotificationHandlers } from '@/lib/_layout-notification-handlers';
 
-// Initialize Sentry (make it idempotent)
-try {
-  const g = globalThis as any;
-  if (!g.__talkeeSentryInitialized) {
-    logger.info('[App] 🔧 Initializing Sentry...', {
-      debug: __DEV__,
-      timestamp: new Date().toISOString(),
-    });
-    Sentry.init({
-      dsn: 'https://18e1c6ac9df262bbd98c89fd2db05f06@o4510523149647872.ingest.de.sentry.io/4510523154563152',
-      debug: __DEV__,
-    });
-    g.__talkeeSentryInitialized = true;
-    logger.info('[App] ✅ Sentry initialized successfully', {
-      timestamp: new Date().toISOString(),
-    });
-  }
-} catch (e) {
-  logger.error('[App] ❌ Sentry.init failed (continuing without Sentry)', e);
-  console.error('Sentry.init failed', e);
-}
-
-try {
-  logger.info('[App] 🔧 Registering Sentry adapter...');
-  logger.registerRemoteLogger(new SentryAdapter());
-  logger.info('[App] ✅ Sentry adapter registered successfully');
-} catch (e) {
-  logger.error('[App] ❌ Failed to register Sentry adapter', e);
-}
-
-// Android native splash screen is used - no need for expo-splash-screen
+// Prevent splash screen from auto-hiding
+SplashScreen.preventAutoHideAsync().catch((error) => {
+  logger.warn('[App] ⚠️ Failed to prevent auto-hide splash screen', error);
+});
 
 // Create AsyncStorage persister for React Query cache
 logger.info('[App] 🔧 Creating AsyncStorage persister for React Query...');
@@ -221,88 +208,15 @@ export default function RootLayout() {
     mountTimeRef.current = mountTime;
     logger.info('[App] 🚀 App started, JavaScript loaded!');
     console.log('🚀 [_layout] App started!');
+    console.log('[App] ✅ RootLayout mounted at', new Date().toISOString());
+
+    // Force log to console to verify JavaScript is running
+    setTimeout(() => {
+      console.log('[App] ⏰ 1 second after mount - app should be initializing');
+    }, 1000);
 
     return () => {
       logger.info('[App] 🔚 RootLayout unmounting');
-    };
-  }, []);
-
-  // ============================================================================
-  // ✅ OPTIMIZED: NOTIFICATION SETUP WITH RESPONSE LISTENER
-  // ============================================================================
-  // ✅ Use ref to ensure setup only happens once
-  const notificationSetupRef = useRef(false);
-
-  // ✅ OPTIMIZED: Defer notification setup to after initial render
-  // This allows app to render faster, notifications can initialize in background
-  useEffect(() => {
-    // ✅ Prevent duplicate setup
-    if (notificationSetupRef.current) {
-      logger.debug('[App] ⏭️ Notification setup already completed, skipping');
-      return;
-    }
-
-    // Defer notification setup slightly to prioritize UI rendering
-    const setupTimer = setTimeout(() => {
-      logger.info('[App] 🔧 Setting up notifications', {
-        timestamp: new Date().toISOString(),
-      });
-
-      notificationSetupRef.current = true;
-
-      // ✅ NOTE: Notification handler is already configured in services/notifications.service.ts
-      // setupNotificationHandler() is now a no-op for backward compatibility
-      // The handler in notifications.service.ts handles incoming call suppression in foreground
-
-      // Request permissions (async, non-blocking)
-      (async () => {
-        try {
-          const granted = await requestNotificationPermissions();
-          if (granted) {
-            logger.info('[App] ✅ Notification permissions granted', {
-              timestamp: new Date().toISOString(),
-            });
-          } else {
-            logger.warn('[App] ⚠️ Notification permissions denied', {
-              timestamp: new Date().toISOString(),
-            });
-          }
-        } catch (error) {
-          logger.error(
-            '[App] ❌ Failed to request notification permissions',
-            error,
-            {
-              timestamp: new Date().toISOString(),
-            }
-          );
-        }
-      })();
-    }, 100); // Small delay to allow initial render
-
-    // ✅ NEW: Setup notification response listener
-    // ✅ REFACTORED: Extract notification handlers to separate file
-    const { handleAccept, handleDecline } = createNotificationHandlers({
-      onAccept: async (callId: string) => {
-        // Handler logic is in createNotificationHandlers
-      },
-      onDecline: async (callId: string) => {
-        // Handler logic is in createNotificationHandlers
-      },
-    });
-
-    const notificationSubscription = setupNotificationResponseListener(
-      // On Accept
-      handleAccept,
-      // On Decline
-      handleDecline
-    );
-
-    return () => {
-      // Cleanup: clear timeout and remove notification listener
-      clearTimeout(setupTimer);
-      if (notificationSubscription) {
-        notificationSubscription.remove();
-      }
     };
   }, []);
 
@@ -320,40 +234,14 @@ export default function RootLayout() {
           userId: session?.user?.id,
         });
 
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          if (session) {
-            logger.info('[App] 🔧 Ensuring session is set', {
-              userId: session.user.id,
-              event,
-            });
-
-            // Session'ı force set et
-            const sessionSet = await setSupabaseSession(
-              session.access_token,
-              session.refresh_token
-            );
-
-            if (sessionSet) {
-              // Session'ı kontrol et
-              await ensureSupabaseSession();
-
-              // ✅ Only invalidate cache on SIGNED_IN, not on TOKEN_REFRESHED
-              // TOKEN_REFRESHED is just a token renewal, user data hasn't changed
-              if (event === 'SIGNED_IN') {
-                logger.info('[App] 🔄 Invalidating queries after sign in');
-                queryClient.invalidateQueries();
-              } else {
-                logger.debug(
-                  '[App] ⏭️ Skipping cache invalidation on TOKEN_REFRESHED (token renewal only)'
-                );
-              }
-            }
-          }
-        }
-
+        // ✅ BEST PRACTICE: Only handle cache/global state cleanup here.
+        // Session setting is handled by the login/callback components.
         if (event === 'SIGNED_OUT') {
-          logger.info('[App] 🚪 User signed out, clearing session');
+          logger.info('[App] 🚪 User signed out, clearing cache');
           queryClient.clear();
+        } else if (event === 'SIGNED_IN' && session) {
+          // No need to call setSession again, it's already set if we got this event
+          logger.info('[App] ✅ User signed in, ensuring cache readiness');
         }
       }
     );
@@ -366,64 +254,104 @@ export default function RootLayout() {
     };
   }, []);
 
-  // Initialize logger and error handlers
+  // Initialize logger, Sentry, and other services safely
   useEffect(() => {
     const initStartTime = Date.now();
-    logger.info('[App] 🔧 Initializing app...');
 
-    const forceConsoleLogs = process.env.EXPO_PUBLIC_DEBUG_LOGS === '1';
-    logger.configure({
-      enableRemoteLogging: !__DEV__,
-      logLevel: __DEV__ || forceConsoleLogs ? 'debug' : 'error',
-      enableConsoleInProd: forceConsoleLogs,
-      enableBreadcrumbs: true,
-      enablePerformanceTracking: true,
-    });
+    // ✅ FIX: Defer heavy initializations to prevent "app context before module created" crash
+    const initTimer = setTimeout(() => {
+      logger.info('[App] 🔧 Initializing services (deferred)...');
 
-    setupGlobalErrorHandlers();
-
-    // Pre-warm Supabase connection
-    warmSupabaseConnection()
-      .then(() => {
-        logger.info('[App] ✅ Supabase connection pre-warmed', {
-          elapsed: `${Date.now() - initStartTime}ms`,
-        });
-      })
-      .catch((error) => {
-        logger.warn('[App] ⚠️ Supabase pre-warm failed (non-critical)', error);
+      const forceConsoleLogs = process.env.EXPO_PUBLIC_DEBUG_LOGS === '1';
+      logger.configure({
+        enableRemoteLogging: !__DEV__,
+        logLevel: __DEV__ || forceConsoleLogs ? 'debug' : 'error',
+        enableConsoleInProd: forceConsoleLogs,
+        enableBreadcrumbs: true,
+        enablePerformanceTracking: true,
       });
 
-    // Check existing session
-    (async () => {
-      try {
-        logger.info('[App] 🔧 Checking existing session...');
-        const hasSession = await ensureSupabaseSession();
-        if (hasSession) {
-          logger.info('[App] ✅ Existing session found and validated');
-        } else {
-          logger.warn('[App] ⚠️ No existing session found');
-        }
-      } catch (error) {
-        logger.error('[App] ❌ Session check failed', error);
-      }
-    })();
+      setupGlobalErrorHandlers();
 
-    // Initialize notifications
-    (async () => {
+      // ✅ FIX: Move Sentry init here to prevent early native module access
       try {
-        notificationsService.setupListeners();
-        const token = await notificationsService.initialize();
-        if (token) {
-          logger.info('[App] ✅ Push notifications initialized');
-        }
-      } catch (error) {
-        logger.error('[App] ❌ Failed to initialize notifications', error);
-      }
-    })();
+        const g = globalThis as any;
+        if (!g.__talkeeSentryInitialized) {
+          logger.info('[App] 🔧 Initializing Sentry...', {
+            debug: __DEV__,
+            timestamp: new Date().toISOString(),
+          });
+          Sentry.init({
+            dsn: 'https://18e1c6ac9df262bbd98c89fd2db05f06@o4510523149647872.ingest.de.sentry.io/4510523154563152',
+            debug: __DEV__,
+          });
+          g.__talkeeSentryInitialized = true;
+          logger.info('[App] ✅ Sentry initialized successfully');
 
-    logger.info('[App] ✅ App initialization complete');
+          logger.info('[App] 🔧 Registering Sentry adapter...');
+          logger.registerRemoteLogger(new SentryAdapter());
+          logger.info('[App] ✅ Sentry adapter registered successfully');
+        }
+      } catch (e) {
+        logger.error('[App] ❌ Sentry initialization failed', e);
+      }
+
+      // Pre-warm Supabase connection
+      warmSupabaseConnection()
+        .then(() => {
+          logger.info('[App] ✅ Supabase connection pre-warmed', {
+            elapsed: `${Date.now() - initStartTime}ms`,
+          });
+        })
+        .catch((error) => {
+          logger.warn(
+            '[App] ⚠️ Supabase pre-warm failed (non-critical)',
+            error
+          );
+        });
+
+      // Check existing session
+      (async () => {
+        try {
+          logger.info('[App] 🔧 Checking existing session...');
+          const hasSession = await ensureSupabaseSession();
+          if (hasSession) {
+            logger.info('[App] ✅ Existing session found and validated');
+          }
+        } catch (error) {
+          logger.error('[App] ❌ Session check failed', error);
+        }
+      })();
+
+      // Initialize notifications (with extra safety)
+      (async () => {
+        try {
+          logger.info('[App] 🔧 Initializing notification service...');
+
+          // ✅ FIX: Call setupNotificationHandler explicitly (it's now safe)
+          setupNotificationHandler();
+
+          // ✅ Request permissions
+          const granted = await requestNotificationPermissions();
+          if (granted) {
+            logger.info('[App] ✅ Notification permissions granted');
+          }
+
+          notificationsService.setupListeners();
+          const token = await notificationsService.initialize();
+          if (token) {
+            logger.info('[App] ✅ Push notifications initialized');
+          }
+        } catch (error) {
+          logger.error('[App] ❌ Failed to initialize notifications', error);
+        }
+      })();
+
+      logger.info('[App] ✅ Deferred initialization complete');
+    }, 1000); // 1 second delay to ensure native modules are ready
 
     return () => {
+      clearTimeout(initTimer);
       logger.cleanup();
     };
   }, []);
@@ -439,8 +367,53 @@ export default function RootLayout() {
   // ✅ OPTIMIZED: Allow app to render even if fonts fail to load
   // System fonts will be used as fallback
 
-  // Android native splash screen is used - no need to manually hide it
-  // The native splash screen will automatically hide when the app is ready
+  // ✅ Hide splash screen when app is ready
+  const [appIsReady, setAppIsReady] = useState(false);
+
+  useEffect(() => {
+    const fontsReady = fontsLoaded || fontError || fontForcedReady;
+    if (fontsReady && i18nReady) {
+      // Small delay to ensure everything is rendered
+      const hideTimer = setTimeout(() => {
+        SplashScreen.hideAsync()
+          .then(() => {
+            logger.info(
+              '[App] ✅ App is ready - IncomingCallHandler will now render',
+              {
+                timestamp: new Date().toISOString(),
+              }
+            );
+            setAppIsReady(true);
+          })
+          .catch((error) => {
+            logger.warn('[App] ⚠️ Failed to hide splash screen', error);
+            logger.info(
+              '[App] ✅ App is ready (fallback) - IncomingCallHandler will now render',
+              {
+                timestamp: new Date().toISOString(),
+              }
+            );
+            setAppIsReady(true);
+          });
+      }, 100);
+      return () => clearTimeout(hideTimer);
+    }
+  }, [fontsLoaded, fontError, fontForcedReady, i18nReady]);
+
+  // ✅ FALLBACK: Force hide splash screen after timeout to prevent stuck state
+  useEffect(() => {
+    const forceHideTimer = setTimeout(() => {
+      SplashScreen.hideAsync()
+        .then(() => {
+          setAppIsReady(true);
+        })
+        .catch((error) => {
+          logger.warn('[App] ⚠️ Failed to force hide splash screen', error);
+          setAppIsReady(true);
+        });
+    }, 5000); // Hide after 5 seconds regardless of state
+    return () => clearTimeout(forceHideTimer);
+  }, []);
 
   // ✅ OPTIMIZED: Defer i18n initialization to after initial render
   // This allows app to render faster, i18n can load in background
@@ -535,13 +508,19 @@ export default function RootLayout() {
                 <ToastStack />
 
                 {/* ✅ OPTIMIZED: Lazy loaded call components - reduces initial bundle size */}
-                <Suspense fallback={null}>
-                  {/* ✅ Incoming Call Handler - Shows modal for incoming calls */}
-                  <IncomingCallHandler />
+                {appIsReady && (
+                  <>
+                    <Suspense fallback={null}>
+                      {/* ✅ Incoming Call Handler - Shows modal for incoming calls */}
+                      <IncomingCallHandler />
+                    </Suspense>
 
-                  {/* ✅ Active Call Overlay - Shows custom UI during active call */}
-                  <ActiveCallOverlay />
-                </Suspense>
+                    <Suspense fallback={null}>
+                      {/* ✅ Active Call Overlay - Shows custom UI during active call */}
+                      <ActiveCallOverlay />
+                    </Suspense>
+                  </>
+                )}
 
                 {/* ✅ Global Loading Overlay - Shows loading when app is processing */}
                 <GlobalLoadingOverlay />

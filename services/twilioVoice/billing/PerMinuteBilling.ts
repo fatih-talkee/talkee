@@ -77,10 +77,19 @@ export class PerMinuteBilling {
           );
 
           if (error) {
+            // Extract more details from the error
+            const errorDetails = {
+              message: error.message,
+              status: (error as any).status,
+              context: (error as any).context,
+              data: (error as any).data,
+            };
+            
             logger.error('[PerMinuteBilling] ❌ Per-minute charge failed', error, {
               callId: this.callId,
               minute_number: currentMinute,
               errorMessage: error.message,
+              errorDetails,
               timestamp: new Date().toISOString(),
             });
             return;

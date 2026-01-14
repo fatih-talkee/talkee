@@ -44,16 +44,26 @@ export function usePopularCategories(
       try {
         const result = await categoriesService.getPopularCategories(limit);
         const duration = Date.now() - startTime;
+        
         logger.info('[usePopularCategories] ✅ Fetch completed', {
           duration: `${duration}ms`,
-          count: result.length,
+          count: result?.length || 0,
           limit,
         });
         return result;
       } catch (error: any) {
         const duration = Date.now() - startTime;
-        logger.error('[usePopularCategories] ❌ Fetch failed', {
-          error: error?.message || String(error),
+        
+        // Enhanced error serialization
+        let detailedError = '';
+        try {
+          detailedError = typeof error === 'object' ? JSON.stringify(error, Object.getOwnPropertyNames(error), 2) : String(error);
+        } catch (e) {
+          detailedError = String(error);
+        }
+
+        logger.error('[usePopularCategories] ❌ Fetch failed', error, {
+          detailed: detailedError,
           duration: `${duration}ms`,
           limit,
         });
@@ -61,8 +71,8 @@ export function usePopularCategories(
       }
     },
     ...CACHE_CONFIG.CATEGORIES,
-    // Force refetch on mount to ensure fresh data
-    refetchOnMount: true,
+    // Use stale data if available, only refetch if stale
+    refetchOnMount: false, 
     retry: 1, // Only retry once on failure
     retryDelay: 1000, // Wait 1 second before retry
   });

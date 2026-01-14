@@ -74,53 +74,31 @@ export function useFeaturedProfessionals(
       });
       const startTime = Date.now();
       try {
-        // Add additional timeout wrapper for React Query
-        const queryPromise = professionalsService.getFeaturedProfessionals(
+        const result = await professionalsService.getFeaturedProfessionals(
           limit,
           categoryId
         );
-        let queryTimeoutId: ReturnType<typeof setTimeout> | null = null;
-        const queryTimeout = new Promise((_, reject) => {
-          queryTimeoutId = setTimeout(() => {
-            const timeoutElapsed = Date.now() - startTime;
-            const timeoutError = new Error(
-              'Featured professionals query timeout in hook'
-            );
-            logger.error(
-              '[useFeaturedProfessionals] ⏱️ Query TIMEOUT in React Query hook',
-              timeoutError,
-              {
-                elapsedTime: `${timeoutElapsed}ms`,
-                timeoutLimit: '20000ms',
-                timestamp: new Date().toISOString(),
-              }
-            );
-            reject(timeoutError);
-          }, 20000);
-        });
-
-        const result = (await Promise.race([
-          queryPromise,
-          queryTimeout,
-        ])) as any;
-
-        // Clear timeout if query succeeded
-        if (queryTimeoutId) {
-          clearTimeout(queryTimeoutId);
-        }
-
         const duration = Date.now() - startTime;
         logger.info('[useFeaturedProfessionals] ✅ Fetch completed', {
           duration: `${duration}ms`,
-          count: result.length,
+          count: result?.length || 0,
           limit,
           categoryId,
         });
         return result;
       } catch (error: any) {
         const duration = Date.now() - startTime;
-        logger.error('[useFeaturedProfessionals] ❌ Fetch failed', {
-          error: error?.message || String(error),
+        
+        // ✅ FIX: Enhanced error serialization
+        let detailedError = '';
+        try {
+          detailedError = typeof error === 'object' ? JSON.stringify(error, Object.getOwnPropertyNames(error), 2) : String(error);
+        } catch (e) {
+          detailedError = String(error);
+        }
+
+        logger.error('[useFeaturedProfessionals] ❌ Fetch failed', error, {
+          detailed: detailedError,
           duration: `${duration}ms`,
           limit,
           categoryId,
@@ -129,6 +107,8 @@ export function useFeaturedProfessionals(
       }
     },
     ...CACHE_CONFIG.PROFESSIONAL_FEATURED,
+    // Use stale data if available, only refetch if stale
+    refetchOnMount: false,
     retry: 1, // Only retry once on failure
     retryDelay: 1000, // Wait 1 second before retry
   });

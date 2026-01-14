@@ -455,6 +455,20 @@ class Logger {
           // Handle error object properly
           if (error instanceof Error) {
             console.error(prefix, message, error.message, error.stack);
+          } else if (typeof error === 'object') {
+            try {
+              // capture all properties including non-enumerable
+              const serialized = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
+              
+              // If the serialized object is just empty or has [object Object] as a value
+              if (serialized.includes('[object Object]')) {
+                console.error(prefix, message, 'Serializing complex error object:', error);
+              } else {
+                console.error(prefix, message, serialized);
+              }
+            } catch (e) {
+              console.error(prefix, message, error);
+            }
           } else {
             console.error(prefix, message, error);
           }

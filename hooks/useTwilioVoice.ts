@@ -10,6 +10,7 @@ import type { CallState } from '@/services/twilioVoice.service';
 import { logger } from '@/lib/logger';
 import { useProfile } from './useProfile';
 import BillingService from '@/services/billingService';
+import { supabase } from '@/lib/supabase';
 
 export function useTwilioVoice() {
   const mountTimeRef = useRef<number>(Date.now());
@@ -17,7 +18,8 @@ export function useTwilioVoice() {
   const [error, setError] = useState<Error | null>(null);
   const { user, isLoading: profileLoading } = useProfile();
 
-  logger.debug('[useTwilioVoice] 🎬 Hook rendering', {
+  // ✅ DEBUG: Use INFO level to ensure visibility
+  logger.info('[useTwilioVoice] 🎬 Hook rendering (FIRST CALL CHECK)', {
     hasUser: !!user,
     userId: user?.id,
     profileLoading,
@@ -260,6 +262,94 @@ export function useTwilioVoice() {
       mounted = false;
     };
   }, [user, profileLoading]); // Re-register when user changes
+
+  // 🚨 EMERGENCY: Fallback registration if profile loading fails
+  // If session exists but profile isn't loading, register with session user_id
+  useEffect(() => {
+    // Only set up fallback if SDK is initialized and user hasn't loaded yet
+    if (!isInitialized || user) {
+      return;
+    }
+
+    let mounted = true;
+
+    logger.debug('[useTwilioVoice] 🚨 Setting up fallback registration timer', {
+      currentProfileLoading: profileLoading,
+      willCheckAfter: '10s',
+      timestamp: new Date().toISOString(),
+    });
+
+    // Wait 10 seconds before attempting fallback registration
+    const fallbackTimer = setTimeout(async () => {
+      if (!mounted) {
+        logger.debug('[useTwilioVoice] ⏭️ Component unmounted, skipping fallback');
+        return;
+      }
+
+      // Double-check conditions after 10 seconds
+      // If user loaded in the meantime, skip
+      if (user) {
+        logger.info('[useTwilioVoice] ✅ User loaded naturally, skipping fallback registration', {
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      // If profile is still loading, it might complete soon, skip
+      if (profileLoading) {
+        logger.debug('[useTwilioVoice] ⏳ Profile still loading after 10s, waiting for natural completion', {
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      // If we reach here: no user, not loading, SDK initialized = profile load failed
+      try {
+        logger.warn('[useTwilioVoice] 🚨 Profile failed to load, attempting fallback registration', {
+          reason: 'Profile not loaded after 10s and not actively loading',
+          timestamp: new Date().toISOString(),
+        });
+
+        // Check if we have a session directly from auth
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session?.user?.id) {
+          logger.warn('[useTwilioVoice] ⏭️ No session available for fallback registration', {
+            hasSession: !!session,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+
+        const sessionUserId = session.user.id;
+        
+        logger.info('[useTwilioVoice] 🚨 Executing fallback registration with session user', {
+          sessionUserId: sessionUserId.substring(0, 8),
+          timestamp: new Date().toISOString(),
+        });
+
+        await twilioVoiceService.register();
+
+        logger.info('[useTwilioVoice] ✅ Fallback registration successful', {
+          sessionUserId: sessionUserId.substring(0, 8),
+          timestamp: new Date().toISOString(),
+        });
+      } catch (err) {
+        logger.error('[useTwilioVoice] ❌ Fallback registration failed', err, {
+          errorMessage: err instanceof Error ? err.message : String(err),
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }, 10000); // 10 second delay
+
+    return () => {
+      mounted = false;
+      clearTimeout(fallbackTimer);
+      logger.debug('[useTwilioVoice] 🧹 Cleaned up fallback registration timer', {
+        timestamp: new Date().toISOString(),
+      });
+    };
+  }, [isInitialized, user, profileLoading]);
 
   // ✅ NEW: Monitor call state changes for billing
   useEffect(() => {

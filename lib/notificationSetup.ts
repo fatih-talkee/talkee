@@ -5,24 +5,18 @@ import { Platform, AppState } from 'react-native';
 import { logger } from '@/lib/logger';
 import { twilioVoiceService } from '@/services/twilioVoice.service';
 import { CallSidExtractor } from '@/services/twilioVoice/utils';
+import { setupNotificationHandler as registerGlobalHandler } from '@/services/notifications.service';
 
 /**
  * Setup notification handler
- * ✅ NOTE: Handler is now configured in services/notifications.service.ts
- * ✅ This function is kept for backward compatibility but does nothing
- * ✅ The handler in notifications.service.ts already handles:
- *    - Foreground: Suppress incoming call notifications (IncomingCallHandler modal handles it)
- *    - Background/Closed: Show incoming call notifications with action buttons
  */
 export function setupNotificationHandler() {
-  logger.debug(
-    '[NotificationSetup] ⏭️ Notification handler already configured in notifications.service.ts',
-    {
-      timestamp: new Date().toISOString(),
-    }
-  );
-  // Handler is already configured in services/notifications.service.ts
-  // No need to set it again (would override the existing one)
+  logger.info('[NotificationSetup] 🔧 Registering global notification handler', {
+    timestamp: new Date().toISOString(),
+  });
+  
+  // ✅ Call the actual implementation from notifications.service
+  registerGlobalHandler();
 }
 
 /**
@@ -534,8 +528,8 @@ export function setupNotificationResponseListener(
               );
             }
           } else {
-            logger.error(
-              '[NotificationSetup] ❌ callInvite not found after all retries',
+            logger.warn(
+              '[NotificationSetup] ⚠️ callInvite not found after all retries (this is expected if the call was already handled)',
               {
                 maxRetries,
                 retryDelay: `${retryDelay}ms`,
@@ -613,8 +607,8 @@ export function setupNotificationResponseListener(
           // If activeCallInvite exists but fallbackCallSid not found, continue to second section
           // Don't return here, let the second section handle it with hasActiveIncomingCall check
           if (!activeCallInvite) {
-            logger.error(
-              '[NotificationSetup] ❌ Cannot process notification - missing call_id and no active callInvite',
+            logger.warn(
+              '[NotificationSetup] ⚠️ Cannot process notification - missing call_id and no active callInvite found in SDK state',
               {
                 actionIdentifier,
                 callId,

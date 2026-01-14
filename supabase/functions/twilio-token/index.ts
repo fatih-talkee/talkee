@@ -24,7 +24,7 @@ serve(async (req) => {
     const TWILIO_TWIML_APP_SID = Deno.env.get('TWILIO_TWIML_APP_SID');
     const TWILIO_PUSH_CREDENTIAL_SID = Deno.env.get(
       'TWILIO_PUSH_CREDENTIAL_SID'
-    ); // 🔥 EKLE
+    );
 
     if (
       !TWILIO_ACCOUNT_SID ||
@@ -34,6 +34,13 @@ serve(async (req) => {
     ) {
       console.error('❌ [twilio-token] Missing Twilio credentials');
       throw new Error('Missing Twilio credentials');
+    }
+
+    // Validate push credential SID (required for incoming call push notifications)
+    if (!TWILIO_PUSH_CREDENTIAL_SID || TWILIO_PUSH_CREDENTIAL_SID.trim() === '') {
+      console.error('❌ [twilio-token] TWILIO_PUSH_CREDENTIAL_SID is missing or empty');
+      console.error('❌ [twilio-token] This will prevent incoming call push notifications from working');
+      throw new Error('TWILIO_PUSH_CREDENTIAL_SID is required for push notifications');
     }
 
     // Authenticate user
@@ -76,8 +83,8 @@ serve(async (req) => {
     console.log('🔑 [twilio-token] TwiML App SID:', TWILIO_TWIML_APP_SID);
     console.log(
       '🔑 [twilio-token] Push Credential SID:',
-      TWILIO_PUSH_CREDENTIAL_SID
-    ); // 🔥 EKLE
+      TWILIO_PUSH_CREDENTIAL_SID ? `${TWILIO_PUSH_CREDENTIAL_SID.substring(0, 10)}...` : 'MISSING'
+    );
 
     // Create JWT token for Twilio using jose (Deno-compatible)
     const now = Math.floor(Date.now() / 1000);
@@ -106,7 +113,10 @@ serve(async (req) => {
           incoming: {
             allow: true,
           },
-          push_credential_sid: TWILIO_PUSH_CREDENTIAL_SID, // 🔥 EKLE
+          // Include push_credential_sid only if it's set (required for push notifications)
+          ...(TWILIO_PUSH_CREDENTIAL_SID && {
+            push_credential_sid: TWILIO_PUSH_CREDENTIAL_SID,
+          }),
         },
       },
     })
