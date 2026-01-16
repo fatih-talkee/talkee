@@ -176,11 +176,24 @@ export function useCallDetails({
         );
       }
 
-      // Step 4: Calculate rate from CALLEE's availability
+      // Step 4: Get rate - PRIORITY: call record > calculated from availability
+      // IMPORTANT: Use rate from call record if available (this is what billing uses)
+      // Only fallback to calculating from availability if call record rate is missing
       let ratePerMinute = 0;
       let rateSource = 'not_available';
 
-      if (professionalId) {
+      // Priority 1: Use rate from call record (ensures UI matches billing)
+      if (metadata.callRecord?.rate_per_minute && Number(metadata.callRecord.rate_per_minute) > 0) {
+        ratePerMinute = Number(metadata.callRecord.rate_per_minute);
+        rateSource = 'call_record';
+        logger.info('[useCallDetails] ✅ Using rate from call record (matches billing)', {
+          ratePerMinute,
+          callRecordId: metadata.callRecord.id,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      // Priority 2: Calculate from availability (fallback)
+      else if (professionalId) {
         const rateResult = await calculateCallRate(
           professionalId,
           metadata.callType,
@@ -188,6 +201,13 @@ export function useCallDetails({
         );
         ratePerMinute = rateResult.ratePerMinute;
         rateSource = rateResult.rateSource;
+        logger.info('[useCallDetails] ⚠️ Using calculated rate (call record rate not available)', {
+          ratePerMinute,
+          rateSource,
+          hasCallRecord: !!metadata.callRecord,
+          callRecordRate: metadata.callRecord?.rate_per_minute,
+          timestamp: new Date().toISOString(),
+        });
       }
 
       // Step 5: Extract category name

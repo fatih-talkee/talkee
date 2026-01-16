@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { usersService } from '@/services/supabase/user.service';
 import { notificationsService } from '@/services/notifications.service';
 import BillingService from '@/services/billingService';
+import { lookupCallMetadata } from '@/services/callRecordLookup.service';
 import { OUTGOING_CALL_TIMEOUT_MS } from '../constants';
 import { CallEventListenerDependencies } from '../types';
 import { CallSidExtractor, getCallState } from '../utils';
@@ -114,11 +115,9 @@ export class CallEventListener {
       // Fetch rate from call record if not provided
       let finalRatePerMinute = this.ratePerMinute;
       let finalUserBalance = this.userBalance;
+      let isIncomingCall = false; // ✅ Track if this is an incoming call (callee should NOT be billed)
 
-      if (
-        (!finalRatePerMinute || finalRatePerMinute <= 0) &&
-        (this.callId || callSid)
-      ) {
+      if (!finalRatePerMinute || finalRatePerMinute <= 0) {
         logger.info('[CallEventListener] 💰 Fetching rate from call record', {
           debugId: this.debugId,
           callId: this.callId,
@@ -135,20 +134,142 @@ export class CallEventListener {
           if (this.callId && CallSidExtractor.isUuid(this.callId)) {
             const { data } = await supabase
               .from('calls')
-              .select('rate_per_minute')
+              .select('rate_per_minute, caller_id')
               .eq('id', this.callId)
               .maybeSingle();
-            callRecord = data;
+            if (data) {
+              callRecord = { rate_per_minute: data.rate_per_minute };
+              
+              // ✅ FIX: Check if current user is the callee (NOT the caller)
+              try {
+                const currentUser = await usersService.getCurrentUser();
+                if (currentUser?.id && data.caller_id && data.caller_id !== currentUser.id) {
+                  isIncomingCall = true;
+                  logger.info('[CallEventListener] 📞 Detected incoming call via caller_id check', {
+                    debugId: this.debugId,
+                    callId: this.callId,
+                    callerId: data.caller_id,
+                    currentUserId: currentUser.id,
+                    timestamp: new Date().toISOString(),
+                  });
+                }
+              } catch (userError) {
+                logger.warn('[CallEventListener] ⚠️ Could not check caller_id for incoming call detection', {
+                  debugId: this.debugId,
+                  error: userError instanceof Error ? userError.message : String(userError),
+                  timestamp: new Date().toISOString(),
+                });
+              }
+              
+              if (data.rate_per_minute) {
+                logger.debug('[CallEventListener] ✅ Found rate by call UUID', {
+                  debugId: this.debugId,
+                  callId: this.callId,
+                  isIncomingCall,
+                  timestamp: new Date().toISOString(),
+                });
+              }
+            }
           }
 
           // If not found and we have callSid, try by call_sid
           if (!callRecord?.rate_per_minute && callSid) {
             const { data } = await supabase
               .from('calls')
-              .select('rate_per_minute')
+              .select('rate_per_minute, caller_id')
               .eq('call_sid', callSid)
               .maybeSingle();
-            callRecord = data;
+            if (data) {
+              callRecord = { rate_per_minute: data.rate_per_minute };
+              
+              // ✅ FIX: Check if current user is the callee (NOT the caller)
+              if (!isIncomingCall) { // Only check if not already determined
+                try {
+                  const currentUser = await usersService.getCurrentUser();
+                  if (currentUser?.id && data.caller_id && data.caller_id !== currentUser.id) {
+                    isIncomingCall = true;
+                    logger.info('[CallEventListener] 📞 Detected incoming call via call_sid caller_id check', {
+                      debugId: this.debugId,
+                      callSid: callSid?.substring(0, 20) + '...',
+                      callerId: data.caller_id,
+                      currentUserId: currentUser.id,
+                      timestamp: new Date().toISOString(),
+                    });
+                  }
+                } catch (userError) {
+                  logger.warn('[CallEventListener] ⚠️ Could not check caller_id for incoming call detection', {
+                    debugId: this.debugId,
+                    error: userError instanceof Error ? userError.message : String(userError),
+                    timestamp: new Date().toISOString(),
+                  });
+                }
+              }
+              
+              if (data.rate_per_minute) {
+                logger.debug('[CallEventListener] ✅ Found rate by call SID', {
+                  debugId: this.debugId,
+                  callSid: callSid?.substring(0, 20) + '...',
+                  isIncomingCall,
+                  timestamp: new Date().toISOString(),
+                });
+              }
+            }
+          }
+
+          // FALLBACK: Use lookupCallMetadata for incoming calls (callee has different SID)
+          // This handles the case where caller and callee have different Twilio call SIDs
+          if (!callRecord?.rate_per_minute) {
+            logger.info('[CallEventListener] 🔍 Trying fallback lookup (lookupCallMetadata)', {
+              debugId: this.debugId,
+              timestamp: new Date().toISOString(),
+            });
+
+            try {
+              const currentUser = await usersService.getCurrentUser();
+              if (currentUser?.id) {
+                const metadata = await lookupCallMetadata(this.call, null, currentUser.id);
+                if (metadata.callRecord?.rate_per_minute) {
+                  callRecord = { rate_per_minute: metadata.callRecord.rate_per_minute };
+                  
+                  // ✅ FIX: Set the call ID from fallback lookup so billing can work
+                  if (metadata.callRecord.id && !this.callId) {
+                    this.callId = metadata.callRecord.id;
+                    this.deps.setCurrentDbCallId(metadata.callRecord.id);
+                    logger.info('[CallEventListener] ✅ Set callId from fallback lookup', {
+                      debugId: this.debugId,
+                      callId: metadata.callRecord.id,
+                      timestamp: new Date().toISOString(),
+                    });
+                  }
+                  
+                  // ✅ FIX: Track if this is an incoming call (callee should NOT be billed)
+                  if (metadata.isIncomingCall) {
+                    isIncomingCall = true;
+                    logger.info('[CallEventListener] 📞 Detected incoming call - callee will NOT be billed', {
+                      debugId: this.debugId,
+                      callId: metadata.callRecord.id,
+                      callerId: metadata.callRecord.caller_id,
+                      currentUserId: currentUser.id,
+                      timestamp: new Date().toISOString(),
+                    });
+                  }
+                  
+                  logger.info('[CallEventListener] ✅ Found rate via lookupCallMetadata (fallback)', {
+                    debugId: this.debugId,
+                    ratePerMinute: metadata.callRecord.rate_per_minute,
+                    callRecordId: metadata.callRecord.id,
+                    isIncomingCall: metadata.isIncomingCall,
+                    timestamp: new Date().toISOString(),
+                  });
+                }
+              }
+            } catch (fallbackError) {
+              logger.warn('[CallEventListener] ⚠️ Fallback lookup failed', {
+                debugId: this.debugId,
+                error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+                timestamp: new Date().toISOString(),
+              });
+            }
           }
 
           if (callRecord?.rate_per_minute) {
@@ -206,53 +327,65 @@ export class CallEventListener {
         }
       }
 
-      // Start per-minute billing (if rate provided)
-      if (finalRatePerMinute && finalRatePerMinute > 0) {
-        this.deps.startPerMinuteBilling(finalRatePerMinute);
-      } else {
-        logger.warn(
-          '[CallEventListener] ⚠️ Cannot start per-minute billing - rate is 0 or missing',
-          {
-            debugId: this.debugId,
-            callId: this.callId,
-            finalRatePerMinute,
-            timestamp: new Date().toISOString(),
-          }
-        );
-      }
-
-      // Start BillingService for notifications
-      if (
-        finalRatePerMinute &&
-        finalRatePerMinute > 0 &&
-        finalUserBalance !== undefined
-      ) {
-        logger.info('[CallEventListener] 💰 Starting BillingService', {
+      // ✅ FIX: Only start billing for CALLER, not for callee (incoming call receiver)
+      // The caller pays for the call, the callee does NOT get charged
+      if (isIncomingCall) {
+        logger.info('[CallEventListener] 📞 Skipping billing for callee (incoming call)', {
           debugId: this.debugId,
           callId: this.callId,
-          ratePerMinute: finalRatePerMinute,
-          userBalance: finalUserBalance,
+          isIncomingCall: true,
+          note: 'Callee does not pay for incoming calls - only caller is billed',
           timestamp: new Date().toISOString(),
         });
-
-        BillingService.startTracking(
-          this.call,
-          finalRatePerMinute,
-          finalUserBalance
-        );
       } else {
-        logger.warn(
-          '[CallEventListener] ⚠️ BillingService not started - missing rate or balance',
-          {
+        // Start per-minute billing (if rate provided) - ONLY FOR CALLER
+        if (finalRatePerMinute && finalRatePerMinute > 0) {
+          this.deps.startPerMinuteBilling(finalRatePerMinute);
+        } else {
+          logger.warn(
+            '[CallEventListener] ⚠️ Cannot start per-minute billing - rate is 0 or missing',
+            {
+              debugId: this.debugId,
+              callId: this.callId,
+              finalRatePerMinute,
+              timestamp: new Date().toISOString(),
+            }
+          );
+        }
+
+        // Start BillingService for notifications - ONLY FOR CALLER
+        if (
+          finalRatePerMinute &&
+          finalRatePerMinute > 0 &&
+          finalUserBalance !== undefined
+        ) {
+          logger.info('[CallEventListener] 💰 Starting BillingService (caller)', {
             debugId: this.debugId,
             callId: this.callId,
-            hasRate: !!finalRatePerMinute && finalRatePerMinute > 0,
-            rateValue: finalRatePerMinute,
-            hasBalance: finalUserBalance !== undefined,
-            balanceValue: finalUserBalance,
+            ratePerMinute: finalRatePerMinute,
+            userBalance: finalUserBalance,
             timestamp: new Date().toISOString(),
-          }
-        );
+          });
+
+          BillingService.startTracking(
+            this.call,
+            finalRatePerMinute,
+            finalUserBalance
+          );
+        } else {
+          logger.warn(
+            '[CallEventListener] ⚠️ BillingService not started - missing rate or balance',
+            {
+              debugId: this.debugId,
+              callId: this.callId,
+              hasRate: !!finalRatePerMinute && finalRatePerMinute > 0,
+              rateValue: finalRatePerMinute,
+              hasBalance: finalUserBalance !== undefined,
+              balanceValue: finalUserBalance,
+              timestamp: new Date().toISOString(),
+            }
+          );
+        }
       }
     };
 
