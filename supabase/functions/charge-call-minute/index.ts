@@ -92,10 +92,19 @@ serve(async (req: Request) => {
       });
     }
 
-    if (callRow.status !== 'active' && callRow.status !== 'in-progress') {
+    // Allow pending status for first minute due to race condition:
+    // The call may be connected (client sees it) but DB status update is still in progress.
+    // For subsequent minutes, we only allow active/in-progress.
+    const allowedStatuses = minute_number === 1 
+      ? ['active', 'in-progress', 'pending'] 
+      : ['active', 'in-progress'];
+    
+    if (!allowedStatuses.includes(callRow.status)) {
       console.warn('⚠️ [CHARGE-CALL-MINUTE] Call not active', {
         call_id,
         status: callRow.status,
+        minute_number,
+        allowedStatuses,
       });
       return new Response(JSON.stringify({ error: 'Call is not active' }), {
         status: 400,
@@ -183,14 +192,18 @@ serve(async (req: Request) => {
 
     const currentBalance = Number(caller.wallet_balance || 0);
 
-    // Charge this minute
-    const { error: chargeErr } = await supabase.rpc('add_user_credits', {
-      p_user_id: (callRow as any).caller_id,
-      p_amount: -minuteCost,
-      p_type: 'call_expense',
-      p_description: `Call minute ${minute_number}`,
-      p_stripe_payment_intent_id: null,
-    });
+    // ✅ FIX: Directly update wallet_balance instead of using add_user_credits
+    // add_user_credits RPC doesn't support call_expense type and has constraints
+    const callerId = (callRow as any).caller_id;
+
+    // Deduct from caller's wallet
+    const { error: chargeErr } = await supabase
+      .from('users')
+      .update({
+        wallet_balance: currentBalance - minuteCost,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', callerId);
 
     if (chargeErr) {
       console.error('❌ [CHARGE-CALL-MINUTE] Charge failed', {
@@ -207,15 +220,24 @@ serve(async (req: Request) => {
       );
     }
 
-    // Create transaction record
-    await supabase.from('transactions').insert({
-      user_id: (callRow as any).caller_id,
+    // Create transaction record for caller (expense)
+    // Note: amount must be positive (DB constraint), the type 'call_expense' indicates it's an expense
+    const { error: txErr } = await supabase.from('transactions').insert({
+      user_id: callerId,
       type: 'call_expense',
-      amount: minuteCost,
+      amount: minuteCost, // Positive value - the type indicates it's an expense
       description: `Call minute ${minute_number}`,
       call_id: call_id,
       status: 'completed',
     });
+
+    if (txErr) {
+      console.warn('⚠️ [CHARGE-CALL-MINUTE] Transaction record failed', {
+        call_id,
+        minute_number,
+        error: txErr.message,
+      });
+    }
 
     // Get updated balance
     const { data: updatedCaller } = await supabase

@@ -48,6 +48,26 @@ enabled = true
 verify_jwt = false # Twilio status callbacks don't send Supabase JWTs
 entrypoint = "./functions/twilio-webhook/index.ts"
 
+[functions.twilio-voice-routing]
+enabled = true
+verify_jwt = false # Twilio Voice TwiML webhook - Twilio doesn't send Supabase JWTs
+entrypoint = "./functions/twilio-voice-routing/index.ts"
+
+[functions.twilio-token]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/twilio-token/index.ts"
+
+[functions.charge-call-minute]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/charge-call-minute/index.ts"
+
+[functions.send-availability-reminder]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/send-availability-reminder/index.ts"
+
 [functions.notify-feed-followers]
 enabled = true
 verify_jwt = true
