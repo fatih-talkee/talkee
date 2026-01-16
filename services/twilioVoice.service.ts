@@ -1192,6 +1192,22 @@ class TwilioVoiceService {
       updateState: (updates: any) => this.stateManager.updateState(updates),
       cleanupCallInviteListeners: (callInvite: CallInvite) =>
         this.cleanupCallInviteListeners(callInvite),
+      getState: () => this.stateManager.getState(),
+      setupCallListeners: (
+        call: Call,
+        callId: string | undefined,
+        debugId?: string,
+        ratePerMinute?: number,
+        userBalance?: number
+      ) => this.setupCallListeners(call, callId, debugId, ratePerMinute, userBalance),
+      setActiveCall: (call: Call | null) => {
+        this.activeCall = call;
+        logger.info('[TwilioVoice] 📱 Active call set from native sync', {
+          hasCall: !!call,
+          callSid: call ? (call as any)?.getSid?.() || (call as any)?._sid : null,
+          timestamp: new Date().toISOString(),
+        });
+      },
     });
     this.voiceEventListener.setup();
     this.voiceListenersSetup = true;

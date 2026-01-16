@@ -1,6 +1,7 @@
 package net.talkee.app
 import expo.modules.splashscreen.SplashScreenManager
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 
@@ -10,8 +11,18 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnable
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 
 import expo.modules.ReactActivityDelegateWrapper
+import com.twiliovoicereactnative.VoiceActivityProxy
 
 class MainActivity : ReactActivity() {
+  /**
+   * Twilio Voice SDK: VoiceActivityProxy handles notification action button intents
+   * This is required for the Answer/Decline buttons on incoming call notifications to work
+   */
+  private val voiceActivityProxy = VoiceActivityProxy(
+    this,
+    VoiceActivityProxy.PermissionsRationaleNotifier { /* no-op */ }
+  )
+
   override fun onCreate(savedInstanceState: Bundle?) {
     // Set the theme to AppTheme BEFORE onCreate to support
     // coloring the background, status bar, and navigation bar.
@@ -21,6 +32,21 @@ class MainActivity : ReactActivity() {
     SplashScreenManager.registerOnActivity(this)
     // @generated end expo-splashscreen
     super.onCreate(null)
+    
+    // Twilio Voice SDK: Initialize activity proxy for handling notification actions
+    voiceActivityProxy.onCreate(savedInstanceState)
+  }
+  
+  override fun onDestroy() {
+    voiceActivityProxy.onDestroy()
+    super.onDestroy()
+  }
+  
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    // Twilio Voice SDK: Forward notification action intents to the proxy
+    // This handles Answer/Decline button taps from the incoming call notification
+    voiceActivityProxy.onNewIntent(intent)
   }
 
   /**

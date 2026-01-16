@@ -58,16 +58,25 @@ export default function ActiveCallOverlay() {
       currentUserId: currentUser?.id,
     });
 
-  // ✅ Show overlay when call is ringing, connecting, or connected
+  // ✅ Show overlay when call is connecting or connected
+  // ⚠️ Do NOT show when status is 'ringing' AND callInvite exists (that's for IncomingCallHandler)
   useEffect(() => {
+    // For incoming calls that haven't been accepted yet, don't show this overlay
+    // (IncomingCallHandler handles that case)
+    const isIncomingCallRinging = callState.status === 'ringing' && !!callState.callInvite;
+    
     const shouldShow =
-      callState.status === 'ringing' ||
-      callState.status === 'connecting' ||
-      callState.status === 'connected';
+      !isIncomingCallRinging &&
+      (callState.status === 'ringing' ||
+       callState.status === 'connecting' ||
+       callState.status === 'connected');
 
     logger.debug('[ActiveCallOverlay] 🔍 Call state changed', {
       status: callState.status,
       shouldShow,
+      isIncomingCallRinging,
+      hasCallInvite: !!callState.callInvite,
+      hasCall: !!callState.call,
       timestamp: new Date().toISOString(),
     });
 
@@ -103,7 +112,7 @@ export default function ActiveCallOverlay() {
       setMinimized(false);
       fadeAnim.setValue(0);
     }
-  }, [callState.status, callDetails, isLoadingDetails, loadCallDetails, fadeAnim]);
+  }, [callState.status, callState.callInvite, callDetails, isLoadingDetails, loadCallDetails, fadeAnim]);
 
   // Pulse animation for active call
   useEffect(() => {

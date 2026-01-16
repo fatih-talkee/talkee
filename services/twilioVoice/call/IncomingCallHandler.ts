@@ -1,8 +1,20 @@
-import { Call, CallInvite } from '@twilio/voice-react-native-sdk';
+import { Call, CallInvite, Voice } from '@twilio/voice-react-native-sdk';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { CallStatus as DbCallStatus } from '@/types/database.types';
-import { PermissionManager, CallSidExtractor, acceptCallInvite, rejectCallInvite, getCallInviteFrom, getCallState, isCallConnected } from '../utils';
+import { 
+  PermissionManager, 
+  CallSidExtractor, 
+  acceptCallInvite, 
+  rejectCallInvite, 
+  getCallInviteFrom, 
+  getCallState, 
+  isCallConnected,
+  getCallInviteState,
+  isCallInvitePending,
+  isCallInviteAccepted,
+  getActiveCalls
+} from '../utils';
 import { CallRepository } from '../database/CallRepository';
 import BillingService from '@/services/billingService';
 import {
@@ -88,52 +100,185 @@ export class IncomingCallHandler {
 
       const acceptCallStartTime = Date.now();
       let call: Call;
-      try {
-        logger.info('[IncomingCallHandler] 🔧 About to call callInvite.accept()', {
+      
+      // ✅ Check if call invite is already accepted (e.g., from native notification action)
+      const inviteState = getCallInviteState(callInvite);
+      const isAlreadyAccepted = isCallInviteAccepted(callInvite);
+      const isPending = isCallInvitePending(callInvite);
+      
+      logger.info('[IncomingCallHandler] 🔍 Checking call invite state before accept', {
+        debugId,
+        callId,
+        inviteState,
+        isAlreadyAccepted,
+        isPending,
+        timestamp: new Date().toISOString(),
+      });
+      
+      if (isAlreadyAccepted) {
+        // ✅ Call was already accepted (likely from native notification button)
+        // Try to get the active call from the SDK
+        logger.info('[IncomingCallHandler] 📞 Call invite already accepted (likely from native notification)', {
           debugId,
           callId,
-          callerDisplayName,
-          callInviteSid: CallSidExtractor.extractFromCallInvite(callInvite, debugId),
+          inviteState,
+          note: 'Attempting to get active call from SDK',
           timestamp: new Date().toISOString(),
         });
-
-        call = await acceptCallInvite(callInvite, {
-          contactHandle: callerDisplayName,
-        });
-        const acceptElapsed = Date.now() - acceptCallStartTime;
-
-        logger.info(
-          '[IncomingCallHandler] ✅ callInvite.accept() completed successfully',
-          {
+        
+        try {
+          // Try to get active calls from Voice SDK
+          const { voice } = await import('@/services/twilioVoice.service').then(m => ({ voice: (m.twilioVoiceService as any).voice }));
+          if (voice) {
+            const activeCalls = await getActiveCalls(voice);
+            const callSid = CallSidExtractor.extractFromCallInvite(callInvite, debugId);
+            
+            logger.info('[IncomingCallHandler] 🔍 Looking for active call', {
+              debugId,
+              callId,
+              callSid,
+              activeCallsCount: activeCalls.size,
+              activeCallSids: Array.from(activeCalls.keys()),
+              timestamp: new Date().toISOString(),
+            });
+            
+            // Try to find the call by SID
+            if (callSid && activeCalls.has(callSid)) {
+              call = activeCalls.get(callSid)!;
+              logger.info('[IncomingCallHandler] ✅ Found active call by SID', {
+                debugId,
+                callId,
+                callSid,
+                timestamp: new Date().toISOString(),
+              });
+            } else if (activeCalls.size === 1) {
+              // If there's exactly one active call, use it
+              call = activeCalls.values().next().value;
+              logger.info('[IncomingCallHandler] ✅ Using the only active call', {
+                debugId,
+                callId,
+                timestamp: new Date().toISOString(),
+              });
+            } else {
+              // No active call found - the accept from notification might have failed
+              logger.warn('[IncomingCallHandler] ⚠️ Call invite accepted but no active call found', {
+                debugId,
+                callId,
+                activeCallsCount: activeCalls.size,
+                timestamp: new Date().toISOString(),
+              });
+              
+              // Clear state and throw error
+              updateState({ callInvite: null, status: 'idle' });
+              throw new Error('Call was accepted from notification but no active call found');
+            }
+          } else {
+            logger.warn('[IncomingCallHandler] ⚠️ Voice SDK not available to get active calls', {
+              debugId,
+              callId,
+              timestamp: new Date().toISOString(),
+            });
+            updateState({ callInvite: null, status: 'idle' });
+            throw new Error('Call was accepted from notification but Voice SDK not available');
+          }
+        } catch (getActiveCallError) {
+          logger.error('[IncomingCallHandler] ❌ Failed to get active call after native accept', getActiveCallError, {
             debugId,
             callId,
-            callSid: call?.getSid?.(),
-            acceptElapsed: `${acceptElapsed}ms`,
+            errorMessage: getActiveCallError instanceof Error ? getActiveCallError.message : String(getActiveCallError),
             timestamp: new Date().toISOString(),
-          }
-        );
-      } catch (acceptError) {
-        const acceptElapsed = Date.now() - acceptCallStartTime;
-
-        logger.error(
-          '[IncomingCallHandler] ❌ Failed to accept call invite (may be expired/cancelled)',
-          acceptError,
-          {
+          });
+          updateState({ callInvite: null, status: 'idle' });
+          throw getActiveCallError;
+        }
+      } else {
+        // ✅ Normal flow - call invite is pending, accept it
+        try {
+          logger.info('[IncomingCallHandler] 🔧 About to call callInvite.accept()', {
             debugId,
             callId,
-            acceptElapsed: `${acceptElapsed}ms`,
-            errorMessage:
-              acceptError instanceof Error
-                ? acceptError.message
-                : String(acceptError),
+            callerDisplayName,
+            callInviteSid: CallSidExtractor.extractFromCallInvite(callInvite, debugId),
             timestamp: new Date().toISOString(),
+          });
+
+          call = await acceptCallInvite(callInvite, {
+            contactHandle: callerDisplayName,
+          });
+          const acceptElapsed = Date.now() - acceptCallStartTime;
+
+          logger.info(
+            '[IncomingCallHandler] ✅ callInvite.accept() completed successfully',
+            {
+              debugId,
+              callId,
+              callSid: call?.getSid?.(),
+              acceptElapsed: `${acceptElapsed}ms`,
+              timestamp: new Date().toISOString(),
+            }
+          );
+        } catch (acceptError) {
+          const acceptElapsed = Date.now() - acceptCallStartTime;
+          const errorMessage = acceptError instanceof Error ? acceptError.message : String(acceptError);
+          
+          // ✅ Check if error is "already accepted" - this can happen due to race condition
+          if (errorMessage.includes('accepted') && errorMessage.includes('pending')) {
+            logger.warn('[IncomingCallHandler] ⚠️ Call invite was accepted concurrently (race condition)', {
+              debugId,
+              callId,
+              acceptElapsed: `${acceptElapsed}ms`,
+              errorMessage,
+              note: 'Attempting to get active call from SDK',
+              timestamp: new Date().toISOString(),
+            });
+            
+            // Try to get active call
+            try {
+              const { voice } = await import('@/services/twilioVoice.service').then(m => ({ voice: (m.twilioVoiceService as any).voice }));
+              if (voice) {
+                const activeCalls = await getActiveCalls(voice);
+                if (activeCalls.size > 0) {
+                  call = activeCalls.values().next().value;
+                  logger.info('[IncomingCallHandler] ✅ Got active call after race condition', {
+                    debugId,
+                    callId,
+                    activeCallsCount: activeCalls.size,
+                    timestamp: new Date().toISOString(),
+                  });
+                } else {
+                  throw new Error('No active call found after race condition');
+                }
+              } else {
+                throw new Error('Voice SDK not available');
+              }
+            } catch (raceError) {
+              logger.error('[IncomingCallHandler] ❌ Failed to recover from race condition', raceError, {
+                debugId,
+                callId,
+                timestamp: new Date().toISOString(),
+              });
+              updateState({ callInvite: null, status: 'idle' });
+              throw acceptError; // Throw original error
+            }
+          } else {
+            logger.error(
+              '[IncomingCallHandler] ❌ Failed to accept call invite (may be expired/cancelled)',
+              acceptError,
+              {
+                debugId,
+                callId,
+                acceptElapsed: `${acceptElapsed}ms`,
+                errorMessage,
+                timestamp: new Date().toISOString(),
+              }
+            );
+
+            // Clear the call invite from state if accept failed
+            updateState({ callInvite: null, status: 'idle' });
+
+            throw acceptError;
           }
-        );
-
-        // Clear the call invite from state if accept failed
-        updateState({ callInvite: null, status: 'idle' });
-
-        throw acceptError;
+        }
       }
 
       // ✅ Save call SID if available

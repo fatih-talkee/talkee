@@ -1,13 +1,15 @@
-import { Voice, CallInvite } from '@twilio/voice-react-native-sdk';
+import { Voice, CallInvite, Call } from '@twilio/voice-react-native-sdk';
 import { logger } from '@/lib/logger';
 import { usersService } from '@/services/supabase/user.service';
-import { CallSidExtractor, addCallInviteEventListener, getCallInviteEventNames } from '../utils';
+import { CallSidExtractor, addCallInviteEventListener, getCallInviteEventNames, getCallInviteState, isCallInviteAccepted, getActiveCalls } from '../utils';
 import { VoiceEventListenerDependencies } from '../types';
 
 export class VoiceEventListener {
   private voice: Voice;
   private deps: VoiceEventListenerDependencies;
   private listeners: Map<string, any> = new Map();
+  private stateSyncInterval: ReturnType<typeof setInterval> | null = null;
+  private lastSyncCheck: number = 0;
 
   constructor(
     voice: Voice,
@@ -27,10 +29,140 @@ export class VoiceEventListener {
     this.setupRegisteredListener();
     this.setupUnregisteredListener();
     this.setupErrorListener();
+    this.setupStateSyncChecker();
 
     logger.info('[VoiceEventListener] ✅ Voice listeners set up successfully', {
       timestamp: new Date().toISOString(),
     });
+  }
+
+  /**
+   * Periodically check for state mismatches between native SDK and JS state.
+   * This handles cases where VoiceActivityProxy accepts a call natively
+   * but JS state is not updated.
+   */
+  private setupStateSyncChecker(): void {
+    // Check every 1 second while in ringing state
+    this.stateSyncInterval = setInterval(() => {
+      this.checkAndSyncState();
+    }, 1000);
+
+    logger.debug('[VoiceEventListener] 🔄 State sync checker started', {
+      interval: '1000ms',
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  private async checkAndSyncState(): Promise<void> {
+    // Throttle checks to avoid excessive logging
+    const now = Date.now();
+    if (now - this.lastSyncCheck < 900) return;
+    this.lastSyncCheck = now;
+
+    try {
+      const currentState = this.deps.getState();
+      
+      // Only check when in ringing state
+      if (currentState.status !== 'ringing') return;
+      if (!currentState.callInvite) return;
+
+      // Check if call invite has been accepted natively
+      const inviteState = getCallInviteState(currentState.callInvite);
+      const isAccepted = isCallInviteAccepted(currentState.callInvite);
+
+      if (isAccepted) {
+        logger.info('[VoiceEventListener] 🔔 Detected native accept - call invite state is "accepted"', {
+          inviteState,
+          jsStatus: currentState.status,
+          timestamp: new Date().toISOString(),
+        });
+
+        // Try to get the active call from SDK
+        await this.syncActiveCallFromNative();
+      }
+    } catch (error) {
+      // Silently ignore errors in sync checker
+    }
+  }
+
+  /**
+   * Attempt to sync active call from native SDK when state mismatch is detected
+   */
+  private async syncActiveCallFromNative(): Promise<void> {
+    try {
+      const activeCalls = await getActiveCalls(this.voice);
+      
+      logger.info('[VoiceEventListener] 🔍 Checking for active calls from native SDK', {
+        activeCallsCount: activeCalls.size,
+        activeCallSids: Array.from(activeCalls.keys()),
+        timestamp: new Date().toISOString(),
+      });
+
+      if (activeCalls.size > 0) {
+        // Get the first (and usually only) active call
+        const activeCall = activeCalls.values().next().value as Call;
+        const callSid = activeCall?.getSid?.();
+        
+        // Check the actual call state from native
+        const callAny = activeCall as any;
+        const nativeCallState = callAny?.state || callAny?._state || callAny?.getState?.();
+        const isAlreadyConnected = nativeCallState === 'connected' || nativeCallState === 'CONNECTED';
+
+        logger.info('[VoiceEventListener] ✅ Found active call from native SDK', {
+          callSid,
+          nativeCallState,
+          isAlreadyConnected,
+          timestamp: new Date().toISOString(),
+        });
+
+        // Determine the correct status based on native call state
+        const newStatus = isAlreadyConnected ? 'connected' : 'connecting';
+
+        // ✅ CRITICAL: Set the active call in the service so disconnect works
+        this.deps.setActiveCall(activeCall);
+
+        // Update state to reflect the connected call
+        this.deps.updateState({
+          status: newStatus,
+          call: activeCall,
+          callInvite: null,
+        });
+
+        // Set up call listeners
+        this.deps.setupCallListeners(activeCall, undefined, `native-sync-${Date.now()}`, 0, 0);
+
+        logger.info('[VoiceEventListener] ✅ State synced with native call', {
+          callSid,
+          newStatus,
+          nativeCallState,
+          timestamp: new Date().toISOString(),
+        });
+
+        // If already connected, start duration tracking
+        if (isAlreadyConnected) {
+          logger.info('[VoiceEventListener] 📞 Call is already connected, duration tracking should start from CallEventListener', {
+            callSid,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } else {
+        // Call invite is accepted but no active call found - this is an error state
+        logger.warn('[VoiceEventListener] ⚠️ Call invite accepted but no active call found', {
+          note: 'Resetting to idle state',
+          timestamp: new Date().toISOString(),
+        });
+
+        this.deps.updateState({
+          status: 'idle',
+          callInvite: null,
+        });
+      }
+    } catch (error) {
+      logger.error('[VoiceEventListener] ❌ Error syncing active call from native', error instanceof Error ? error : undefined, {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+      });
+    }
   }
 
   private setupCallInviteListener(): void {
@@ -234,6 +366,15 @@ export class VoiceEventListener {
       listenerCount: this.listeners.size,
       timestamp: new Date().toISOString(),
     });
+
+    // Stop state sync checker
+    if (this.stateSyncInterval) {
+      clearInterval(this.stateSyncInterval);
+      this.stateSyncInterval = null;
+      logger.debug('[VoiceEventListener] 🛑 State sync checker stopped', {
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     try {
       for (const [eventName, handler] of this.listeners.entries()) {

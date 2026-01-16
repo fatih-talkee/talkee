@@ -19,7 +19,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 import { useProfile } from '@/hooks/useProfile';
-import { CallSidExtractor } from '@/services/twilioVoice/utils';
+import { CallSidExtractor, isCallInvitePending, getCallInviteState } from '@/services/twilioVoice/utils';
 import {
   loadIncomingCallDetails,
   loadUserBalance,
@@ -163,14 +163,22 @@ export default function IncomingCallHandler() {
       return;
     }
 
-    // ✅ FIX: Show modal if we have a callInvite, even if status is not exactly 'ringing'
-    // This handles cases where status might be 'connecting' or other states but callInvite exists
+    // ✅ FIX: Show modal only if we have a PENDING callInvite
+    // Once the callInvite is accepted (either from JS or native notification), hide the modal
+    const isPending = callState.callInvite ? isCallInvitePending(callState.callInvite) : false;
+    const inviteState = callState.callInvite ? getCallInviteState(callState.callInvite) : null;
+    
+    // Only show if callInvite exists, is still pending, and status is ringing
+    // Don't show for 'connecting' status since that means call was already accepted
     const shouldShow = !!callState.callInvite && 
-      (callState.status === 'ringing' || callState.status === 'connecting');
+      isPending &&
+      callState.status === 'ringing';
 
     logger.info('[IncomingCallHandler] 🔍 Checking if should show modal', {
       status: callState.status,
       hasCallInvite: !!callState.callInvite,
+      inviteState,
+      isPending,
       hasCurrentUser: !!currentUser,
       shouldShow,
       currentShowModal: showModal,

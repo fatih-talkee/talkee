@@ -43,15 +43,34 @@ export const setupNotificationHandler = () => {
       const data = (content?.data || {}) as any;
 
       // ✅ Check multiple possible paths for incoming call type
+      // Include Twilio-specific detection patterns
       const isIncomingCall =
         data?.type === 'incoming_call' ||
         data?.call_type === 'incoming_call' ||
+        data?.twilio_voice_call ||
+        data?.twilio_call_sid ||
+        data?.CallSid ||
+        data?.call_sid ||
         content?.title?.includes('Incoming Call') ||
-        content?.title?.includes('📞');
+        content?.title?.includes('📞') ||
+        content?.title?.toLowerCase()?.includes('call') ||
+        content?.body?.toLowerCase()?.includes('calling');
 
       // ✅ Check if app is in foreground
       const appState = AppState.currentState;
       const isAppInForeground = appState === 'active';
+      
+      // ✅ NEW: Check if there's an active incoming call in Twilio state
+      // If there's an active callInvite and we're in foreground, suppress ALL notifications
+      // This catches cases where Twilio's push doesn't match our detection criteria
+      let hasActiveCallInvite = false;
+      try {
+        const { twilioVoiceService } = await import('@/services/twilioVoice.service');
+        const twilioState = twilioVoiceService.getState();
+        hasActiveCallInvite = !!twilioState?.callInvite || twilioState?.status === 'ringing';
+      } catch (e) {
+        // Ignore errors - twilioVoiceService might not be initialized
+      }
 
       logger.info(
         '[NotificationService] 📬 Foreground notification handler called',
@@ -64,6 +83,7 @@ export const setupNotificationHandler = () => {
           dataType: data?.type,
           dataStringified: JSON.stringify(data || {}).substring(0, 200),
           isIncomingCall,
+          hasActiveCallInvite,
           appState,
           isAppInForeground,
           timestamp: new Date().toISOString(),
@@ -72,11 +92,14 @@ export const setupNotificationHandler = () => {
 
       // ✅ BEST PRACTICE: If incoming call and app is in FOREGROUND, suppress notification
       // IncomingCallHandler modal will show instead (WhatsApp-style behavior)
-      if (isIncomingCall && isAppInForeground) {
+      // Also suppress if there's an active callInvite in Twilio state (catches Twilio's own push)
+      if ((isIncomingCall || hasActiveCallInvite) && isAppInForeground) {
         logger.info(
           '[NotificationService] 🚫 Suppressing incoming call notification (app is foreground)',
           {
             note: 'IncomingCallHandler modal will show instead',
+            isIncomingCall,
+            hasActiveCallInvite,
             timestamp: new Date().toISOString(),
           }
         );
@@ -125,15 +148,18 @@ export const setupNotificationHandler = () => {
 
       // Android: If a remote push arrives while foreground, the OS may not show it reliably.
       // We re-publish it as a local notification on our channel for consistent behavior.
+      // ✅ EXCEPT for call-related notifications - don't republish those
       let republishedOk = false;
       const shouldRepublishAndroidRemote =
-        isAndroid && isRemotePush && !isLocal;
+        isAndroid && isRemotePush && !isLocal && !isIncomingCall && !hasActiveCallInvite;
 
       logger.debug('[NotificationService] 🔍 Republish decision', {
         shouldRepublishAndroidRemote,
         isAndroid,
         isRemotePush,
         isLocal,
+        isIncomingCall,
+        hasActiveCallInvite,
         timestamp: new Date().toISOString(),
       });
 

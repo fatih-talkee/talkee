@@ -1,4 +1,4 @@
-import { Call, CallInvite } from '@twilio/voice-react-native-sdk';
+import { Call, CallInvite, Voice } from '@twilio/voice-react-native-sdk';
 
 /**
  * Type guards and utilities for safely accessing Twilio SDK internal properties
@@ -11,6 +11,45 @@ import { Call, CallInvite } from '@twilio/voice-react-native-sdk';
 export function getCallState(call: Call): string | undefined {
   const callAny = call as any;
   return callAny?.state || callAny?._state || callAny?.getState?.();
+}
+
+/**
+ * Safely get call invite state
+ */
+export function getCallInviteState(callInvite: CallInvite): string | undefined {
+  const inviteAny = callInvite as any;
+  return inviteAny?.state || inviteAny?._state || inviteAny?.getState?.();
+}
+
+/**
+ * Check if call invite is still pending (can be accepted)
+ */
+export function isCallInvitePending(callInvite: CallInvite): boolean {
+  const state = getCallInviteState(callInvite);
+  return state === 'pending' || state === 'PENDING' || !state;
+}
+
+/**
+ * Check if call invite has already been accepted
+ */
+export function isCallInviteAccepted(callInvite: CallInvite): boolean {
+  const state = getCallInviteState(callInvite);
+  return state === 'accepted' || state === 'ACCEPTED';
+}
+
+/**
+ * Get active calls from the Voice SDK
+ */
+export async function getActiveCalls(voice: Voice): Promise<Map<string, Call>> {
+  try {
+    const voiceAny = voice as any;
+    if (voiceAny?.getCalls && typeof voiceAny.getCalls === 'function') {
+      return await voiceAny.getCalls();
+    }
+    return new Map();
+  } catch (error) {
+    return new Map();
+  }
 }
 
 /**

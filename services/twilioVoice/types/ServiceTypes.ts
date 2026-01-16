@@ -25,6 +25,15 @@ export interface CallInviteCleanupCallback {
 export interface VoiceEventListenerDependencies {
   updateState: StateUpdateCallback;
   cleanupCallInviteListeners: CallInviteCleanupCallback;
+  getState: () => CallState;
+  setupCallListeners: (
+    call: Call,
+    callId: string | undefined,
+    debugId?: string,
+    ratePerMinute?: number,
+    userBalance?: number
+  ) => void;
+  setActiveCall: (call: Call | null) => void;
 }
 
 export interface CallEventListenerDependencies {
