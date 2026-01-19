@@ -512,7 +512,7 @@ export default function BecomeProfessionalScreen() {
 
         // Navigate to home
         setTimeout(() => {
-          router.replace('/(tabs)/home' as any);
+          router.replace('/(tabs)/' as any);
         }, 1000);
       } else {
         throw new Error('Failed to create professional profile');
