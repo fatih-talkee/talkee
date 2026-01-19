@@ -85,7 +85,7 @@ export function useCallHistory(
     },
     staleTime: 1000 * 60 * 2, // 2 minutes
     gcTime: 1000 * 60 * 10, // 10 minutes
-    refetchOnMount: false, // ✅ FIX: Prevent unnecessary refetches
+    refetchOnMount: 'always', // Always refetch when call history page mounts
     refetchOnWindowFocus: false, // ✅ FIX: Prevent refresh loops
   });
 }
@@ -159,7 +159,7 @@ export function useInfiniteCallHistory(filters?: CallFilters) {
     initialPageParam: 0,
     staleTime: 1000 * 60 * 2, // 2 minutes - data is fresh for 2 minutes
     gcTime: 1000 * 60 * 10, // 10 minutes - cache retention
-    refetchOnMount: false, // ✅ FIX: Don't refetch on mount (prevents loops)
+    refetchOnMount: 'always', // Always refetch when call history page mounts
     refetchOnWindowFocus: false, // ✅ FIX: Don't refetch on window focus
     refetchInterval: false, // ✅ FIX: Disable auto-refetch interval
     // ✅ FIX: Removed placeholderData to match invoices behavior - isLoading should be false when data exists
@@ -212,7 +212,7 @@ export function useCallHistoryCount(filters?: CallFilters) {
     },
     staleTime: 1000 * 60 * 2, // 2 minutes
     gcTime: 1000 * 60 * 10, // 10 minutes
-    refetchOnMount: false, // ✅ FIX: Prevent unnecessary refetches on mount
+    refetchOnMount: 'always', // Always refetch when call history page mounts
     refetchOnWindowFocus: false, // ✅ FIX: Prevent refresh loops on focus
     refetchInterval: false, // ✅ FIX: Disable auto-refetch interval (prevents 3-5s refresh)
     placeholderData: (previousData) => previousData, // ✅ FIX: Keep previous data while refetching

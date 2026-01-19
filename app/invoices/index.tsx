@@ -3,13 +3,16 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   FlatList,
   Image,
   Linking,
   Alert,
 } from 'react-native';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
   FileText,
@@ -36,6 +39,7 @@ type FilterStatus = 'all' | 'paid' | 'pending' | 'overdue' | 'cancelled';
 
 export default function InvoicesScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<FilterStatus>('all');
   const [avatarErrors, setAvatarErrors] = useState<{ [key: string]: boolean }>(
@@ -831,6 +835,7 @@ export default function InvoicesScreen() {
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
+      edges={['top']}
     >
       <Header showLogo showBack />
 
@@ -853,7 +858,10 @@ export default function InvoicesScreen() {
         data={filteredInvoices}
         keyExtractor={(item) => item.id}
         renderItem={renderInvoiceItem}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: Math.max(insets.bottom, 24) + 24 },
+        ]}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyState}>

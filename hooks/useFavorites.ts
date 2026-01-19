@@ -35,6 +35,7 @@ export function useFavorites(): UseQueryResult<ProfessionalWithRelations[]> {
       return favorites as unknown as ProfessionalWithRelations[];
     },
     ...CACHE_CONFIG.FAVORITES,
+    refetchOnMount: 'always', // Always refetch when favorites page mounts
   });
 }
 
@@ -60,10 +61,18 @@ export function useAddFavorite() {
     mutationFn: (professionalId: string) =>
       favoritesService.addFavorite(professionalId),
     onSuccess: (_, professionalId) => {
-      // Invalidate favorites list
-      queryClient.invalidateQueries({ queryKey: favoritesKeys.lists() });
+      // Invalidate favorites list with refetchType: 'all' to ensure all instances update
+      queryClient.invalidateQueries({
+        queryKey: favoritesKeys.lists(),
+        refetchType: 'all',
+      });
       // Update specific favorite check
       queryClient.setQueryData(favoritesKeys.check(professionalId), true);
+      // Invalidate profile to update favorites_count in stats
+      queryClient.invalidateQueries({
+        queryKey: ['profile'],
+        refetchType: 'all',
+      });
     },
   });
 }
@@ -78,10 +87,18 @@ export function useRemoveFavorite() {
     mutationFn: (professionalId: string) =>
       favoritesService.removeFavorite(professionalId),
     onSuccess: (_, professionalId) => {
-      // Invalidate favorites list
-      queryClient.invalidateQueries({ queryKey: favoritesKeys.lists() });
+      // Invalidate favorites list with refetchType: 'all' to ensure all instances update
+      queryClient.invalidateQueries({
+        queryKey: favoritesKeys.lists(),
+        refetchType: 'all',
+      });
       // Update specific favorite check
       queryClient.setQueryData(favoritesKeys.check(professionalId), false);
+      // Invalidate profile to update favorites_count in stats
+      queryClient.invalidateQueries({
+        queryKey: ['profile'],
+        refetchType: 'all',
+      });
     },
   });
 }
@@ -96,10 +113,19 @@ export function useToggleFavorite() {
     mutationFn: (professionalId: string) =>
       favoritesService.toggleFavorite(professionalId),
     onSuccess: (_, professionalId) => {
-      // Invalidate both favorites list and specific check
-      queryClient.invalidateQueries({ queryKey: favoritesKeys.lists() });
+      // Invalidate both favorites list and specific check with refetchType: 'all'
+      queryClient.invalidateQueries({
+        queryKey: favoritesKeys.lists(),
+        refetchType: 'all',
+      });
       queryClient.invalidateQueries({
         queryKey: favoritesKeys.check(professionalId),
+        refetchType: 'all',
+      });
+      // Invalidate profile to update favorites_count in stats
+      queryClient.invalidateQueries({
+        queryKey: ['profile'],
+        refetchType: 'all',
       });
     },
   });

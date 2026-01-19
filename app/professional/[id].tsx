@@ -1146,12 +1146,12 @@ export default function ProfessionalProfileScreen() {
             remainingTime > 0 ? (
               professional.is_available ? (
                 // Available + Online → Green
-                <Card
+                <View
                   style={[
                     styles.currentAvailabilityBanner,
                     {
-                      backgroundColor: '#10B981' + '15',
-                      borderColor: '#10B981' + '40',
+                      backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                      borderColor: 'rgba(16, 185, 129, 0.4)',
                     },
                   ]}
                 >
@@ -1233,15 +1233,15 @@ export default function ProfessionalProfileScreen() {
                         )}
                     </View>
                   </View>
-                </Card>
+                </View>
               ) : (
                 // Available but Offline → Orange/Warning
-                <Card
+                <View
                   style={[
                     styles.currentAvailabilityBanner,
                     {
-                      backgroundColor: '#F59E0B' + '15',
-                      borderColor: '#F59E0B' + '40',
+                      backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                      borderColor: 'rgba(245, 158, 11, 0.4)',
                     },
                   ]}
                 >
@@ -1273,7 +1273,7 @@ export default function ProfessionalProfileScreen() {
                           { color: theme.colors.textSecondary },
                         ]}
                       >
-                        {formatRemainingTime(remainingTime)} left
+                        {formatRemainingTime(remainingTime)}
                       </Text>
                     </View>
                     <View style={styles.currentAvailabilityPriceContainer}>
@@ -1327,7 +1327,7 @@ export default function ProfessionalProfileScreen() {
                         )}
                     </View>
                   </View>
-                </Card>
+                </View>
               )
             ) : null}
 
@@ -1423,7 +1423,12 @@ export default function ProfessionalProfileScreen() {
                     </View>
                   )}
 
-                  <View style={styles.availabilityFooter}>
+                  <View
+                    style={[
+                      styles.availabilityFooter,
+                      { borderTopColor: theme.colors.border },
+                    ]}
+                  >
                     <View style={styles.timeRow}>
                       <View
                         style={[
@@ -2179,7 +2184,7 @@ export default function ProfessionalProfileScreen() {
                         { color: theme.colors.textMuted },
                       ]}
                     >
-                      {formatRemainingTime(remainingTime)} left
+                      {formatRemainingTime(remainingTime)}
                     </Text>
                   </View>
                 </>
@@ -2225,7 +2230,7 @@ export default function ProfessionalProfileScreen() {
                         { color: theme.colors.textMuted },
                       ]}
                     >
-                      {formatRemainingTime(remainingTime)} left
+                      {formatRemainingTime(remainingTime)}
                     </Text>
                   </View>
                 </>
@@ -3014,7 +3019,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     marginTop: 4,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.12)',
+    // borderTopColor is set dynamically in the component
   },
   timeRow: {
     flexDirection: 'row',

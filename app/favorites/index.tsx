@@ -3,10 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   FlatList,
   TouchableOpacity,
 } from 'react-native';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { Heart } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { SearchBar } from '@/components/ui/SearchBar';
@@ -23,6 +26,7 @@ import type { ProfessionalWithRelations } from '@/types/database.types';
 
 export default function FavoritesScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const toast = useToast();
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -127,6 +131,7 @@ export default function FavoritesScreen() {
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
+      edges={['top']}
     >
       <Header showLogo showBack />
 
@@ -159,7 +164,10 @@ export default function FavoritesScreen() {
           data={filteredFavorites}
           keyExtractor={(item) => item?.id || Math.random().toString()}
           renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Math.max(insets.bottom, 24) + 24 },
+          ]}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyState}>

@@ -56,6 +56,7 @@ export function useInvoices(role: 'caller' | 'professional' = 'caller') {
     queryFn: () => ProfileService.getInvoices(userId!, role),
     enabled: !!userId,
     ...CACHE_CONFIG.INVOICES,
+    refetchOnMount: 'always', // Always refetch when invoices page mounts
   });
 
   return {

@@ -3,11 +3,14 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   FlatList,
   Image,
 } from 'react-native';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
   Bell,
@@ -45,6 +48,7 @@ interface NotificationWithProfessional extends Notification {
 
 export default function NotificationsScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const toast = useToast();
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'unread'>('all');
   const [expandedNotifications, setExpandedNotifications] = useState<
@@ -390,13 +394,12 @@ export default function NotificationsScreen() {
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
+      edges={['top']}
     >
       <Header
         showLogo
         showBack
         onBackPress={handleBackPress}
-        showLogo
-        showBack
         rightButton={
           unreadCount > 0 && (
             <TouchableOpacity
@@ -434,7 +437,10 @@ export default function NotificationsScreen() {
         data={filteredNotifications}
         keyExtractor={(item) => item.id}
         renderItem={renderNotificationItem}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: Math.max(insets.bottom, 24) + 24 },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshing={isLoading}
         onRefresh={refetch}

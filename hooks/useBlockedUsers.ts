@@ -27,6 +27,7 @@ export function useBlockedUsers() {
       }
     },
     ...CACHE_CONFIG.BLOCKED_USERS,
+    refetchOnMount: 'always', // Always refetch when blocked users page mounts
   });
 }
 
@@ -47,7 +48,15 @@ export function useBlockUser() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['blocked-users'] });
+      queryClient.invalidateQueries({
+        queryKey: ['blocked-users'],
+        refetchType: 'all',
+      });
+      // Invalidate profile to update blocked_users_count in stats
+      queryClient.invalidateQueries({
+        queryKey: ['profile'],
+        refetchType: 'all',
+      });
     },
   });
 }
@@ -69,8 +78,15 @@ export function useUnblockUser() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['blocked-users'] });
+      queryClient.invalidateQueries({
+        queryKey: ['blocked-users'],
+        refetchType: 'all',
+      });
+      // Invalidate profile to update blocked_users_count in stats
+      queryClient.invalidateQueries({
+        queryKey: ['profile'],
+        refetchType: 'all',
+      });
     },
   });
 }
-

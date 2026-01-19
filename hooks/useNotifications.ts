@@ -101,6 +101,7 @@ export function useNotifications(limit: number = 50, offset: number = 0) {
       }
     },
     ...CACHE_CONFIG.NOTIFICATIONS,
+    refetchOnMount: 'always', // Always refetch when notifications page mounts
     retry: false, // Don't retry on timeout - fail fast
     enabled: isAuthReady, // Only fetch when auth is ready
   });
@@ -243,7 +244,10 @@ export function useMarkAsRead() {
         }
       );
       // Invalidate notifications and unread count
-      queryClient.invalidateQueries({ queryKey: notificationsKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: notificationsKeys.all,
+        refetchType: 'all',
+      });
       logger.debug('[useNotifications] ✅ Queries invalidated', {
         timestamp: new Date().toISOString(),
       });
@@ -415,7 +419,10 @@ export function useMarkAllAsRead() {
       );
 
       // Invalidate and refetch to ensure consistency
-      queryClient.invalidateQueries({ queryKey: notificationsKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: notificationsKeys.all,
+        refetchType: 'all',
+      });
       queryClient.refetchQueries({ queryKey: notificationsKeys.all });
 
       logger.debug('[useNotifications] ✅ Queries invalidated and refetched', {
@@ -492,7 +499,10 @@ export function useDeleteNotification() {
         }
       );
       // Invalidate notifications and unread count
-      queryClient.invalidateQueries({ queryKey: notificationsKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: notificationsKeys.all,
+        refetchType: 'all',
+      });
       logger.debug('[useNotifications] ✅ Queries invalidated', {
         timestamp: new Date().toISOString(),
       });

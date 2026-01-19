@@ -16,7 +16,10 @@ import {
   RefreshControl,
   TouchableOpacity,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Clock } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
@@ -43,6 +46,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 export default function CallHistoryScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const toast = useToast();
   const queryClient = useQueryClient();
   const invalidateCallHistory = useInvalidateCallHistory();
@@ -433,6 +437,7 @@ export default function CallHistoryScreen() {
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
+      edges={['top']}
     >
       <Header showLogo showBack />
 
@@ -452,7 +457,10 @@ export default function CallHistoryScreen() {
         data={filteredHistory}
         keyExtractor={(item) => item.id}
         renderItem={renderCallItem}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: Math.max(insets.bottom, 24) + 24 },
+        ]}
         showsVerticalScrollIndicator={false}
         onEndReached={loadMore}
         onEndReachedThreshold={0.5}
