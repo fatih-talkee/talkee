@@ -15,7 +15,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useTheme } from '@/contexts/ThemeContext';
 import { X } from 'lucide-react-native';
 import { router } from 'expo-router';
@@ -264,7 +264,7 @@ export function QRCodeScanner({ visible, onClose }: QRCodeScannerProps) {
         <View style={styles.cameraContainer}>
           <CameraView
             style={styles.camera}
-            facing={CameraType.back}
+            facing="back"
             onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
             barcodeScannerSettings={{
               barcodeTypes: ['qr'],

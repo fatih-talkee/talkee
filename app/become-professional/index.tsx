@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   Animated,
   Platform,
@@ -13,7 +12,10 @@ import {
   TextInput,
   KeyboardAvoidingView,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Button } from '@/components/ui/Button';
 import { Header } from '@/components/ui/Header';
@@ -502,7 +504,7 @@ export default function BecomeProfessionalScreen() {
 
         // Navigate to home
         setTimeout(() => {
-          router.replace('/(tabs)/');
+          router.replace('/(tabs)/home' as any);
         }, 1000);
       } else {
         throw new Error('Failed to create professional profile');
@@ -614,7 +616,10 @@ export default function BecomeProfessionalScreen() {
 
     // Check for overlaps (only for scheduled availabilities, not urgent)
     if (newAvailability.availableAt !== 'urgent') {
-      const overlaps = checkAvailabilityOverlaps(newAvailability, availabilities);
+      const overlaps = checkAvailabilityOverlaps(
+        newAvailability,
+        availabilities
+      );
       if (overlaps.length > 0) {
         setOverlappingAvailabilities(overlaps);
         setShowOverlapModal(true);
@@ -686,7 +691,7 @@ export default function BecomeProfessionalScreen() {
             fullName={fullName}
             email={email}
             bio={bio}
-            profileLoading={profileLoading}
+            profileLoading={profileLoading || true}
             onFullNameChange={setFullName}
             onEmailChange={setEmail}
             onBioChange={setBio}
@@ -761,6 +766,7 @@ export default function BecomeProfessionalScreen() {
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
+      edges={['top']}
     >
       <Header
         showBack
@@ -797,7 +803,7 @@ export default function BecomeProfessionalScreen() {
           {
             backgroundColor: '#000000',
             borderTopColor: theme.colors.border,
-            paddingBottom: Math.max(insets.bottom, 60),
+            paddingBottom: Math.max(insets.bottom, 16) + 24,
           },
         ]}
       >
@@ -1640,11 +1646,12 @@ export default function BecomeProfessionalScreen() {
                     onPress={() => {
                       setAvailabilityFormData({
                         ...availabilityFormData,
-                        videoCallEnabled: !availabilityFormData.videoCallEnabled,
-                        videoCallRatePerMinute: availabilityFormData
-                          .videoCallEnabled
-                          ? ''
-                          : availabilityFormData.videoCallRatePerMinute,
+                        videoCallEnabled:
+                          !availabilityFormData.videoCallEnabled,
+                        videoCallRatePerMinute:
+                          availabilityFormData.videoCallEnabled
+                            ? ''
+                            : availabilityFormData.videoCallRatePerMinute,
                       });
                       setAvailabilityError(null);
                     }}
@@ -1765,7 +1772,8 @@ export default function BecomeProfessionalScreen() {
               : availabilityFormData.endHour,
           pricePerMinute: availabilityFormData.pricePerMinute!,
           videoCallEnabled: availabilityFormData.videoCallEnabled || false,
-          videoCallRatePerMinute: availabilityFormData.videoCallRatePerMinute || '',
+          videoCallRatePerMinute:
+            availabilityFormData.videoCallRatePerMinute || '',
         }}
       />
     </SafeAreaView>
