@@ -25,6 +25,7 @@ import * as Sentry from '@sentry/react-native';
 import { SentryAdapter } from '../lib/sentryAdapter';
 import { notificationsService } from '../services';
 import { Platform, View, ActivityIndicator, StyleSheet } from 'react-native';
+import Constants from 'expo-constants';
 import NetInfo from '@react-native-community/netinfo';
 import { OfflineBanner } from '../components/ui/OfflineBanner';
 import { StripeProvider } from '@stripe/stripe-react-native';
@@ -461,8 +462,11 @@ export default function RootLayout() {
     );
   }
 
+  // Read Stripe publishable key from app.json extra config (not env vars)
   const stripePublishableKey =
-    process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
+    Constants.expoConfig?.extra?.stripePublishableKey ||
+    process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
+    '';
 
   return (
     <SafeAreaProvider>
