@@ -54,3 +54,5 @@ ios/sentry.properties
 
 # typescript
 *.tsbuildinfo
+
+.agent/
