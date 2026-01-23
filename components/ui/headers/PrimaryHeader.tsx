@@ -19,31 +19,43 @@ const logoDark = require('../../../assets/images/talkee_logoF.png');
 const logoLight = require('../../../assets/images/talkee_logoM.png');
 
 interface PrimaryHeaderProps {
+  leftButtons?: React.ReactNode | React.ReactNode[];
   rightButtons?: React.ReactNode | React.ReactNode[];
   showLogo?: boolean;
+  title?: string;
+  titleColor?: string;
+  children?: React.ReactNode;
   containerStyle?: ViewStyle;
   onLogoPress?: () => void;
   showBack?: boolean;
   backRoute?: string;
   onBackPress?: () => void;
-  title?: string;
 }
 
 export function PrimaryHeader({
+  leftButtons,
   rightButtons,
   showLogo = true,
+  title,
+  titleColor,
+  children,
   containerStyle,
   onLogoPress,
   showBack = false,
   backRoute,
   onBackPress,
-  title,
 }: PrimaryHeaderProps) {
   const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const logo = theme.name === 'dark' ? logoDark : logoLight;
+
+  const renderLeft = Array.isArray(leftButtons)
+    ? leftButtons
+    : leftButtons
+    ? [leftButtons]
+    : [];
 
   const renderRight = Array.isArray(rightButtons)
     ? rightButtons
@@ -68,31 +80,11 @@ export function PrimaryHeader({
   };
 
   // Ensure proper top padding for Android status bar
-  // Android status bars can be taller on some devices, use a safe minimum
-  // Add extra padding for Android action bar
-  const topPadding = Math.max(
-    insets.top + (Platform.OS === 'android' ? 8 : 0),
-    Platform.OS === 'android' ? 56 : 0
-  );
+  const topPadding = Math.max(insets.top, Platform.OS === 'android' ? 56 : 0);
 
   // Header background adapts to theme
-  // For dark theme: black, for other themes: use surface color (lighter backgrounds)
   const headerBackground =
-    theme.name === 'dark' ? '#000000' : theme.colors.surface;
-
-  // Button background adapts to theme
-  // For dark theme: use surface (dark gray), for light theme: use brandPink from theme
-  // For other themes (green, blue): use black for contrast
-  const buttonBackground =
-    theme.name === 'dark'
-      ? theme.colors.surface
-      : theme.name === 'light'
-      ? theme.colors.brandPink
-      : '#000000';
-
-  // Icon color adapts to theme
-  // Always white for good contrast against all backgrounds
-  const iconColor = '#FFFFFF';
+    theme.name === 'dark' ? '#1C1C1E' : theme.colors.surface;
 
   return (
     <View
@@ -100,13 +92,28 @@ export function PrimaryHeader({
         styles.header,
         {
           backgroundColor: headerBackground,
-          paddingTop: topPadding,
+          paddingTop: Math.max(insets.top, 44),
         },
         containerStyle,
       ]}
     >
       <View style={styles.leftSection}>
-        {showLogo && (
+        {showBack && (
+          <View style={styles.leftButtonWrapper}>
+            <TouchableOpacity
+              onPress={handleBack}
+              style={styles.backButton}
+            >
+              <ArrowLeft size={20} color={theme.colors.pinkTwo} />
+            </TouchableOpacity>
+          </View>
+        )}
+        {renderLeft.map((btn, idx) => (
+          <View key={idx} style={styles.leftButtonWrapper}>
+            {btn}
+          </View>
+        ))}
+        {showLogo && !title ? (
           <TouchableOpacity
             disabled={!onLogoPress}
             onPress={onLogoPress}
@@ -120,19 +127,22 @@ export function PrimaryHeader({
               accessibilityLabel="Talkee Logo"
             />
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
 
-      <View style={styles.centerSection}>
-        {title && (
-          <Text
-            style={[styles.title, { color: theme.colors.text }]}
-            numberOfLines={1}
-          >
+      {title && (
+        <View style={styles.centerSectionAbsolute}>
+          <Text style={[styles.titleText, { color: titleColor || theme.colors.text }]} numberOfLines={1}>
             {title}
           </Text>
-        )}
-      </View>
+        </View>
+      )}
+
+      {!title && children && (
+        <View style={styles.centerSection}>
+          {children}
+        </View>
+      )}
 
       <View style={styles.rightSection}>
         {renderRight.map((btn, idx) => (
@@ -140,16 +150,6 @@ export function PrimaryHeader({
             {btn}
           </View>
         ))}
-        {showBack && (
-          <View style={styles.rightButtonWrapper}>
-            <TouchableOpacity
-              onPress={handleBack}
-              style={[styles.iconButton, { backgroundColor: buttonBackground }]}
-            >
-              <ArrowLeft size={20} color={iconColor} />
-            </TouchableOpacity>
-          </View>
-        )}
       </View>
     </View>
   );
@@ -175,11 +175,11 @@ const styles = StyleSheet.create({
         }),
   },
   leftSection: {
-    flex: 0,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    minWidth: 120,
-    width: 120,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    flexDirection: 'row',
+  },
+  leftButtonWrapper: {
     marginRight: 8,
   },
   logoContainer: {
@@ -195,13 +195,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: {
-    fontSize: 18,
+  centerSectionAbsolute: {
+    position: 'absolute',
+    top: 10,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    pointerEvents: 'none',
+  },
+  titleText: {
+    fontSize: 16,
     fontFamily: 'Inter-Bold',
-    textAlign: 'center',
+    fontWeight: '700',
   },
   rightSection: {
-    flex: 2,
     alignItems: 'center',
     justifyContent: 'flex-end',
     flexDirection: 'row',
@@ -215,6 +224,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  backButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
   },
   logoImage: {
     width: 120,

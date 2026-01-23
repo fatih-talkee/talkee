@@ -7,11 +7,12 @@ import {
   TouchableOpacity,
   FlatList,
   ScrollView,
+  TextInput,
+  Dimensions,
+  Image,
 } from 'react-native';
-import { Search, Filter, X, Star } from 'lucide-react-native';
+import { Search, SlidersHorizontal } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
-import { SearchBar } from '@/components/ui/SearchBar';
-import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
 import { useTheme } from '@/contexts/ThemeContext';
 import { FilterModal } from '@/components/filters/FilterModal';
 import { PageLoading } from '@/components/ui/PageLoading';
@@ -20,10 +21,12 @@ import {
   useInfiniteProfessionals,
   useInfiniteSearchProfessionals,
 } from '@/hooks/useProfessionals';
-import { useFavorites } from '@/hooks/useFavorites';
-import type { ProfessionalWithRelations } from '@/types/database.types';
-import { useDebounce } from '@/hooks/useDebounce';
+import { useRouter } from 'expo-router';
 import { useCategories } from '@/hooks/useCategories';
+import type { ProfessionalWithRelations } from '@/types/database.types';
+
+const { width } = Dimensions.get('window');
+const CARD_WIDTH = (width - 64) / 3; // Match backup density (3 items)
 
 interface FilterState {
   priceRange: [number, number];
@@ -35,513 +38,340 @@ interface FilterState {
   skills: string[];
 }
 
+type TabType = 'categories' | 'interests' | 'trending';
+
 export default function SearchScreen() {
   const { theme } = useTheme();
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterVisible, setFilterVisible] = useState(false);
+  const [selectedTab, setSelectedTab] = useState<TabType>('categories');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  
   const [filters, setFilters] = useState<FilterState>({
-    priceRange: [0, 100] as [number, number],
+    priceRange: [0, 100],
     availability: 'all',
-    categories: [] as string[],
+    categories: [],
     featured: false,
-    languages: [] as string[],
-    specialties: [] as string[],
-    skills: [] as string[],
+    languages: [],
+    specialties: [],
+    skills: [],
   });
-
-  // Debounce search query (300ms delay)
-  const debouncedSearchQuery = useDebounce(searchQuery, 300);
-
-  // Get categories for displaying category names in filter chips
+  // Mock user interests for now (simulating user preferences)
+  const userInterests = ['Technology', 'Business', 'Health'];
+  // Get categories
   const { data: categories = [] } = useCategories();
-  const categoryMap = useMemo(
-    () => new Map(categories.map((cat) => [cat.id, cat.name])),
-    [categories]
-  );
 
-  // Determine if we should show search results
-  const isSearching = debouncedSearchQuery.trim().length > 0;
-
-  // Fetch professionals with infinite scroll (initial load - featured first)
+  // Fetch professionals
   const {
     data: professionalsData,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
     isLoading: isLoadingProfessionals,
   } = useInfiniteProfessionals();
 
-  // Fetch search results with infinite scroll (when searching)
-  const {
-    data: searchData,
-    fetchNextPage: fetchNextSearchPage,
-    hasNextPage: hasNextSearchPage,
-    isFetchingNextPage: isFetchingNextSearchPage,
-    isLoading: isLoadingSearch,
-  } = useInfiniteSearchProfessionals(debouncedSearchQuery);
-
-  // Calculate active filter count
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (filters.priceRange[0] > 0 || filters.priceRange[1] < 100) count++;
-    if (filters.availability !== 'all') count++;
-    if (filters.categories.length > 0) count += filters.categories.length;
-    if (filters.featured) count++;
-    if (filters.languages.length > 0) count += filters.languages.length;
-    if (filters.specialties.length > 0) count += filters.specialties.length;
-    if (filters.skills.length > 0) count += filters.skills.length;
-    return count;
-  }, [filters]);
-
-  // Flatten pages into a single array and remove duplicates
+  // Flatten professionals
   const allProfessionals = useMemo(() => {
-    let professionals: ProfessionalWithRelations[] = [];
-    if (isSearching) {
-      professionals = searchData?.pages.flat() || [];
-    } else {
-      professionals = professionalsData?.pages.flat() || [];
-    }
+    return professionalsData?.pages.flat() || [];
+  }, [professionalsData]);
 
-    // Remove duplicates by professional ID
-    const uniqueMap = new Map<string, ProfessionalWithRelations>();
-    professionals.forEach((prof) => {
-      if (!uniqueMap.has(prof.id)) {
-        uniqueMap.set(prof.id, prof);
-      }
-    });
-
-    return Array.from(uniqueMap.values());
-  }, [isSearching, professionalsData, searchData]);
-
-  // Apply filters to professionals
+  // Filter logic (to be expanded)
   const filteredProfessionals = useMemo(() => {
-    let filtered = allProfessionals;
+    // DEBUG: Log data availability
+    return allProfessionals.filter(p => {
+      const matchesSearch = !searchQuery || 
+        p.users?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.title?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      if (selectedCategory === 'All') return matchesSearch;
 
-    // Filter by availability
-    if (filters.availability === 'online') {
-      filtered = filtered.filter((p) => p.is_active && p.is_available);
-    } else if (filters.availability === 'urgent-call') {
-      // Urgent call means available and active
-      filtered = filtered.filter((p) => p.is_active && p.is_available);
-  }
-  
-    // Filter by price range
-  if (filters.priceRange[0] > 0 || filters.priceRange[1] < 100) {
-      filtered = filtered.filter((p) => {
-        const rate = p.rate_per_minute || 0;
-        return rate >= filters.priceRange[0] && rate <= filters.priceRange[1];
-      });
-    }
+      const selectedCategoryObj = categories.find(c => c.name === selectedCategory);
+      if (!selectedCategoryObj) return false;
 
-    // Filter by categories
-  if (filters.categories.length > 0) {
-      filtered = filtered.filter((p) =>
-        filters.categories.includes(p.category_id)
-      );
-  }
+      // Check match by ID or fallback to joined object
+      const matchesCategory = (p.category_id === selectedCategoryObj.id) || 
+                             (p.categories && 'id' in p.categories && p.categories.id === selectedCategoryObj.id);
 
-    // Filter by languages
-    if (filters.languages.length > 0) {
-      filtered = filtered.filter((p) => {
-        const professionalLanguages = p.languages || [];
-        return filters.languages.some((lang) =>
-          professionalLanguages.includes(lang)
-        );
-      });
-    }
-
-    // Filter by specialties
-    if (filters.specialties.length > 0) {
-      filtered = filtered.filter((p) => {
-        const professionalSpecialties = p.specialties || [];
-        return filters.specialties.some((spec) =>
-          professionalSpecialties.includes(spec)
-        );
-      });
-    }
-
-    // Filter by skills
-    if (filters.skills.length > 0) {
-      filtered = filtered.filter((p) => {
-        const professionalSkills = p.skills_certifications || [];
-        return filters.skills.some((skill) =>
-          professionalSkills.includes(skill)
-        );
-      });
-    }
-
-    // Filter by featured
-    if (filters.featured) {
-      filtered = filtered.filter((p) => p.is_featured === true);
-    }
-
-    return filtered;
-  }, [allProfessionals, filters]);
-
-  const isLoading = isSearching ? isLoadingSearch : isLoadingProfessionals;
-  const isFetchingMore = isSearching
-    ? isFetchingNextSearchPage
-    : isFetchingNextPage;
-  const hasMore = isSearching ? hasNextSearchPage : hasNextPage;
-
-  const handleLoadMore = useCallback(() => {
-    if (hasMore && !isFetchingMore) {
-      if (isSearching) {
-        fetchNextSearchPage();
-      } else {
-        fetchNextPage();
-      }
-    }
-  }, [
-    hasMore,
-    isFetchingMore,
-    isSearching,
-    fetchNextPage,
-    fetchNextSearchPage,
-  ]);
+      return matchesSearch && matchesCategory;
+    });
+  }, [allProfessionals, searchQuery, selectedCategory, categories, selectedTab]);
 
   const handleApplyFilters = (modalFilters: Omit<FilterState, 'featured'>) => {
-    setFilters({
-      ...modalFilters,
-      featured: filters.featured, // Keep current featured state
-    });
+    setFilters({ ...modalFilters, featured: filters.featured });
   };
 
-  const handleClearAllFilters = () => {
-    setFilters({
-      priceRange: [0, 100] as [number, number],
-      availability: 'all',
-      categories: [],
-      featured: false,
-      languages: [],
-      specialties: [],
-      skills: [],
-    });
-  };
-
-  const getInitialFiltersForModal = useMemo(
-    () => ({
+  const getInitialFiltersForModal = useMemo(() => ({
     priceRange: filters.priceRange,
-      availability: filters.availability,
+    availability: filters.availability,
     categories: filters.categories,
-      languages: filters.languages,
-      specialties: filters.specialties,
-      skills: filters.skills,
-    }),
-    [
-      filters.priceRange,
-      filters.availability,
-      filters.categories,
-      filters.languages,
-      filters.specialties,
-      filters.skills,
-    ]
-  );
-
-  const renderProfessional = useCallback(
-    ({ item }: { item: ProfessionalWithRelations }) => (
-      <ProfessionalCard professional={item} />
-    ),
-    []
-  );
-
-  const renderFooter = useCallback(() => {
-    if (!isFetchingMore) return null;
-
-    return (
-      <View style={styles.footerLoader}>
-        <SectionLoading size="small" />
-        <Text style={[styles.footerText, { color: theme.colors.textMuted }]}>
-          Loading more...
-        </Text>
-      </View>
-    );
-  }, [isFetchingMore, theme]);
+    languages: filters.languages,
+    specialties: filters.specialties,
+    skills: filters.skills,
+  }), [filters]);
 
   return (
     <SafeAreaView
       style={[
         styles.container,
-        {
-          backgroundColor:
-            theme.name === 'dark' ? '#000000' : theme.colors.background,
-        },
+        { backgroundColor: theme.name === 'dark' ? '#1C1C1E' : theme.colors.background },
       ]}
     >
       <Header
-        showLogo={true}
+        showLogo={false}
+        leftButtons={<View style={styles.headerSpacer} />}
         rightButtons={
           <TouchableOpacity
-            style={[
-              styles.headerIconButton,
-              {
-                backgroundColor:
-                  theme.name === 'dark'
-                    ? theme.colors.surface
-                    : theme.name === 'light'
-                    ? theme.colors.brandPink
-                    : '#000000',
-              },
-            ]}
+            style={styles.filterIconButton}
             onPress={() => setFilterVisible(true)}
           >
-            <Filter size={20} color="#FFFFFF" />
-            {activeFilterCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-              </View>
-            )}
+            <SlidersHorizontal size={24} color={theme.colors.pinkTwo} />
           </TouchableOpacity>
         }
-      />
+      >
+        <View style={[styles.searchContainer, { backgroundColor: theme.colors.surface }]}>
+          <Search size={20} color={theme.colors.textMuted} />
+          <TextInput
+            style={[styles.searchInput, { color: theme.colors.text }]}
+            placeholder="Search Lists"
+            placeholderTextColor={theme.colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+      </Header>
 
-      {/* Search Section */}
-      <SearchBar
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-        placeholder="Search professionals..."
-        showResultsCount={true}
-        resultsCount={filteredProfessionals.length}
-        resultsCountLabel={`${filteredProfessionals.length} professional${
-          filteredProfessionals.length !== 1 ? 's' : ''
-        } found`}
-      />
-
-      {/* Active Filters */}
-      {activeFilterCount > 0 && (
-        <View
-          style={[
-            styles.activeFiltersContainer,
-            {
-              backgroundColor: theme.colors.surface,
-              borderBottomColor: theme.colors.border,
-            },
-          ]}
-        >
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.activeFiltersScroll}
+      {/* Tabs */}
+      <View style={[styles.tabContainer, { borderBottomColor: theme.colors.border }]}>
+        {(['categories', 'interests', 'trending'] as TabType[]).map((tab) => (
+          <TouchableOpacity
+            key={tab}
+            style={styles.tab}
+            onPress={() => setSelectedTab(tab)}
           >
-            {filters.availability !== 'all' && (
-              <View
-                style={[
-                  styles.filterChip,
-                  { backgroundColor: theme.colors.accent },
-                ]}
-              >
-                <Text style={[styles.filterChipText, { color: '#000000' }]}>
-                  {filters.availability === 'online'
-                    ? 'Online Now'
-                    : 'Urgent Call'}
-                </Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    setFilters({ ...filters, availability: 'all' })
-                  }
-                  style={styles.filterChipClose}
-                >
-                  <X size={14} color="#000000" />
-                </TouchableOpacity>
-              </View>
+            <Text style={[
+              styles.tabText,
+              { color: selectedTab === tab ? theme.colors.text : theme.colors.textMuted },
+              selectedTab === tab && styles.tabTextActive
+            ]}>
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </Text>
+            {selectedTab === tab && (
+              <View style={[styles.tabIndicator, {
+                backgroundColor: theme.name === 'light' ? theme.colors.pinkTwo : theme.colors.primary
+              }]} />
             )}
-            {filters.featured && (
-              <View
-                style={[
-                  styles.filterChip,
-                  { backgroundColor: theme.colors.accent },
-                ]}
-              >
-                <Star size={14} color="#000000" fill="#000000" />
-                <Text style={[styles.filterChipText, { color: '#000000' }]}>
-                  Featured
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setFilters({ ...filters, featured: false })}
-                  style={styles.filterChipClose}
-                >
-                  <X size={14} color="#000000" />
-                </TouchableOpacity>
-              </View>
-            )}
-            {(filters.priceRange[0] > 0 || filters.priceRange[1] < 100) && (
-              <View
-                style={[
-                  styles.filterChip,
-                  { backgroundColor: theme.colors.accent },
-                ]}
-              >
-                <Text style={[styles.filterChipText, { color: '#000000' }]}>
-                  ${filters.priceRange[0]}-${filters.priceRange[1]}/min
-                </Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    setFilters({ ...filters, priceRange: [0, 100] })
-                  }
-                  style={styles.filterChipClose}
-                >
-                  <X size={14} color="#000000" />
-                </TouchableOpacity>
-              </View>
-            )}
-            {filters.categories.map((categoryId) => {
-              const categoryName = categoryMap.get(categoryId) || 'Category';
-              return (
-                <View
-                  key={categoryId}
-                  style={[
-                    styles.filterChip,
-                    { backgroundColor: theme.colors.accent },
-                  ]}
-                >
-                  <Text style={[styles.filterChipText, { color: '#000000' }]}>
-                    {categoryName}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() =>
-                      setFilters({
-                        ...filters,
-                        categories: filters.categories.filter(
-                          (id) => id !== categoryId
-                        ),
-                      })
-                    }
-                    style={styles.filterChipClose}
-                  >
-                    <X size={14} color="#000000" />
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
-            {filters.languages.map((language) => (
-              <View
-                key={language}
-                style={[
-                  styles.filterChip,
-                  { backgroundColor: theme.colors.accent },
-                ]}
-              >
-                <Text style={[styles.filterChipText, { color: '#000000' }]}>
-                  {language}
-                </Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    setFilters({
-                      ...filters,
-                      languages: filters.languages.filter(
-                        (lang) => lang !== language
-                      ),
-                    })
-                  }
-                  style={styles.filterChipClose}
-                >
-                  <X size={14} color="#000000" />
-                </TouchableOpacity>
-              </View>
-            ))}
-            {filters.specialties.map((specialty) => (
-              <View
-                key={specialty}
-                style={[
-                  styles.filterChip,
-                  { backgroundColor: theme.colors.accent },
-                ]}
-              >
-                <Text style={[styles.filterChipText, { color: '#000000' }]}>
-                  {specialty}
-                </Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    setFilters({
-                      ...filters,
-                      specialties: filters.specialties.filter(
-                        (spec) => spec !== specialty
-                      ),
-                    })
-                  }
-                  style={styles.filterChipClose}
-                >
-                  <X size={14} color="#000000" />
-                </TouchableOpacity>
-              </View>
-            ))}
-            {filters.skills.map((skill) => (
-              <View
-                key={skill}
-                style={[
-                  styles.filterChip,
-                  { backgroundColor: theme.colors.accent },
-                ]}
-              >
-                <Text style={[styles.filterChipText, { color: '#000000' }]}>
-                  {skill}
-                </Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    setFilters({
-                      ...filters,
-                      skills: filters.skills.filter((s) => s !== skill),
-                    })
-                  }
-                  style={styles.filterChipClose}
-                >
-                  <X size={14} color="#000000" />
-                </TouchableOpacity>
-              </View>
-            ))}
-            <TouchableOpacity
-              onPress={handleClearAllFilters}
-              style={[
-                styles.clearAllButton,
-                { borderColor: theme.colors.border },
-              ]}
-            >
-              <Text
-                style={[styles.clearAllText, { color: theme.colors.textMuted }]}
-              >
-                Clear All
-              </Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      )}
+          </TouchableOpacity>
+        ))}
+      </View>
 
-      {/* Results Section */}
-      {isLoading ? (
-        <PageLoading
-          message={isSearching ? 'Searching...' : 'Loading professionals...'}
-        />
-      ) : filteredProfessionals.length > 0 ? (
-        <FlatList
-          data={filteredProfessionals}
-          keyExtractor={(item) => item.id}
-          renderItem={renderProfessional}
-          contentContainerStyle={[
-            styles.resultsContainer,
-            activeFilterCount > 0 && styles.resultsContainerWithFilters,
-          ]}
-          showsVerticalScrollIndicator={false}
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.3}
-          ListFooterComponent={renderFooter}
-          scrollEventThrottle={16}
-          removeClippedSubviews={false}
-        />
-      ) : (
-        <View style={styles.emptyState}>
-          <Search size={48} color={theme.colors.textMuted} />
-          <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
-            {isSearching
-              ? 'No professionals found'
-              : 'No professionals available'}
-          </Text>
-          <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
-            {isSearching
-              ? 'Try adjusting your search terms or filters'
-              : 'Check back later for new professionals'}
-          </Text>
-        </View>
-      )}
+
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {selectedTab === 'categories' && (
+          <View style={styles.tabContentContainer}>
+            {/* Category Chips */}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              contentContainerStyle={styles.chipsScroll}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.chip,
+                  selectedCategory === 'All' && { backgroundColor: theme.name === 'light' ? theme.colors.pinkTwo : theme.colors.primary, borderColor: 'transparent' }
+                ]}
+                onPress={() => setSelectedCategory('All')}
+              >
+                <Text style={[
+                  styles.chipText,
+                  selectedCategory === 'All' && { color: '#FFFFFF' }
+                ]}>All</Text>
+              </TouchableOpacity>
+              {categories.map(cat => (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[
+                    styles.chip,
+                    selectedCategory === cat.name && { backgroundColor: theme.name === 'light' ? theme.colors.pinkTwo : theme.colors.primary, borderColor: 'transparent' }
+                  ]}
+                  onPress={() => setSelectedCategory(cat.name)}
+                >
+                  <Text style={[
+                    styles.chipText,
+                    selectedCategory === cat.name && { color: '#FFFFFF' }
+                  ]}>{cat.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Sections */}
+            <View style={styles.sectionsContainer}>
+              {(selectedCategory === 'All' ? categories : categories.filter(c => c.name === selectedCategory)).map(cat => {
+                // Modified filter: Use category_id OR categories object from relation
+                const categoryProfessionals = filteredProfessionals.filter(p => {
+                    if (p.category_id === cat.id) return true;
+                    // Fallback to joined category object
+                    if (p.categories && 'id' in p.categories && p.categories.id === cat.id) return true;
+                    return false;
+                });
+                
+                if (categoryProfessionals.length === 0) return null;
+
+                return (
+                  <View key={cat.id} style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                      <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                        Top {cat.name} Experts
+                      </Text>
+                      <TouchableOpacity onPress={() => router.push(`/category/${cat.id}?name=${encodeURIComponent(cat.name)}` as any)}>
+                        <Text style={[styles.seeAllText, { color: theme.name === 'light' ? theme.colors.pinkTwo : theme.colors.primary }]}>See All</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <FlatList
+                      data={categoryProfessionals.slice(0, 10)}
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.horizontalList}
+                      renderItem={({ item }) => (
+                        <TouchableOpacity
+                          style={[styles.professionalCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+                          onPress={() => router.push(`/professional/${item.id}` as any)}
+                          activeOpacity={0.8}
+                        >
+                          <View style={styles.cardImageContainer}>
+                            <Image source={{ uri: item.users?.avatar_url || 'https://via.placeholder.com/150' }} style={styles.cardAvatar} />
+                            {(item.is_active && item.is_available) && <View style={styles.onlineIndicator} />}
+                          </View>
+                          <View style={styles.cardContent}>
+                            <Text numberOfLines={1} style={[styles.cardName, { color: theme.colors.text }]}>
+                              {item.users?.name}
+                            </Text>
+                            <Text numberOfLines={2} style={[styles.cardTitle, { color: theme.colors.textSecondary }]}>
+                              {item.profession}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      )}
+                      keyExtractor={item => item.id}
+                      ItemSeparatorComponent={() => <View style={styles.cardSeparator} />}
+                      snapToInterval={CARD_WIDTH + 12}
+                      snapToAlignment="start"
+                      decelerationRate="fast"
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {selectedTab === 'interests' && (
+          <View style={styles.tabContentContainer}>
+            <View style={styles.sectionsContainer}>
+               {userInterests.map(interestName => {
+                 // Try to find the category object if available
+                 const categoryObj = categories.find(c => c.name === interestName);
+                 const interestCatId = categoryObj?.id;
+
+                 // Filter professionals for this interest
+                 const interestProfessionals = filteredProfessionals.filter(p => {
+                    // Check by ID if we found the category object
+                    if (interestCatId && p.category_id === interestCatId) return true;
+                    // Fallback to joined category object name match
+                    if (p.categories && 'name' in p.categories && p.categories.name === interestName) return true;
+                    return false;
+                 });
+
+                 if (interestProfessionals.length === 0) return null;
+
+                 return (
+                  <View key={`interest-${interestName}`} style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                      <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                        Top {interestName} Experts
+                      </Text>
+                      {categoryObj && (
+                        <TouchableOpacity onPress={() => router.push(`/category/${categoryObj.id}?name=${encodeURIComponent(categoryObj.name)}` as any)}>
+                          <Text style={[styles.seeAllText, { color: theme.name === 'light' ? theme.colors.pinkTwo : theme.colors.primary }]}>See All</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    <FlatList
+                      data={interestProfessionals.slice(0, 10)}
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.horizontalList}
+                      renderItem={({ item }) => (
+                        <TouchableOpacity
+                          style={[styles.professionalCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+                          onPress={() => router.push(`/professional/${item.id}` as any)}
+                          activeOpacity={0.8}
+                        >
+                          <View style={styles.cardImageContainer}>
+                            <Image source={{ uri: item.users?.avatar_url || 'https://via.placeholder.com/150' }} style={styles.cardAvatar} />
+                            {(item.is_active && item.is_available) && <View style={styles.onlineIndicator} />}
+                          </View>
+                          <View style={styles.cardContent}>
+                            <Text numberOfLines={1} style={[styles.cardName, { color: theme.colors.text }]}>
+                              {item.users?.name}
+                            </Text>
+                            <Text numberOfLines={2} style={[styles.cardTitle, { color: theme.colors.textSecondary }]}>
+                              {item.profession}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      )}
+                      keyExtractor={item => item.id}
+                      ItemSeparatorComponent={() => <View style={styles.cardSeparator} />}
+                      snapToInterval={CARD_WIDTH + 12}
+                      snapToAlignment="start"
+                      decelerationRate="fast"
+                    />
+                  </View>
+                 );
+               })}
+                {/* Empty State for Interests if no data found matches any interest */}
+                 {userInterests.every(interestName => {
+                    const categoryObj = categories.find(c => c.name === interestName);
+                    const interestCatId = categoryObj?.id;
+                     return !filteredProfessionals.some(p => 
+                        (interestCatId && p.category_id === interestCatId) ||
+                        (p.categories && 'name' in p.categories && p.categories.name === interestName)
+                     );
+                 }) && (
+                   <View style={styles.emptyState}>
+                     <Search size={48} color={theme.colors.textMuted} />
+                     <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No Matches Found</Text>
+                     <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
+                       We couldn't find professionals matching your interests right now.
+                     </Text>
+                   </View>
+                 )}
+            </View>
+          </View>
+        )}
+
+        {selectedTab === 'trending' && (
+          <View style={[styles.tabContentContainer, styles.gridContainer]}>
+            {filteredProfessionals.slice(0, 12).map(item => (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.professionalCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, marginBottom: 12 }]}
+                onPress={() => router.push(`/professional/${item.id}` as any)}
+              >
+                 <View style={styles.cardImageContainer}>
+                  <Image source={{ uri: item.users?.avatar_url || 'https://via.placeholder.com/150' }} style={styles.cardAvatar} />
+                  {(item.is_active && item.is_available) && <View style={styles.onlineIndicator} />}
+                </View>
+                <Text numberOfLines={1} style={[styles.cardName, { color: theme.colors.text }]}>
+                  {item.users?.name}
+                </Text>
+                <Text numberOfLines={2} style={[styles.cardTitle, { color: theme.colors.textSecondary }]}>
+                  {item.profession}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </ScrollView>
 
       <FilterModal
         visible={filterVisible}
@@ -549,9 +379,7 @@ export default function SearchScreen() {
         onApply={handleApplyFilters}
         initialFilters={getInitialFiltersForModal}
         featured={filters.featured}
-        onFeaturedChange={(value) =>
-          setFilters({ ...filters, featured: value })
-        }
+        onFeaturedChange={(val) => setFilters(prev => ({ ...prev, featured: val }))}
       />
     </SafeAreaView>
   );
@@ -560,33 +388,151 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    width: '100%',
-    overflow: 'hidden',
   },
-  headerIconButton: {
+  headerSpacer: {
     width: 40,
-    height: 40,
-    borderRadius: 20,
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  resultsContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 60,
-  },
-  resultsContainerWithFilters: {
-    paddingTop: 0,
-  },
-  footerLoader: {
-    paddingVertical: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginHorizontal: 12,
     gap: 8,
   },
-  footerText: {
-    fontSize: 12,
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
     fontFamily: 'Inter-Regular',
+    padding: 0, // Remove default padding
+  },
+  filterIconButton: {
+    padding: 8,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  tabText: {
+    fontSize: 15,
+    fontFamily: 'Inter-SemiBold',
+  },
+  tabTextActive: {
+    fontFamily: 'Inter-Bold',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    borderTopLeftRadius: 2,
+    borderTopRightRadius: 2,
+  },
+  content: {
+    flex: 1,
+  },
+  tabContentContainer: {
+    paddingVertical: 16,
+  },
+  chipsScroll: {
+    paddingHorizontal: 16,
+    gap: 8,
+    paddingBottom: 8,
+  },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E5EA', // Default border
+    marginRight: 8,
+  },
+  chipText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#8E8E93', // Default text color
+  },
+  sectionsContainer: {
+    marginTop: 16,
+    gap: 24,
+  },
+  section: {
+    marginBottom: 8,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontFamily: 'Inter-Bold',
+  },
+  seeAllText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+  },
+  horizontalList: {
+    paddingLeft: 16,
+    paddingRight: 32,
+  },
+  cardSeparator: {
+    width: 12,
+  },
+  professionalCard: {
+    width: CARD_WIDTH,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+  },
+  cardImageContainer: {
+    position: 'relative',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cardAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: (CARD_WIDTH - 60) / 2 - 6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#30D158',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  cardContent: {
+    flex: 1,
+  },
+  cardName: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  cardTitle: {
+    fontSize: 11,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
+    lineHeight: 14,
+    minHeight: 28,
   },
   emptyState: {
     flex: 1,
@@ -596,7 +542,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: 'Inter-Bold',
     marginTop: 16,
     marginBottom: 8,
@@ -607,57 +553,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-  filterBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#FF0000',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  filterBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontFamily: 'Inter-Bold',
-  },
-  activeFiltersContainer: {
-    paddingVertical: 12,
-    marginBottom: 16,
-    borderBottomWidth: 1,
-  },
-  activeFiltersScroll: {
-    paddingHorizontal: 20,
-    gap: 8,
-  },
-  filterChip: {
+  gridContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 6,
-  },
-  filterChipText: {
-    fontSize: 13,
-    fontFamily: 'Inter-Medium',
-  },
-  filterChipClose: {
-    marginLeft: 2,
-    padding: 2,
-  },
-  clearAllButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginLeft: 4,
-  },
-  clearAllText: {
-    fontSize: 13,
-    fontFamily: 'Inter-Medium',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    gap: 12,
   },
 });

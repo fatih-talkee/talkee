@@ -39,6 +39,7 @@ class ProfessionalsService {
         .select(
           `
           id,
+          category_id,
           title,
           profession,
           rate_per_minute,
@@ -138,6 +139,7 @@ class ProfessionalsService {
         .select(
           `
           id,
+          category_id,
           title,
           profession,
           rate_per_minute,
@@ -339,6 +341,7 @@ class ProfessionalsService {
         .select(
           `
           id,
+          category_id,
           title,
           profession,
           rate_per_minute,
@@ -413,6 +416,7 @@ class ProfessionalsService {
           .select(
             `
             id,
+            category_id,
             title,
             profession,
             rate_per_minute,
@@ -531,6 +535,7 @@ class ProfessionalsService {
         .select(
           `
           id,
+          category_id,
           title,
           profession,
           rate_per_minute,

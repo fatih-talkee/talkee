@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
-import { Chrome as Home, Wallet, Search, User } from 'lucide-react-native';
+import { Chrome as Home, Users, Wallet, Search, User } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -56,6 +56,15 @@ export default function TabLayout() {
           title: 'Home',
           tabBarIcon: ({ color }) => (
             <Home size={22} color={color} strokeWidth={2} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="people"
+        options={{
+          title: 'People',
+          tabBarIcon: ({ color }) => (
+            <Users size={22} color={color} strokeWidth={2} />
           ),
         }}
       />

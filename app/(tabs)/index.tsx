@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,31 +7,41 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Link } from 'expo-router';
-import { Bell } from 'lucide-react-native';
+import { Link, useRouter } from 'expo-router';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
 import { CategoryGrid } from '@/components/listings/CategoryGrid';
 import { PromotionCarousel } from '@/components/carousel/PromotionCarousel';
 import { useTheme } from '@/contexts/ThemeContext';
-import { router } from 'expo-router';
-import { Header } from '@/components/ui/Header';
 import { SectionLoading } from '@/components/ui/SectionLoading';
 import { InlineLoading } from '@/components/ui/InlineLoading';
+import { HomeHeaderSection } from '@/components/home/HomeHeaderSection';
+import { FilterModal } from '@/components/filters/FilterModal';
 
 // ✅ API HOOKS
 import { useFeaturedProfessionals } from '@/hooks/useProfessionals';
 import { usePopularCategories } from '@/hooks/useCategories';
 import { useFeaturedPromotions } from '@/hooks/usePromotions';
 import { useProfile } from '@/hooks/useProfile';
-import { useUnreadCount } from '@/hooks/useNotifications';
 import { ProfessionalWithRelations } from '@/types/database.types';
 import { logger } from '@/lib/logger';
 import { useEffect } from 'react';
 
-// ✅ TYPE ADAPTERS (not needed here, ProfessionalCard uses ProfessionalWithRelations directly)
-
 export default function HomeScreen() {
   const { theme } = useTheme();
+  const router = useRouter();
+  
+  // Local state for header interactions
+  const [searchValue, setSearchValue] = useState('');
+  const [isVerifiedSelected, setIsVerifiedSelected] = useState(false);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [filters, setFilters] = useState({
+    priceRange: [0, 100] as [number, number],
+    availability: 'all' as 'all' | 'online' | 'urgent-call',
+    categories: [] as string[],
+    languages: [] as string[],
+    specialties: [] as string[],
+    skills: [] as string[],
+  });
 
   // Log when home screen mounts
   useEffect(() => {
@@ -41,7 +51,10 @@ export default function HomeScreen() {
   }, []);
 
   // ✅ Get user profile to check if professional
-  const { isProfessional } = useProfile();
+  const { isProfessional, user } = useProfile();
+  
+  // Get user's first name for greeting
+  const userName = user?.name?.split(' ')[0] || 'User';
 
   // ✅ Fetch featured professionals (is_featured = true from database)
   const {
@@ -57,60 +70,50 @@ export default function HomeScreen() {
   // ✅ Fetch promotions
   const { data: promotionsData = [] } = useFeaturedPromotions(5);
 
-  // ✅ Use professionals data directly (no need to adapt, ProfessionalCard uses ProfessionalWithRelations)
+  // ✅ Use professionals data directly
   const professionals = professionalsData;
   const categories = categoriesData;
   const promotions = promotionsData;
 
-  // ✅ Get unread notification count from API
-  const { data: unreadNotificationCount = 0 } = useUnreadCount();
+  const handleSearchChange = (text: string) => {
+    setSearchValue(text);
+    // Debounce search logic would go here or navigate to search page
+  };
+
+  const handleFiltersPress = () => {
+    setFilterModalVisible(true);
+  };
+
+  const handleApplyFilters = (newFilters: typeof filters) => {
+    setFilters(newFilters);
+    // TODO: Apply filters to professional search/list
+    console.log('Filters applied:', newFilters);
+  };
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-      edges={['top']}
-    >
-      <Header
-        showLogo={true}
-        rightButton={
-          <View style={styles.headerButtons}>
-            <TouchableOpacity
-              style={[
-                styles.iconButton,
-                {
-                  backgroundColor:
-                    theme.name === 'dark'
-                      ? theme.colors.surface
-                      : theme.name === 'light'
-                      ? theme.colors.brandPink
-                      : '#000000',
-                },
-              ]}
-              onPress={() => router.push('/notifications' as any)}
-            >
-              <Bell size={20} color="#FFFFFF" />
-              {unreadNotificationCount > 0 && (
-                <View
-                  style={[
-                    styles.badge,
-                    {
-                      backgroundColor: theme.colors.error || '#EF4444',
-                    },
-                  ]}
-                >
-                  <Text style={styles.badgeText}>
-                    {unreadNotificationCount > 99
-                      ? '99+'
-                      : unreadNotificationCount}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        }
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      {/* 
+        ✅ NEW HEADER integration 
+        Note: Removed SafeAreaView top edge locally because the header handles its own safe area padding
+        to allow the background color to extend to the top of the screen.
+      */}
+      <HomeHeaderSection
+        userName={userName}
+        searchValue={searchValue}
+        onSearchChange={handleSearchChange}
+        onFiltersPress={handleFiltersPress}
+        onCategoryPress={() => console.log('Category filter pressed')}
+        onAvailabilityPress={() => console.log('Availability filter pressed')}
+        onLanguagePress={() => console.log('Language filter pressed')}
+        onVerifiedToggle={() => setIsVerifiedSelected(!isVerifiedSelected)}
+        isVerifiedSelected={isVerifiedSelected}
       />
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
         {/* Promotion Carousel */}
         {promotions.length > 0 && (
           <View style={styles.carouselSection}>
@@ -180,7 +183,17 @@ export default function HomeScreen() {
           )}
         </View>
       </ScrollView>
-    </SafeAreaView>
+
+      {/* Filter Modal */}
+      <FilterModal
+        visible={filterModalVisible}
+        onClose={() => setFilterModalVisible(false)}
+        onApply={handleApplyFilters}
+        initialFilters={filters}
+        featured={isVerifiedSelected}
+        onFeaturedChange={setIsVerifiedSelected}
+      />
+    </View>
   );
 }
 
@@ -188,42 +201,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  headerButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  badge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  badgeText: {
-    fontSize: 10,
-    fontFamily: 'Inter-Bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
   content: {
     flex: 1,
   },
   carouselSection: {
     marginBottom: 16,
+    marginTop: 16, // Added spacing since header is different
   },
   section: {
     marginBottom: 32,
