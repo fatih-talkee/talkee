@@ -257,7 +257,7 @@ export default function FeedScreen() {
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
-        <Header showLogo showBack onBackPress={() => router.back()} />
+        <Header showLogo={false} title="Feed Management" showBack onBackPress={() => router.back()} />
         <PageLoading message="Loading feeds..." />
       </SafeAreaView>
     );
@@ -267,7 +267,7 @@ export default function FeedScreen() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <Header showLogo showBack onBackPress={() => router.back()} />
+      <Header showLogo={false} title="Feed Management" showBack onBackPress={() => router.back()} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoid}
@@ -279,14 +279,6 @@ export default function FeedScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>
-            Feed Management
-          </Text>
-          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-            Manage your posts and content
-          </Text>
-        </View>
 
         {feeds.length === 0 ? (
           <Card

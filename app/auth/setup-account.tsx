@@ -6,22 +6,23 @@ import {
   TouchableOpacity,
   SafeAreaView,
   ScrollView,
-  TextInput,
   Platform,
   Animated,
   Image,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { router } from 'expo-router';
 import {
-  ChevronRight,
   ChevronLeft,
   User,
   Calendar,
   Hash,
   Sparkles,
-  Check,
   Camera,
+  X,
+  Plus,
 } from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -32,8 +33,7 @@ import { useCategories } from '@/hooks/useCategories';
 
 export default function SetupAccountScreen() {
   const { theme } = useTheme();
-  const { data: categories = [], isLoading: categoriesLoading } =
-    useCategories();
+  const { data: categories = [], isLoading: categoriesLoading } = useCategories();
   const [currentStep, setCurrentStep] = useState(1);
   const progressAnim = useRef(new Animated.Value(33.33)).current;
 
@@ -47,6 +47,10 @@ export default function SetupAccountScreen() {
 
   // Step 2 - Interests
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  // Added custom categories support from backup to enhance the UI functionality (Step 2 visual improvement)
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [showCustomCategoryModal, setShowCustomCategoryModal] = useState(false);
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
 
   const handleNextStep = () => {
     if (currentStep < 3) {
@@ -110,30 +114,19 @@ export default function SetupAccountScreen() {
         updates.name = fullName.trim();
       }
 
-      if (nickname.trim()) {
-        // You might want to add a nickname field to the users table
-        // For now, we'll skip it or store it in a different way
-      }
-
-      // Save birth date and gender if you have these fields in users table
-      // For now, we'll just save the name
-
+      // Logic for saving profile data preserved from original file
       if (Object.keys(updates).length > 0) {
         await usersService.updateProfile(updates);
       }
 
-      // TODO: Save selectedInterests to user_interests table if it exists
-      // For now, we'll just log it
       if (selectedInterests.length > 0) {
         console.log('Selected interests:', selectedInterests);
-        // You can implement saving interests to a user_interests table here
       }
 
       await sendWelcomeNotification();
       router.replace('/(tabs)/');
     } catch (error) {
       console.error('Error saving profile data:', error);
-      // Still send notification and navigate even if save fails
       await sendWelcomeNotification();
       router.replace('/(tabs)/');
     }
@@ -155,6 +148,21 @@ export default function SetupAccountScreen() {
     );
   };
 
+  const handleAddCustomCategory = () => {
+    const trimmedCategory = customCategoryInput.trim();
+    if (trimmedCategory && !customCategories.includes(trimmedCategory)) {
+      setCustomCategories((prev) => [...prev, trimmedCategory]);
+      setSelectedInterests((prev) => [...prev, trimmedCategory]);
+      setCustomCategoryInput('');
+      setShowCustomCategoryModal(false);
+    }
+  };
+
+  const handleRemoveCustomCategory = (category: string) => {
+    setCustomCategories((prev) => prev.filter((c) => c !== category));
+    setSelectedInterests((prev) => prev.filter((c) => c !== category));
+  };
+
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
@@ -164,11 +172,7 @@ export default function SetupAccountScreen() {
   };
 
   const handleSelectPhoto = () => {
-    if (Platform.OS === 'web') {
-      Alert.alert('Photo Upload', 'Photo upload feature coming soon!');
-    } else {
-      Alert.alert('Photo Upload', 'Photo upload feature coming soon!');
-    }
+    Alert.alert('Photo Upload', 'Photo upload feature coming soon!');
   };
 
   const renderProgressBar = () => (
@@ -180,7 +184,7 @@ export default function SetupAccountScreen() {
           style={[
             styles.progressFill,
             {
-              backgroundColor: theme.colors.primary,
+              backgroundColor: theme.colors.pinkTwo || theme.colors.primary,
               width: progressAnim.interpolate({
                 inputRange: [0, 100],
                 outputRange: ['0%', '100%'],
@@ -210,7 +214,7 @@ export default function SetupAccountScreen() {
           <View
             style={[
               styles.profileImagePlaceholder,
-              { backgroundColor: theme.colors.primary },
+              { backgroundColor: theme.colors.pinkTwo || theme.colors.primary },
             ]}
           >
             <User size={40} color={theme.colors.surface} strokeWidth={2.5} />
@@ -219,7 +223,7 @@ export default function SetupAccountScreen() {
         <View
           style={[
             styles.cameraButton,
-            { backgroundColor: theme.colors.primary },
+            { backgroundColor: theme.colors.pinkTwo || theme.colors.primary },
           ]}
         >
           <Camera size={18} color={theme.colors.surface} />
@@ -236,6 +240,8 @@ export default function SetupAccountScreen() {
       <View style={styles.form}>
         <Input
           label="Full Name"
+          labelStyle={{ color: theme.colors.text }}
+            style={{ backgroundColor: theme.colors.surface, color: theme.colors.pinkTwo || theme.colors.primary, borderColor: theme.colors.border }}
           value={fullName}
           onChangeText={setFullName}
           placeholder="Enter your full name"
@@ -244,6 +250,8 @@ export default function SetupAccountScreen() {
 
         <Input
           label="Nickname (Optional)"
+            labelStyle={{ color: theme.colors.text }}
+            style={{ backgroundColor: theme.colors.surface, color: theme.colors.pinkTwo || theme.colors.primary, borderColor: theme.colors.border }}
           value={nickname}
           onChangeText={setNickname}
           placeholder="How should we call you?"
@@ -275,8 +283,6 @@ export default function SetupAccountScreen() {
               mode="date"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={(event, selectedDate) => {
-                // On Android, always close picker after selection
-                // On iOS, keep it open for spinner mode
                 if (Platform.OS === 'android') {
                   setShowDatePicker(false);
                 }
@@ -307,11 +313,11 @@ export default function SetupAccountScreen() {
                   {
                     backgroundColor:
                       gender === option.value
-                        ? theme.colors.primary
+                        ? (theme.colors.pinkTwo || theme.colors.primary)
                         : theme.colors.surface,
                     borderColor:
                       gender === option.value
-                        ? theme.colors.primary
+                        ? (theme.colors.pinkTwo || theme.colors.primary)
                         : theme.colors.border,
                   },
                 ]}
@@ -339,86 +345,140 @@ export default function SetupAccountScreen() {
 
   const renderStep2 = () => (
     <View style={styles.stepContent}>
-      <View
-        style={[
-          styles.iconContainer,
-          { backgroundColor: theme.colors.surface },
-        ]}
-      >
-        <View
-          style={[styles.iconCircle, { backgroundColor: theme.colors.primary }]}
-        >
-          <Sparkles size={32} color={theme.colors.surface} strokeWidth={2.5} />
-        </View>
-      </View>
-
       <Text style={[styles.title, { color: theme.colors.text }]}>
         What are you interested in?
       </Text>
       <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-        Select categories that interest you
+        Your feed will be personalized based on what you like.
       </Text>
 
       <View style={styles.interestsGrid}>
+          {/* Combine backend categories and custom ones for display if needed, currently separating them logic-wise but visual wise they are pills */}
         {categoriesLoading ? (
-          <Text
-            style={[styles.loadingText, { color: theme.colors.textSecondary }]}
-          >
-            Loading categories...
-          </Text>
-        ) : categories.length === 0 ? (
-          <Text
-            style={[styles.loadingText, { color: theme.colors.textSecondary }]}
-          >
-            No categories available
-          </Text>
+            <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>
+                 Loading categories...
+            </Text>
         ) : (
-          categories.map((category) => {
-            const isSelected = selectedInterests.includes(category.id);
-            return (
-              <TouchableOpacity
-                key={category.id}
-                onPress={() => toggleInterest(category.id)}
-                style={[
-                  styles.interestCard,
-                  {
-                    backgroundColor: isSelected
-                      ? theme.colors.primary
-                      : theme.colors.surface,
-                    borderColor: isSelected
-                      ? theme.colors.primary
-                      : theme.colors.border,
-                  },
-                ]}
-              >
-                {isSelected && (
-                  <View style={styles.checkBadge}>
-                    <Check
-                      size={14}
-                      color={theme.colors.surface}
-                      strokeWidth={3}
-                    />
-                  </View>
-                )}
-                <Text style={styles.interestEmoji}>
-                  {category.emoji || getCategoryEmoji(category.name)}
-                </Text>
-                <Text
+             categories.map((category) => {
+              const isSelected = selectedInterests.includes(category.id);
+              return (
+                <TouchableOpacity
+                  key={category.id}
+                  onPress={() => toggleInterest(category.id)}
                   style={[
-                    styles.interestName,
+                    styles.interestPill,
                     {
-                      color: isSelected
-                        ? theme.colors.surface
-                        : theme.colors.text,
+                      backgroundColor: isSelected
+                        ? (theme.colors.pinkTwo || theme.colors.primary)
+                        : 'transparent',
+                      borderColor: isSelected
+                        ? (theme.colors.pinkTwo || theme.colors.primary)
+                        : theme.colors.border,
                     },
                   ]}
                 >
-                  {category.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })
+                  <Text
+                    style={[
+                      styles.interestPillText,
+                      {
+                        color: isSelected
+                          ? theme.colors.surface
+                          : theme.colors.text,
+                      },
+                    ]}
+                  >
+                    {category.name}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.interestPillIcon,
+                      {
+                        color: isSelected
+                          ? theme.colors.surface
+                          : theme.colors.text,
+                      },
+                    ]}
+                  >
+                    {isSelected ? '✓' : '+'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })
         )}
+
+        {/* Custom Categories */}
+        {customCategories.map((category) => {
+          const isSelected = selectedInterests.includes(category);
+          return (
+            <TouchableOpacity
+              key={category}
+              onPress={() => toggleInterest(category)}
+              onLongPress={() => handleRemoveCustomCategory(category)}
+              style={[
+                styles.interestPill,
+                {
+                  backgroundColor: isSelected
+                    ? (theme.colors.pinkTwo || theme.colors.primary)
+                    : 'transparent',
+                  borderColor: isSelected
+                    ? (theme.colors.pinkTwo || theme.colors.primary)
+                    : theme.colors.border,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.interestPillText,
+                  {
+                    color: isSelected
+                      ? theme.colors.surface
+                      : theme.colors.text,
+                  },
+                ]}
+              >
+                {category}
+              </Text>
+              <Text
+                style={[
+                  styles.interestPillIcon,
+                  {
+                    color: isSelected
+                      ? theme.colors.surface
+                      : theme.colors.text,
+                  },
+                ]}
+              >
+                {isSelected ? '✓' : '+'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+
+        {/* Other Button */}
+        <TouchableOpacity
+          onPress={() => setShowCustomCategoryModal(true)}
+          style={[
+            styles.interestPill,
+            styles.otherPill,
+            {
+              backgroundColor: 'transparent',
+              borderColor: theme.colors.border,
+              borderStyle: 'dashed',
+            },
+          ]}
+        >
+          <Plus size={18} color={theme.colors.text} />
+          <Text
+            style={[
+              styles.interestPillText,
+              {
+                color: theme.colors.text,
+              },
+            ]}
+          >
+            Other
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -432,7 +492,7 @@ export default function SetupAccountScreen() {
         ]}
       >
         <View
-          style={[styles.iconCircle, { backgroundColor: theme.colors.primary }]}
+          style={[styles.iconCircle, { backgroundColor: theme.colors.pinkTwo || theme.colors.primary }]}
         >
           <Sparkles size={32} color={theme.colors.surface} strokeWidth={2.5} />
         </View>
@@ -452,7 +512,7 @@ export default function SetupAccountScreen() {
           <View
             style={[
               styles.featureDot,
-              { backgroundColor: theme.colors.primary },
+              { backgroundColor: theme.colors.pinkTwo || theme.colors.primary },
             ]}
           />
           <Text style={[styles.featureText, { color: theme.colors.text }]}>
@@ -463,7 +523,7 @@ export default function SetupAccountScreen() {
           <View
             style={[
               styles.featureDot,
-              { backgroundColor: theme.colors.primary },
+              { backgroundColor: theme.colors.pinkTwo || theme.colors.primary },
             ]}
           />
           <Text style={[styles.featureText, { color: theme.colors.text }]}>
@@ -474,7 +534,7 @@ export default function SetupAccountScreen() {
           <View
             style={[
               styles.featureDot,
-              { backgroundColor: theme.colors.primary },
+              { backgroundColor: theme.colors.pinkTwo || theme.colors.primary },
             ]}
           />
           <Text style={[styles.featureText, { color: theme.colors.text }]}>
@@ -485,7 +545,7 @@ export default function SetupAccountScreen() {
           <View
             style={[
               styles.featureDot,
-              { backgroundColor: theme.colors.primary },
+              { backgroundColor: theme.colors.pinkTwo || theme.colors.primary },
             ]}
           />
           <Text style={[styles.featureText, { color: theme.colors.text }]}>
@@ -499,7 +559,7 @@ export default function SetupAccountScreen() {
         onPress={handleBecomeProfessional}
         style={[
           styles.professionalButton,
-          { backgroundColor: theme.colors.primary },
+          { backgroundColor: theme.colors.pinkTwo || theme.colors.primary },
         ]}
       />
 
@@ -533,7 +593,7 @@ export default function SetupAccountScreen() {
         )}
 
         <TouchableOpacity onPress={handleSkip}>
-          <Text style={[styles.skipText, { color: theme.colors.primary }]}>
+          <Text style={[styles.skipText, { color: theme.colors.pinkTwo || theme.colors.primary }]}>
             Skip
           </Text>
         </TouchableOpacity>
@@ -556,31 +616,69 @@ export default function SetupAccountScreen() {
           <Button
             title={currentStep === 2 ? 'Continue' : 'Next'}
             onPress={handleNextStep}
-            style={{ backgroundColor: theme.colors.primary }}
+            style={{ backgroundColor: theme.colors.pinkTwo || theme.colors.primary }}
           />
         </View>
       )}
+
+      {/* Custom Category Modal */}
+      <Modal
+        visible={showCustomCategoryModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowCustomCategoryModal(false)}
+      >
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.colors.background }]}>
+          <View style={[styles.modalHeader, {
+            backgroundColor: theme.name === 'dark' ? '#1C1C1E' : theme.colors.surface,
+            borderBottomColor: theme.colors.border,
+          }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Add Custom Category</Text>
+            <TouchableOpacity
+              onPress={() => setShowCustomCategoryModal(false)}
+              style={[styles.modalCloseButton, { backgroundColor: theme.colors.surface }]}
+            >
+              <X size={20} color={theme.colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.modalContent}>
+            <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>
+              Enter a category that interests you
+            </Text>
+
+            <View style={styles.modalInputContainer}>
+              <TextInput
+                style={[styles.modalInput, {
+                  backgroundColor: theme.colors.surface,
+                  color: theme.colors.text,
+                  borderColor: theme.colors.border,
+                }]}
+                value={customCategoryInput}
+                onChangeText={setCustomCategoryInput}
+                placeholder="e.g., Cooking, Photography, etc."
+                placeholderTextColor={theme.colors.textMuted}
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={handleAddCustomCategory}
+              />
+            </View>
+
+            <Button
+              title="Add Category"
+              onPress={handleAddCustomCategory}
+              disabled={!customCategoryInput.trim()}
+              style={[styles.modalButton, {
+                backgroundColor: theme.colors.pinkTwo || theme.colors.primary,
+                opacity: customCategoryInput.trim() ? 1 : 0.5,
+              }]}
+            />
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
-
-const getCategoryEmoji = (categoryName: string): string => {
-  const emojiMap: { [key: string]: string } = {
-    Business: '💼',
-    Technology: '💻',
-    Health: '❤️',
-    Finance: '💰',
-    Lifestyle: '✨',
-    Education: '📚',
-    Design: '🎨',
-    Entertainment: '🎬',
-    Sports: '⚽',
-    Automotive: '🚗',
-    Photography: '📸',
-    Gaming: '🎮',
-  };
-  return emojiMap[categoryName] || '⭐';
-};
 
 const styles = StyleSheet.create({
   container: {
@@ -739,34 +837,32 @@ const styles = StyleSheet.create({
     gap: 12,
     width: '100%',
   },
-  interestCard: {
-    width: '47%',
-    paddingVertical: 20,
+  // Replaced interestCard with interestPill style
+  interestPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 16,
-    borderWidth: 2,
-    alignItems: 'center',
-    position: 'relative',
+    borderRadius: 24,
+    borderWidth: 1.5,
+    gap: 8,
   },
-  checkBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  otherPill: {
+    borderStyle: 'dashed',
   },
-  interestEmoji: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
-  interestName: {
+  interestPillText: {
     fontSize: 14,
-    fontFamily: 'Inter-Bold',
+    fontFamily: 'Inter-SemiBold',
+  },
+  interestPillIcon: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  loadingText: {
     textAlign: 'center',
+    width: '100%',
+    marginTop: 20,
+    fontFamily: 'Inter-Medium',
   },
   featureCard: {
     width: '100%',
@@ -801,16 +897,53 @@ const styles = StyleSheet.create({
   maybeLaterText: {
     fontSize: 15,
     fontFamily: 'Inter-Medium',
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
     textAlign: 'center',
-    paddingVertical: 20,
-    width: '100%',
   },
   footer: {
     padding: 24,
-    paddingBottom: Platform.OS === 'ios' ? 32 : 24,
+    paddingTop: 12,
+  },
+  modalContainer: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontFamily: 'Inter-SemiBold',
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalContent: {
+    padding: 24,
+  },
+  modalSubtitle: {
+    fontSize: 15,
+    fontFamily: 'Inter-Regular',
+    marginBottom: 24,
+  },
+  modalInputContainer: {
+    marginBottom: 24,
+  },
+  modalInput: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  modalButton: {
+    marginTop: 8,
   },
 });

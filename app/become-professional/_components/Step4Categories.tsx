@@ -7,7 +7,7 @@ import {
   TextInput,
   Platform,
 } from 'react-native';
-import { Briefcase, Check, Search, X } from 'lucide-react-native';
+import { Search, X } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useCategoriesGrouped } from '@/hooks/useCategories';
 import { SectionLoading } from '@/components/ui/SectionLoading';
@@ -53,28 +53,10 @@ export function Step4Categories({
 
   return (
     <View style={[styles.stepContent, styles.stepContentCompact]}>
-      <View
-        style={[
-          styles.iconContainerCompact,
-          { backgroundColor: theme.colors.surface },
-        ]}
-      >
-        <View
-          style={[
-            styles.iconCircleCompact,
-            { backgroundColor: theme.colors.primary },
-          ]}
-        >
-          <Briefcase size={20} color={theme.colors.surface} strokeWidth={2.5} />
-        </View>
-      </View>
-
-      <Text style={[styles.titleCompact, { color: theme.colors.text }]}>
+      <Text style={[styles.title, { color: theme.colors.text }]}>
         Select Categories
       </Text>
-      <Text
-        style={[styles.subtitleCompact, { color: theme.colors.textSecondary }]}
-      >
+      <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
         Choose one or more categories where you can provide expertise
       </Text>
 
@@ -124,7 +106,7 @@ export function Step4Categories({
               <Text
                 style={[
                   styles.selectedCountText,
-                  { color: theme.colors.primary },
+                  { color: theme.colors.pinkTwo },
                 ]}
               >
                 {selectedCategories.length}{' '}
@@ -145,65 +127,32 @@ export function Step4Categories({
             </View>
           )}
 
-          {/* Grouped Categories */}
-          {/* NOTE: This step is already rendered inside the parent ScrollView in `become-professional/index.tsx`.
-              Avoid nested ScrollView here (can cause collapsed height / overlapping layouts). */}
+          {/* Categories as Pills */}
           <View style={styles.groupsContainer}>
-            {filteredGroups.map((group) => (
-              <View key={group.id} style={styles.categoryGroup}>
-                {/* Group Header */}
-                <View style={styles.groupHeader}>
-                  <Text style={styles.groupEmoji}>{group.emoji}</Text>
-                  <Text
-                    style={[styles.groupName, { color: theme.colors.text }]}
-                  >
-                    {group.name}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.groupCount,
-                      { color: theme.colors.textMuted },
-                    ]}
-                  >
-                    ({group.categories.length})
-                  </Text>
-                </View>
-
-                {/* Categories Grid */}
-                <View style={styles.categoriesGrid}>
-                  {group.categories.map((category) => {
+            {filteredGroups.length > 0 ? (
+              <View style={styles.categoriesGrid}>
+                {filteredGroups.flatMap((group) =>
+                  group.categories.map((category) => {
                     const isSelected = selectedCategories.includes(category.id);
                     return (
                       <TouchableOpacity
                         key={category.id}
                         onPress={() => onCategoryToggle(category.id)}
                         style={[
-                          styles.categoryCard,
+                          styles.categoryPill,
                           {
                             backgroundColor: isSelected
-                              ? theme.colors.primary
-                              : theme.colors.surface,
+                              ? theme.colors.pinkTwo || theme.colors.primary
+                              : 'transparent',
                             borderColor: isSelected
-                              ? theme.colors.primary
+                              ? theme.colors.pinkTwo || theme.colors.primary
                               : theme.colors.border,
                           },
                         ]}
                       >
-                        {isSelected && (
-                          <View style={styles.checkBadge}>
-                            <Check
-                              size={12}
-                              color={theme.colors.surface}
-                              strokeWidth={3}
-                            />
-                          </View>
-                        )}
-                        <Text style={styles.categoryEmoji}>
-                          {category.emoji || '⭐'}
-                        </Text>
                         <Text
                           style={[
-                            styles.categoryName,
+                            styles.categoryPillText,
                             {
                               color: isSelected
                                 ? theme.colors.surface
@@ -213,14 +162,24 @@ export function Step4Categories({
                         >
                           {category.name}
                         </Text>
+                        <Text
+                          style={[
+                            styles.categoryPillIcon,
+                            {
+                              color: isSelected
+                                ? theme.colors.surface
+                                : theme.colors.text,
+                            },
+                          ]}
+                        >
+                          {isSelected ? '✓' : '+'}
+                        </Text>
                       </TouchableOpacity>
                     );
-                  })}
-                </View>
+                  })
+                )}
               </View>
-            ))}
-
-            {filteredGroups.length === 0 && (
+            ) : (
               <View style={styles.emptySearchContainer}>
                 <Search size={48} color={theme.colors.textMuted} />
                 <Text
@@ -250,7 +209,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepContentCompact: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     width: '100%',
   },
   iconContainerCompact: {
@@ -268,6 +227,19 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  title: {
+    fontSize: 28,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 15,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 22,
   },
   titleCompact: {
     fontSize: 16,
@@ -290,8 +262,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 2,
+    borderRadius: 24,
     borderWidth: 2,
     gap: 12,
     ...(Platform.OS === 'web'
@@ -328,61 +300,29 @@ const styles = StyleSheet.create({
   groupsContainer: {
     width: '100%',
   },
-  categoryGroup: {
-    marginBottom: 24,
-  },
-  groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
-  },
-  groupEmoji: {
-    fontSize: 20,
-  },
-  groupName: {
-    fontSize: 16,
-    fontFamily: 'Inter-Bold',
-  },
-  groupCount: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-  },
+
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    gap: 12,
+    width: '100%',
   },
-  categoryCard: {
-    width: '48%',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+  categoryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 24,
     borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    marginBottom: 12,
+    gap: 8,
   },
-  checkBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  categoryPillText: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
   },
-  categoryEmoji: {
-    fontSize: 24,
-    marginBottom: 4,
-  },
-  categoryName: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    textAlign: 'center',
+  categoryPillIcon: {
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   emptySearchContainer: {
     alignItems: 'center',

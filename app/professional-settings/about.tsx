@@ -144,7 +144,7 @@ export default function AboutScreen() {
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
-        <Header showLogo showBack onBackPress={() => router.back()} />
+        <Header showLogo={false} title="About Me" showBack onBackPress={() => router.back()} />
         <PageLoading message="Loading about me information..." />
       </SafeAreaView>
     );
@@ -154,22 +154,12 @@ export default function AboutScreen() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <Header showLogo showBack onBackPress={() => router.back()} />
+      <Header showLogo={false} title="About Me" showBack onBackPress={() => router.back()} />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>
-            About Me
-          </Text>
-          <Text
-            style={[styles.subtitle, { color: theme.colors.textSecondary }]}
-          >
-            Tell users about your expertise and what makes you unique
-          </Text>
-        </View>
 
         <View style={styles.form}>
           {/* Specialties */}
@@ -260,7 +250,7 @@ export default function AboutScreen() {
           title={saving ? 'Saving...' : 'Save Changes'}
           onPress={handleSave}
           disabled={saving || languages.length === 0}
-          style={styles.saveButton}
+          style={[styles.saveButton, { backgroundColor: theme.colors.pinkTwo }]}
         />
       </View>
     </SafeAreaView>

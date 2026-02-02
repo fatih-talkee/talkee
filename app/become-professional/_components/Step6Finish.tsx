@@ -24,51 +24,101 @@ export function Step6Finish({
   const { theme } = useTheme();
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [availableForCalls, setAvailableForCalls] = useState(true);
+  const [publicProfile, setPublicProfile] = useState(true);
 
   return (
     <View style={[styles.stepContent, styles.stepContentCompact]}>
-      <View
+      <Text style={[styles.title, { color: theme.colors.text }]}>
+        Almost There!
+      </Text>
+      <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+        Just a few more settings to complete your profile
+      </Text>
+
+      {/* Available for Calls Card */}
+      <TouchableOpacity
+        onPress={() => setAvailableForCalls(!availableForCalls)}
         style={[
-          styles.iconContainerCompact,
-          { backgroundColor: theme.colors.surface },
+          styles.settingCard,
+          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
         ]}
       >
         <View
           style={[
-            styles.iconCircleCompact,
-            { backgroundColor: theme.colors.primary },
+            styles.checkCircle,
+            {
+              backgroundColor: availableForCalls
+                ? theme.colors.pinkTwo || theme.colors.primary
+                : 'transparent',
+              borderColor: availableForCalls
+                ? theme.colors.pinkTwo || theme.colors.primary
+                : theme.colors.border,
+            },
           ]}
         >
-          <Check size={20} color={theme.colors.surface} strokeWidth={3} />
+          {availableForCalls && (
+            <Check size={18} color={theme.colors.surface} strokeWidth={3} />
+          )}
         </View>
-      </View>
+        <View style={styles.settingInfo}>
+          <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
+            Available for Calls
+          </Text>
+          <Text style={[styles.settingSubtitle, { color: theme.colors.textSecondary }]}>
+            Users can see you're online and ready
+          </Text>
+        </View>
+      </TouchableOpacity>
 
-      <Text style={[styles.titleCompact, { color: theme.colors.text }]}>
-        Almost There!
-      </Text>
-      <Text
-        style={[styles.subtitleCompact, { color: theme.colors.textSecondary }]}
-      >
-        Review your information and complete your professional profile
-      </Text>
-
-      <View
+      {/* Public Profile Card */}
+      <TouchableOpacity
+        onPress={() => setPublicProfile(!publicProfile)}
         style={[
-          styles.termsContainer,
-          { backgroundColor: theme.colors.surface },
+          styles.settingCard,
+          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
         ]}
       >
-        <FileText size={48} color={theme.colors.primary} strokeWidth={1.5} />
+        <View
+          style={[
+            styles.checkCircle,
+            {
+              backgroundColor: publicProfile
+                ? theme.colors.pinkTwo || theme.colors.primary
+                : 'transparent',
+              borderColor: publicProfile
+                ? theme.colors.pinkTwo || theme.colors.primary
+                : theme.colors.border,
+            },
+          ]}
+        >
+          {publicProfile && (
+            <Check size={18} color={theme.colors.surface} strokeWidth={3} />
+          )}
+        </View>
+        <View style={styles.settingInfo}>
+          <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
+            Public Profile
+          </Text>
+          <Text style={[styles.settingSubtitle, { color: theme.colors.textSecondary }]}>
+            Your profile appears in public searches
+          </Text>
+        </View>
+      </TouchableOpacity>
+
+      {/* Terms & Privacy */}
+      <View style={styles.termsSection}>
+        <FileText size={40} color={theme.colors.pinkTwo || theme.colors.primary} strokeWidth={1.5} />
         <Text style={[styles.termsText, { color: theme.colors.textSecondary }]}>
-          By continuing, you agree to our{' '}
+          By continuing, you agree to our{'\n'}
           <TouchableOpacity onPress={() => setShowTermsModal(true)}>
-            <Text style={[styles.termsLink, { color: theme.colors.primary }]}>
+            <Text style={[styles.termsLink, { color: theme.colors.pinkTwo || theme.colors.primary }]}>
               Terms of Service
             </Text>
           </TouchableOpacity>{' '}
           and{' '}
           <TouchableOpacity onPress={() => setShowPrivacyModal(true)}>
-            <Text style={[styles.termsLink, { color: theme.colors.primary }]}>
+            <Text style={[styles.termsLink, { color: theme.colors.pinkTwo || theme.colors.primary }]}>
               Privacy Policy
             </Text>
           </TouchableOpacity>
@@ -342,43 +392,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepContentCompact: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     width: '100%',
   },
-  iconContainerCompact: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    alignSelf: 'center',
-  },
-  iconCircleCompact: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  titleCompact: {
-    fontSize: 16,
+  title: {
+    fontSize: 28,
     fontFamily: 'Inter-Bold',
-    marginBottom: 6,
-    textAlign: 'left',
+    marginBottom: 8,
+    textAlign: 'center',
   },
-  subtitleCompact: {
-    fontSize: 14,
+  subtitle: {
+    fontSize: 15,
     fontFamily: 'Inter-Regular',
-    textAlign: 'left',
-    marginBottom: 24,
-    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 22,
   },
-  termsContainer: {
+  settingCard: {
     width: '100%',
-    padding: 24,
-    borderRadius: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 12,
+    gap: 12,
+  },
+  checkCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingInfo: {
+    flex: 1,
+  },
+  settingTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    marginBottom: 4,
+  },
+  settingSubtitle: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    lineHeight: 18,
+  },
+  termsSection: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 24,
     marginBottom: 24,
   },
   termsText: {
@@ -390,6 +454,7 @@ const styles = StyleSheet.create({
   },
   termsLink: {
     fontFamily: 'Inter-Bold',
+    textDecorationLine: 'underline',
   },
   modalOverlay: {
     flex: 1,

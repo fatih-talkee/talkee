@@ -31,6 +31,7 @@ import {
   BookOpen,
   TestTube,
   Phone,
+  DollarSign,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { Card } from '@/components/ui/Card';
@@ -656,6 +657,48 @@ export default function ProfileScreen() {
                   ]}
                 />
               </View>
+            </Card>
+          </View>
+        )}
+
+        {/* Earnings Section - Only for Professionals */}
+        {isProfessional && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Earnings
+            </Text>
+            <Card
+              style={[styles.menuCard, { backgroundColor: theme.colors.card }]}
+            >
+              <TouchableOpacity
+                style={[styles.menuItem, styles.lastMenuItem]}
+                onPress={() => {
+                  try {
+                    router.push('/transactions');
+                  } catch (error) {
+                    console.error('Navigation error:', error);
+                  }
+                }}
+              >
+                <View style={styles.menuItemLeft}>
+                  <View style={styles.menuItemIcon}>
+                    <DollarSign size={20} color="#f59e0b" />
+                  </View>
+                  <Text
+                    style={[styles.menuItemText, { color: theme.colors.text }]}
+                  >
+                    Transactions
+                  </Text>
+                </View>
+                <View style={styles.menuItemRight}>
+                  <ChevronRight
+                    size={20}
+                    color={
+                      theme.name === 'dark' ? '#FFFFFF' : theme.colors.textMuted
+                    }
+                  />
+                </View>
+              </TouchableOpacity>
             </Card>
           </View>
         )}

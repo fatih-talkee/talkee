@@ -88,11 +88,11 @@ export function EducationInput({
           onPress={handleAdd}
           style={[
             styles.addButton,
-            { backgroundColor: theme.colors.primary + '20' },
+            { backgroundColor: theme.colors.pinkTwo + '20' },
           ]}
         >
-          <Plus size={18} color={theme.colors.primary} />
-          <Text style={[styles.addButtonText, { color: theme.colors.primary }]}>
+          <Plus size={18} color={theme.colors.pinkTwo} />
+          <Text style={[styles.addButtonText, { color: theme.colors.pinkTwo }]}>
             Add
           </Text>
         </TouchableOpacity>
@@ -128,10 +128,10 @@ export function EducationInput({
                   <View
                     style={[
                       styles.iconContainer,
-                      { backgroundColor: theme.colors.primary + '20' },
+                      { backgroundColor: theme.colors.pinkTwo + '20' },
                     ]}
                   >
-                    <GraduationCap size={20} color={theme.colors.primary} />
+                    <GraduationCap size={20} color={theme.colors.pinkTwo} />
                   </View>
                   <View style={styles.cardInfo}>
                     <Text
@@ -456,7 +456,7 @@ function EducationFormModal({
                           {
                             backgroundColor:
                               degreeLevel === level.value
-                                ? theme.colors.primary + '20'
+                                ? theme.colors.pinkTwo + '20'
                                 : 'transparent',
                             borderBottomColor: theme.colors.border,
                           },
@@ -468,7 +468,7 @@ function EducationFormModal({
                             {
                               color:
                                 degreeLevel === level.value
-                                  ? theme.colors.primary
+                                  ? theme.colors.pinkTwo
                                   : theme.colors.text,
                             },
                           ]}
@@ -476,7 +476,7 @@ function EducationFormModal({
                           {level.label}
                         </Text>
                         {degreeLevel === level.value && (
-                          <Check size={16} color={theme.colors.primary} />
+                          <Check size={16} color={theme.colors.pinkTwo} />
                         )}
                       </TouchableOpacity>
                     ))}
@@ -560,10 +560,10 @@ function EducationFormModal({
                   modalStyles.checkbox,
                   {
                     backgroundColor: isCurrent
-                      ? theme.colors.primary
+                      ? theme.colors.pinkTwo
                       : theme.colors.card,
                     borderColor: isCurrent
-                      ? theme.colors.primary
+                      ? theme.colors.pinkTwo
                       : theme.colors.border,
                   },
                 ]}
@@ -613,7 +613,10 @@ function EducationFormModal({
             <Button
               title="Add"
               onPress={handleSave}
-              style={modalStyles.modalButtonFullWidth}
+              style={[
+                modalStyles.modalButtonFullWidth,
+                { backgroundColor: (theme.colors as any).pinkTwo || theme.colors.primary },
+              ]}
             />
           </View>
         </View>

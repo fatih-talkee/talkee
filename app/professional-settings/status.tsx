@@ -129,7 +129,7 @@ export default function StatusScreen() {
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
-        <Header showLogo showBack onBackPress={() => router.back()} />
+        <Header showLogo={false} title="Status & Visibility" showBack onBackPress={() => router.back()} />
         <PageLoading message="Loading status information..." />
       </SafeAreaView>
     );
@@ -139,20 +139,12 @@ export default function StatusScreen() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <Header showLogo showBack onBackPress={() => router.back()} />
+      <Header showLogo={false} title="Status & Visibility" showBack onBackPress={() => router.back()} />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>
-            Status & Visibility
-          </Text>
-          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-            Manage your profile visibility and availability status
-          </Text>
-        </View>
 
         <View style={styles.form}>
           {/* Availability Status */}

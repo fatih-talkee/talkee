@@ -209,12 +209,12 @@ export default function ProfessionalCV() {
           ))}
 
           <TouchableOpacity
-            style={[styles.addButton, { borderColor: theme.colors.primary }]}
+            style={[styles.addButton, { borderColor: theme.colors.pinkTwo }]}
             onPress={() => setShowExperienceModal(true)}
           >
-            <Plus size={20} color={theme.colors.primary} />
+            <Plus size={20} color={theme.colors.pinkTwo} />
             <Text
-              style={[styles.addButtonText, { color: theme.colors.primary }]}
+              style={[styles.addButtonText, { color: theme.colors.pinkTwo }]}
             >
               Add Experience
             </Text>
