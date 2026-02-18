@@ -568,7 +568,7 @@ function ExperienceFormModal({
             <Button
               title="Add"
               onPress={handleSave}
-              style={modalStyles.modalButtonFullWidth}
+              style={[modalStyles.modalButtonFullWidth, { backgroundColor: theme.colors.pinkTwo }]}
             />
           </View>
         </View>
@@ -637,7 +637,7 @@ const modalStyles = StyleSheet.create({
   },
   textInput: {
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 20,
     borderWidth: 1,
     fontSize: 15,
     fontFamily: 'Inter-Regular',

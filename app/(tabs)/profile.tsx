@@ -498,6 +498,24 @@ export default function ProfileScreen() {
                   ? formatMemberSince(stats.member_since)
                   : 'N/A'}
               </Text>
+              {/* Share Profile - profil bilgilerinin altında */}
+              <TouchableOpacity
+                style={[
+                  styles.shareProfileButton,
+                  { backgroundColor: theme.colors.primary + '20' },
+                ]}
+                onPress={() => setShareModalVisible(true)}
+              >
+                <Share2 size={14} color={theme.colors.primary} />
+                <Text
+                  style={[
+                    styles.shareProfileText,
+                    { color: theme.colors.primary },
+                  ]}
+                >
+                  Share Profile
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -541,76 +559,43 @@ export default function ProfileScreen() {
 
         {/* Professional Section - Conditional */}
         {isProfessional ? (
-          // If professional - show settings
+          // Professional ise - Incoming Call Settings kartı göster
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              I'm a Professional
+              Incoming Call Settings
             </Text>
             <Card
-              style={[
-                styles.professionalCard,
-                { backgroundColor: theme.colors.card },
-              ]}
+              style={[styles.menuCard, { backgroundColor: theme.colors.card }]}
             >
-              <View style={styles.professionalLayout}>
-                <View style={styles.qrContainer}>
-                  <QrCode size={45} color={theme.colors.text} />
-                </View>
-
-                <View
-                  style={[
-                    styles.verticalDivider,
-                    { backgroundColor: theme.colors.divider },
-                  ]}
-                />
-
-                <View style={styles.buttonsContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.professionalSettingsButton,
-                      {
-                        backgroundColor: theme.colors.background,
-                        borderColor: theme.colors.border,
-                      },
-                    ]}
-                    onPress={() => {
-                      try {
-                        router.push('/professional-settings');
-                      } catch (error) {
-                        console.error('Navigation error:', error);
-                      }
-                    }}
+              <TouchableOpacity
+                style={[styles.menuItem, styles.lastMenuItem]}
+                onPress={() => {
+                  try {
+                    router.push('/professional-settings');
+                  } catch (error) {
+                    console.error('Navigation error:', error);
+                  }
+                }}
+              >
+                <View style={styles.menuItemLeft}>
+                  <View style={styles.menuItemIcon}>
+                    <Settings size={20} color="#64748b" />
+                  </View>
+                  <Text
+                    style={[styles.menuItemText, { color: theme.colors.text }]}
                   >
-                    <Settings size={16} color={theme.colors.text} />
-                    <Text
-                      style={[
-                        styles.professionalSettingsText,
-                        { color: theme.colors.text },
-                      ]}
-                    >
-                      Professional Settings
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.shareProfileButton,
-                      { backgroundColor: theme.colors.primary + '20' },
-                    ]}
-                    onPress={() => setShareModalVisible(true)}
-                  >
-                    <Share2 size={14} color={theme.colors.primary} />
-                    <Text
-                      style={[
-                        styles.shareProfileText,
-                        { color: theme.colors.primary },
-                      ]}
-                    >
-                      Share Profile
-                    </Text>
-                  </TouchableOpacity>
+                    Incoming Call Settings
+                  </Text>
                 </View>
-              </View>
+                <View style={styles.menuItemRight}>
+                  <ChevronRight
+                    size={20}
+                    color={
+                      theme.name === 'dark' ? '#FFFFFF' : theme.colors.textMuted
+                    }
+                  />
+                </View>
+              </TouchableOpacity>
             </Card>
           </View>
         ) : (

@@ -24,6 +24,12 @@ import {
   Plus,
   Check,
 } from 'lucide-react-native';
+import {
+  GoogleIcon,
+  FacebookIcon,
+  LinkedInIcon,
+  EmailIcon,
+} from '@/components/ui/ProviderIcons';
 import { Header } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -84,12 +90,13 @@ export default function AccountSettingsScreen() {
   const hasPassword = user?.oauth_providers?.includes('email') ?? true;
 
   // All available providers
+  // All available providers
   const allProviders = [
-    { id: 'email', name: 'Email & Password', icon: '🔑' },
-    { id: 'google', name: 'Google', icon: '🔵' },
-    { id: 'facebook', name: 'Facebook', icon: '🔵' },
-    { id: 'linkedin', name: 'LinkedIn', icon: '🔵' },
-  ] as const;
+    { id: 'email', name: 'Email & Password', Icon: EmailIcon },
+    { id: 'google', name: 'Google', Icon: GoogleIcon },
+    { id: 'facebook', name: 'Facebook', Icon: FacebookIcon },
+    { id: 'linkedin', name: 'LinkedIn', Icon: LinkedInIcon },
+  ];
 
   // Handle linking a provider
   const handleLinkProvider = async (
@@ -440,7 +447,7 @@ export default function AccountSettingsScreen() {
               {
                 borderColor:
                   focusedInput === 'fullName' && isEditing
-                    ? theme.colors.primary
+                    ? theme.colors.pinkTwo
                     : theme.colors.border,
                 backgroundColor: theme.colors.surface,
               },
@@ -471,7 +478,7 @@ export default function AccountSettingsScreen() {
               {
                 borderColor:
                   focusedInput === 'email' && isEditing
-                    ? theme.colors.primary
+                    ? theme.colors.pinkTwo
                     : theme.colors.border,
                 backgroundColor: theme.colors.surface,
               },
@@ -502,7 +509,7 @@ export default function AccountSettingsScreen() {
               {
                 borderColor:
                   focusedInput === 'phone' && isEditing
-                    ? theme.colors.primary
+                    ? theme.colors.pinkTwo
                     : theme.colors.border,
                 backgroundColor: theme.colors.surface,
               },
@@ -562,12 +569,12 @@ export default function AccountSettingsScreen() {
               activeOpacity={0.7}
             >
               <View style={styles.settingLeft}>
-                <Lock size={20} color={theme.colors.primary} />
+                <Lock size={20} color={theme.colors.pinkTwo} />
                 <View style={styles.settingInfo}>
                   <Text
                     style={[
                       styles.settingLabel,
-                      { color: theme.colors.primary },
+                      { color: theme.colors.pinkTwo },
                     ]}
                   >
                     Change Password
@@ -644,11 +651,12 @@ export default function AccountSettingsScreen() {
             Connected Accounts
           </Text>
           <View style={styles.connectedAccountsList}>
-            {allProviders.map((providerInfo) => {
+            {allProviders.map((providerInfo, index) => {
               const isConnected = user.oauth_providers?.includes(
                 providerInfo.id
               );
               const providerEmail = user.oauth_emails?.[providerInfo.id];
+              const isLastItem = index === allProviders.length - 1;
 
               return (
                 <View
@@ -656,13 +664,13 @@ export default function AccountSettingsScreen() {
                   style={[
                     styles.accountItem,
                     {
-                      backgroundColor: theme.colors.surface,
                       borderColor: theme.colors.border,
+                      borderBottomWidth: isLastItem ? 0 : 1,
                     },
                   ]}
                 >
                   <View style={styles.accountItemLeft}>
-                    <Text style={styles.providerIcon}>{providerInfo.icon}</Text>
+                    <providerInfo.Icon size={32} style={styles.providerIcon} />
                     <View style={styles.accountItemInfo}>
                       <Text
                         style={[
@@ -728,7 +736,7 @@ export default function AccountSettingsScreen() {
                     <TouchableOpacity
                       style={[
                         styles.linkButton,
-                        { backgroundColor: theme.colors.primary },
+                        { backgroundColor: theme.colors.pinkTwo },
                       ]}
                       onPress={() =>
                         handleLinkProvider(
@@ -1005,10 +1013,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 20,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
+    paddingVertical: 5,
+    marginBottom: 5,
   },
   input: {
     flex: 1,
@@ -1051,7 +1059,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   connectedAccountsList: {
-    gap: 12,
+    // gap: 12, // Removed gap
   },
   accountItem: {
     flexDirection: 'row',
@@ -1059,7 +1067,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 12,
     borderRadius: 12,
-    borderWidth: 1,
+    // borderWidth: 1, // Removed border
   },
   accountItemLeft: {
     flexDirection: 'row',

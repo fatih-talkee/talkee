@@ -55,7 +55,7 @@ export default function ProfessionalSettings() {
     },
     {
       id: 'settings',
-      title: 'Call Criteria Settings',
+      title: 'Professions',
       icon: Settings,
       route: '/profile/call-criteria-settings',
     },

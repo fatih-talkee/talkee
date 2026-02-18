@@ -28,6 +28,7 @@ import {
   Trash2,
   ChevronRight,
   AlertTriangle,
+  Filter,
 } from 'lucide-react-native';
 import { useProfile } from '@/hooks/useProfile';
 import { professionalsService } from '@/services/supabase/professionals.service';
@@ -142,8 +143,16 @@ export default function ProfessionalSettingsScreen() {
                 : undefined,
           },
           {
-            id: 'categories',
+            id: 'call-criteria',
             title: 'Call Criteria Settings',
+            description: 'Control who can call you',
+            icon: Filter,
+            route: '/professional-settings/call-criteria',
+            color: '#F97316',
+          },
+          {
+            id: 'categories',
+            title: 'Professions',
             description: 'Expertise areas',
             icon: Tag,
             route: '/professional-settings/categories',
@@ -237,7 +246,7 @@ export default function ProfessionalSettingsScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: '#F8F9FA' }]} // Lighter background for definition
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <Header 
         title="Settings" // Standard header style

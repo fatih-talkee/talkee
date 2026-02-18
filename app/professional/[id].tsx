@@ -38,6 +38,7 @@ import {
   AlertCircle,
   Wallet,
   QrCode,
+  BadgeCheck,
 } from 'lucide-react-native';
 import { Header } from '@/components/ui/Header';
 import { TabButtons } from '@/components/ui/TabButtons';
@@ -45,6 +46,7 @@ import { Card } from '@/components/ui/Card';
 import { useTheme } from '@/contexts/ThemeContext';
 import { ShareProfileModal } from '@/components/profile/ShareProfileModal';
 import { QRCodeScanner } from '@/components/qr/QRCodeScanner';
+import { CharityInfoModal } from '@/components/charity/CharityInfoModal';
 import { PageLoading } from '@/components/ui/PageLoading';
 import { SectionLoading } from '@/components/ui/SectionLoading';
 import { useIsOnline } from '@/hooks/useNetworkStatus';
@@ -81,6 +83,48 @@ export default function ProfessionalProfileScreen() {
   const [isCalling, setIsCalling] = useState(false);
   const [insufficientBalanceModalVisible, setInsufficientBalanceModalVisible] =
     useState(false);
+  const [charityInfoModalVisible, setCharityInfoModalVisible] = useState(false);
+
+  // Mock posts data
+  const mockPosts = [
+    {
+      id: '1',
+      content:
+        "Just finished an amazing session on career pivoting! Remember: it's never too late to pursue your passion. The best time to start was yesterday, the second best time is now. 🚀",
+      timestamp: '2 hours ago',
+    },
+    {
+      id: '2',
+      content:
+        'New blog post: "5 Steps to Ace Your Next Job Interview". Check it out and let me know your thoughts!',
+      timestamp: '1 day ago',
+    },
+    {
+      id: '3',
+      content:
+        "Celebrating 1000+ successful coaching sessions this year! Thank you all for trusting me with your career journey. Here's to many more transformations! 🎉",
+      timestamp: '3 days ago',
+    },
+  ];
+
+  // Mock charity settings - in production, this would come from professional's profile
+  const mockCharitySettings = {
+    enabled: true,
+    showPublicBadge: true,
+    charities: [
+      { name: 'Çağdaş Yaşamı Destekleme Derneği', percentage: 20 },
+      { name: 'LÖSEV', percentage: 20 },
+      { name: 'ÖÇEV', percentage: 5 },
+    ],
+  };
+
+  // Calculate total donation percentage for badge display
+  const totalDonationPercentage = mockCharitySettings.enabled
+    ? mockCharitySettings.charities.reduce(
+        (sum, charity) => sum + charity.percentage,
+        0
+      )
+    : 0;
   const [activeTab, setActiveTab] = useState<TabType>('about'); // Start with 'about' since feed is not implemented yet
 
   // ✅ Fetch wallet balance
@@ -738,191 +782,74 @@ export default function ProfessionalProfileScreen() {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'feed':
-        if (feedsLoading) {
-          return (
-            <View style={styles.feedContainer}>
-              <SectionLoading size="large" />
-            </View>
-          );
-        }
-
-        if (feedsData.length === 0) {
-          return (
-            <View style={styles.feedContainer}>
-              <View style={styles.emptyState}>
-                <MessageCircle
-                  size={48}
-                  color={theme.colors.textMuted}
-                  strokeWidth={1.5}
-                />
-                <Text
-                  style={[
-                    styles.emptyStateText,
-                    { color: theme.colors.textMuted },
-                  ]}
-                >
-                  No posts yet
-                </Text>
-                <Text
-                  style={[
-                    styles.emptyStateSubtext,
-                    { color: theme.colors.textMuted },
-                  ]}
-                >
-                  This professional hasn't shared any posts yet.
-                </Text>
-              </View>
-            </View>
-          );
-        }
-
         return (
           <View style={styles.feedContainer}>
-            {feedsData.map((feed: any) => {
-              // Calculate time ago
-              const now = new Date();
-              const feedDate = new Date(feed.created_at);
-              const diffInMs = now.getTime() - feedDate.getTime();
-              const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
-              const diffInDays = Math.floor(diffInHours / 24);
-
-              let timeAgo = '';
-              if (diffInHours < 1) {
-                const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-                timeAgo =
-                  diffInMinutes <= 1
-                    ? 'Just now'
-                    : `${diffInMinutes} minutes ago`;
-              } else if (diffInHours < 24) {
-                timeAgo = `${diffInHours} ${
-                  diffInHours === 1 ? 'hour' : 'hours'
-                } ago`;
-              } else if (diffInDays < 7) {
-                timeAgo = `${diffInDays} ${
-                  diffInDays === 1 ? 'day' : 'days'
-                } ago`;
-              } else {
-                timeAgo = feedDate.toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                });
-              }
-
-              return (
-                <Card
-                  key={feed.id}
-                  style={[
-                    styles.feedCard,
-                    feed.is_pinned && {
-                      borderLeftWidth: 3,
-                      borderLeftColor: theme.colors.accent,
+            {mockPosts.map((post) => (
+              <View
+                key={post.id}
+                style={[
+                  styles.postCard,
+                  { backgroundColor: theme.colors.card },
+                  Platform.select({
+                    ios: {
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 4,
                     },
+                    android: {
+                      elevation: 3,
+                    },
+                  }),
+                ]}
+              >
+                <View style={styles.postHeader}>
+                  <Image
+                    source={{
+                      uri:
+                        professional?.users?.avatar_url ||
+                        'https://via.placeholder.com/150',
+                    }}
+                    style={styles.postAvatar}
+                  />
+                  <View style={styles.postHeaderText}>
+                    <View style={styles.postNameRow}>
+                      <Text
+                        style={[styles.postName, { color: theme.colors.text }]}
+                      >
+                        {professional?.users?.name || 'Unknown Professional'}
+                      </Text>
+                      {professional?.is_verified && (
+                        <BadgeCheck
+                          size={14}
+                          color={theme.colors.pinkTwo}
+                          strokeWidth={2.5}
+                        />
+                      )}
+                    </View>
+                    <Text
+                      style={[
+                        styles.postTimestamp,
+                        { color: theme.colors.textMuted },
+                      ]}
+                    >
+                      {post.timestamp}
+                    </Text>
+                  </View>
+                </View>
+                <Text
+                  style={[
+                    styles.postContent,
+                    { color: theme.colors.textSecondary },
                   ]}
                 >
-                  <View style={styles.feedHeader}>
-                    <View style={styles.feedAuthorRow}>
-                      {(() => {
-                        const feedAvatarUrl =
-                          feed.professional_avatar ||
-                          professional.users?.avatar_url ||
-                          '';
-                        const feedName =
-                          feed.professional_name ||
-                          professional.users?.name ||
-                          'Unknown';
-                        const feedId = feed.id || '';
-                        const hasFeedAvatarError =
-                          feedAvatarErrors[feedId] || false;
-                        const hasValidFeedAvatar =
-                          feedAvatarUrl &&
-                          typeof feedAvatarUrl === 'string' &&
-                          feedAvatarUrl.trim() !== '' &&
-                          !feedAvatarUrl.includes('placeholder') &&
-                          !feedAvatarUrl.includes('via.placeholder') &&
-                          !hasFeedAvatarError;
-
-                        return hasValidFeedAvatar ? (
-                          <Image
-                            source={{ uri: feedAvatarUrl }}
-                            style={styles.feedAvatar}
-                            onError={() => {
-                              setFeedAvatarErrors((prev) => ({
-                                ...prev,
-                                [feedId]: true,
-                              }));
-                            }}
-                          />
-                        ) : (
-                          <View
-                            style={[
-                              styles.feedAvatar,
-                              styles.feedAvatarInitials,
-                              { backgroundColor: getAvatarColor(feedName) },
-                            ]}
-                          >
-                            <Text style={styles.feedAvatarInitialsText}>
-                              {getInitials(feedName)}
-                            </Text>
-                          </View>
-                        );
-                      })()}
-                      <View style={styles.feedAuthorInfo}>
-                        <View style={styles.feedAuthorNameRow}>
-                          <Text
-                            style={[
-                              styles.feedAuthorName,
-                              { color: theme.colors.primary },
-                            ]}
-                          >
-                            {feed.professional_name ||
-                              professional.users?.name ||
-                              'Unknown'}
-                          </Text>
-                          {professional.is_verified && (
-                            <ShieldCheck
-                              size={16}
-                              color={theme.colors.primary}
-                              strokeWidth={2.5}
-                            />
-                          )}
-                          {feed.is_pinned && (
-                            <View
-                              style={[
-                                styles.pinnedBadge,
-                                {
-                                  backgroundColor: theme.colors.accent + '20',
-                                },
-                              ]}
-                            >
-                              <Pin
-                                size={14}
-                                color={theme.colors.accent}
-                                fill={theme.colors.accent}
-                              />
-                            </View>
-                          )}
-                        </View>
-                        <Text
-                          style={[
-                            styles.feedTimestamp,
-                            { color: theme.colors.textMuted },
-                          ]}
-                        >
-                          {timeAgo}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                  <Text
-                    style={[styles.feedContent, { color: theme.colors.text }]}
-                  >
-                    {feed.content}
-                  </Text>
-                </Card>
-              );
-            })}
+                  {post.content}
+                </Text>
+              </View>
+            ))}
           </View>
         );
+
 
       case 'about':
         return (
@@ -939,18 +866,6 @@ export default function ProfessionalProfileScreen() {
               ]}
             >
               <View style={styles.sectionHeader}>
-                <View
-                  style={[
-                    styles.sectionIconContainer,
-                    { backgroundColor: theme.colors.primary + '20' },
-                  ]}
-                >
-                  <MessageCircle
-                    size={20}
-                    color={theme.colors.primary}
-                    strokeWidth={2}
-                  />
-                </View>
                 <Text
                   style={[styles.sectionTitle, { color: theme.colors.text }]}
                 >
@@ -974,18 +889,6 @@ export default function ProfessionalProfileScreen() {
               ]}
             >
               <View style={styles.sectionHeader}>
-                <View
-                  style={[
-                    styles.sectionIconContainer,
-                    { backgroundColor: theme.colors.accent + '20' },
-                  ]}
-                >
-                  <Award
-                    size={20}
-                    color={theme.colors.accent}
-                    strokeWidth={2}
-                  />
-                </View>
                 <Text
                   style={[styles.sectionTitle, { color: theme.colors.text }]}
                 >
@@ -1048,14 +951,6 @@ export default function ProfessionalProfileScreen() {
               ]}
             >
               <View style={styles.sectionHeader}>
-                <View
-                  style={[
-                    styles.sectionIconContainer,
-                    { backgroundColor: '#10B981' + '20' },
-                  ]}
-                >
-                  <MessageCircle size={20} color="#10B981" strokeWidth={2} />
-                </View>
                 <Text
                   style={[styles.sectionTitle, { color: theme.colors.text }]}
                 >
@@ -1566,10 +1461,10 @@ export default function ProfessionalProfileScreen() {
                   <View
                     style={[
                       styles.cvSectionIconContainer,
-                      { backgroundColor: '#3B82F6' + '15' },
+                      { backgroundColor: '#ffffff' + '15' },
                     ]}
                   >
-                    <Briefcase size={20} color="#3B82F6" strokeWidth={2.5} />
+                    <Briefcase size={20} color={theme.colors.pinkTwo} strokeWidth={2.5} />
                   </View>
                   <Text
                     style={[
@@ -1602,7 +1497,7 @@ export default function ProfessionalProfileScreen() {
                       <View style={styles.cvEntryContent}>
                         {exp.title && (
                           <Text
-                            style={[styles.cvEntryTitle, { color: '#3B82F6' }]}
+                            style={[styles.cvEntryTitle, { color: theme.colors.pinkTwo }]}
                           >
                             {exp.title}
                           </Text>
@@ -1659,12 +1554,12 @@ export default function ProfessionalProfileScreen() {
                   <View
                     style={[
                       styles.cvSectionIconContainer,
-                      { backgroundColor: '#3B82F6' + '15' },
+                      { backgroundColor: '#ffffff' + '15' },
                     ]}
                   >
                     <GraduationCap
                       size={20}
-                      color="#3B82F6"
+                      color={theme.colors.pinkTwo}
                       strokeWidth={2.5}
                     />
                   </View>
@@ -1701,7 +1596,7 @@ export default function ProfessionalProfileScreen() {
                       <View style={styles.cvEntryLeftBorder} />
                       <View style={styles.cvEntryContent}>
                         <Text
-                          style={[styles.cvEntryTitle, { color: '#3B82F6' }]}
+                          style={[styles.cvEntryTitle, { color: theme.colors.pinkTwo }]}
                         >
                           {degreeText}
                         </Text>
@@ -1757,10 +1652,10 @@ export default function ProfessionalProfileScreen() {
                   <View
                     style={[
                       styles.cvSectionIconContainer,
-                      { backgroundColor: '#3B82F6' + '15' },
+                      { backgroundColor: '#ffffff' + '15' },
                     ]}
                   >
-                    <Award size={20} color="#3B82F6" strokeWidth={2.5} />
+                    <Award size={20} color={theme.colors.pinkTwo} strokeWidth={2.5} />
                   </View>
                   <Text
                     style={[
@@ -1779,7 +1674,7 @@ export default function ProfessionalProfileScreen() {
                         styles.skillBadge,
                         {
                           backgroundColor: theme.colors.background,
-                          borderColor: '#3B82F6',
+                          borderColor: theme.colors.pinkTwo,
                         },
                       ]}
                     >
@@ -1884,117 +1779,95 @@ export default function ProfessionalProfileScreen() {
             },
           ]}
         >
-          <View style={styles.avatarContainer}>
-            {(() => {
-              const avatarUrl = professional.users?.avatar_url || '';
-              const hasValidAvatar =
-                avatarUrl &&
-                typeof avatarUrl === 'string' &&
-                avatarUrl.trim() !== '' &&
-                !avatarUrl.includes('placeholder') &&
-                !avatarUrl.includes('via.placeholder') &&
-                !avatarError;
+          <View style={styles.topSection}>
+            <View style={styles.avatarContainer}>
+              {(() => {
+                const avatarUrl = professional.users?.avatar_url || '';
+                const hasValidAvatar =
+                  avatarUrl &&
+                  typeof avatarUrl === 'string' &&
+                  avatarUrl.trim() !== '' &&
+                  !avatarUrl.includes('placeholder') &&
+                  !avatarUrl.includes('via.placeholder') &&
+                  !avatarError;
 
-              return hasValidAvatar ? (
-                <Image
-                  source={{ uri: avatarUrl }}
-                  style={styles.avatar}
-                  onError={() => {
-                    setAvatarError(true);
-                  }}
-                />
-              ) : (
+                return hasValidAvatar ? (
+                  <Image
+                    source={{ uri: avatarUrl }}
+                    style={styles.avatar}
+                    onError={() => {
+                      setAvatarError(true);
+                    }}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.avatar,
+                      styles.avatarInitials,
+                      {
+                        backgroundColor: getAvatarColor(
+                          professional.users?.name || 'Unknown'
+                        ),
+                      },
+                    ]}
+                  >
+                    <Text style={styles.avatarInitialsText}>
+                      {getInitials(professional.users?.name || 'Unknown')}
+                    </Text>
+                  </View>
+                );
+              })()}
+              {isFavorite && (
                 <View
                   style={[
-                    styles.avatar,
-                    styles.avatarInitials,
+                    styles.favoriteIndicator,
                     {
-                      backgroundColor: getAvatarColor(
-                        professional.users?.name || 'Unknown'
-                      ),
+                      backgroundColor: theme.colors.error,
+                      borderColor: theme.colors.card,
                     },
                   ]}
                 >
-                  <Text style={styles.avatarInitialsText}>
-                    {getInitials(professional.users?.name || 'Unknown')}
-                  </Text>
+                  <Heart size={10} color="#FFFFFF" fill="#FFFFFF" />
                 </View>
-              );
-            })()}
-            {isFavorite && (
+              )}
               <View
                 style={[
-                  styles.favoriteIndicator,
+                  styles.onlineIndicator,
                   {
-                    backgroundColor: theme.colors.error,
-                    borderColor: theme.colors.card,
+                    backgroundColor: professional.is_available
+                      ? '#10B981'
+                      : '#EF4444',
                   },
                 ]}
-              >
-                <Heart size={12} color="#FFFFFF" fill="#FFFFFF" />
-              </View>
-            )}
-            <View
-              style={[
-                styles.onlineIndicator,
-                {
-                  backgroundColor: professional.is_available
-                    ? '#10B981'
-                    : '#EF4444',
-                },
-              ]}
-            />
-          </View>
-          <View style={styles.nameContainer}>
-            <View style={styles.nameRow}>
-              <Text style={[styles.name, { color: theme.colors.text }]}>
-                {professional.users?.name || 'Unknown Professional'}
-              </Text>
-              {professional.is_verified && (
-                <ShieldCheck
-                  size={24}
-                  color={theme.colors.primary}
-                  strokeWidth={2.5}
-                />
-              )}
+              />
             </View>
-            <View style={styles.titleRow}>
-              <Text style={[styles.title, { color: theme.colors.textMuted }]}>
-                {professional.title ||
-                  professional.profession ||
-                  'Professional'}
-              </Text>
-              {professional.is_featured && (
-                <View
-                  style={[
-                    styles.featuredBadge,
-                    { backgroundColor: theme.colors.accent + '20' },
-                  ]}
-                >
-                  <Star
-                    size={14}
-                    color={theme.colors.accent}
-                    fill={theme.colors.accent}
+
+            <View style={styles.nameContainer}>
+              <View style={styles.nameRow}>
+                <Text style={[styles.name, { color: theme.colors.text }]}>
+                  {professional.users?.name || 'Unknown Professional'}
+                </Text>
+                {professional.is_verified && (
+                  <BadgeCheck
+                    size={20}
+                    color={theme.colors.pinkTwo}
+                    strokeWidth={2.5}
                   />
-                  <Text
-                    style={[
-                      styles.featuredText,
-                      { color: theme.colors.accent },
-                    ]}
-                  >
-                    Featured
-                  </Text>
-                </View>
-              )}
+                )}
+              </View>
+              <View style={styles.titleRow}>
+                <Text style={[styles.title, { color: theme.colors.textMuted }]}>
+                  {professional.title ||
+                    professional.profession ||
+                    'Professional'}
+                </Text>
+              </View>
             </View>
           </View>
 
           {/* Stats Row */}
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <View style={styles.statIconRow}>
-                <Phone size={16} color={theme.colors.primary} />
-              </View>
               <View style={styles.statValueRow}>
                 <Text style={[styles.statValue, { color: theme.colors.text }]}>
                   {professional.total_calls || 0}
@@ -2002,7 +1875,7 @@ export default function ProfessionalProfileScreen() {
                 <Text
                   style={[styles.statLabel, { color: theme.colors.textMuted }]}
                 >
-                  calls
+                  Calls
                 </Text>
               </View>
             </View>
@@ -2015,9 +1888,6 @@ export default function ProfessionalProfileScreen() {
             />
 
             <View style={styles.statItem}>
-              <View style={styles.statIconRow}>
-                <Clock size={16} color={theme.colors.primary} />
-              </View>
               <View style={styles.durationContainer}>
                 {(() => {
                   const totalMinutes = professional.total_minutes || 0;
@@ -2084,6 +1954,11 @@ export default function ProfessionalProfileScreen() {
                   );
                 })()}
               </View>
+              <Text
+                style={[styles.statLabel, { color: theme.colors.textMuted }]}
+              >
+                Time
+              </Text>
             </View>
 
             <View
@@ -2094,9 +1969,6 @@ export default function ProfessionalProfileScreen() {
             />
 
             <View style={styles.statItem}>
-              <View style={styles.statIconRow}>
-                <MessageCircle size={16} color={theme.colors.primary} />
-              </View>
               <View style={styles.statValueRow}>
                 <Text style={[styles.statValue, { color: theme.colors.text }]}>
                   {feedCountData || 0}
@@ -2104,25 +1976,252 @@ export default function ProfessionalProfileScreen() {
                 <Text
                   style={[styles.statLabel, { color: theme.colors.textMuted }]}
                 >
-                  {feedCountData === 1 ? 'post' : 'posts'}
+                  Posts
                 </Text>
               </View>
+            </View>
+          </View>
+
+          <View style={styles.badges}>
+            {professional.is_verified && (
+              <View
+                style={[
+                  styles.badge,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.pinkTwo,
+                  },
+                ]}
+              >
+                <Text
+                  style={[styles.badgeText, { color: theme.colors.pinkTwo }]}
+                >
+                  Licensed Professional
+                </Text>
+              </View>
+            )}
+            {professional.is_featured && (
+              <View
+                style={[
+                  styles.badge,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.pinkTwo,
+                  },
+                ]}
+              >
+                <Text
+                  style={[styles.badgeText, { color: theme.colors.pinkTwo }]}
+                >
+                  Top Rated
+                </Text>
+              </View>
+            )}
+            {/* Inline Charity Badge */}
+            {mockCharitySettings.enabled &&
+              mockCharitySettings.showPublicBadge &&
+              mockCharitySettings.charities.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setCharityInfoModalVisible(true)}
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={[
+                      styles.badge,
+                      {
+                        backgroundColor: theme.colors.surface,
+                        borderColor: theme.colors.success,
+                      },
+                    ]}
+                  >
+                    <Heart
+                      size={14}
+                      color={theme.colors.success}
+                      fill={theme.colors.success}
+                    />
+                    <Text
+                      style={[
+                        styles.badgeText,
+                        { color: theme.colors.success, marginLeft: 4 },
+                      ]}
+                    >
+                      {totalDonationPercentage}% Donated
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+          </View>
+        </View>
+
+        {/* Pricing Section */}
+        <View
+          style={[
+            styles.pricingSection,
+            {
+              backgroundColor: theme.colors.card,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <View style={styles.pricingContent}>
+            {/* Two-column pricing cards */}
+            <View style={styles.pricingCardsRow}>
+              {/* Video Call Card */}
+              {currentAvailability?.availability?.video_call_enabled &&
+                currentAvailability.availability.video_call_rate_per_minute && (
+                  <View
+                    style={[
+                      styles.priceCard,
+                      {
+                        backgroundColor: theme.colors.surface,
+                      },
+                    ]}
+                  >
+                    <View style={styles.priceCardHeader}>
+                      <Video size={20} color={theme.colors.pinkTwo} />
+                      <Text
+                        style={[
+                          styles.priceCardLabel,
+                          { color: theme.colors.textSecondary },
+                        ]}
+                      >
+                        Video Call
+                      </Text>
+                    </View>
+                    <View
+                      style={{ flexDirection: 'row', alignItems: 'baseline' }}
+                    >
+                      <Text
+                        style={[
+                          styles.priceCardAmount,
+                          { color: theme.colors.pinkTwo },
+                        ]}
+                      >
+                        $
+                        {currentAvailability.availability.video_call_rate_per_minute.toFixed(
+                          2
+                        )}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.priceCardUnit,
+                          { color: theme.colors.textMuted },
+                        ]}
+                      >
+                        /min
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+              {/* Audio Call Card */}
+              <View
+                style={[
+                  styles.priceCard,
+                  {
+                    backgroundColor: theme.colors.surface,
+                  },
+                ]}
+              >
+                <View style={styles.priceCardHeader}>
+                  <Phone size={20} color="#F59E0B" />
+                  <Text
+                    style={[
+                      styles.priceCardLabel,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Audio Call
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                  <Text
+                    style={[styles.priceCardAmount, { color: '#F59E0B' }]}
+                  >
+                    $
+                    {(
+                      currentAvailability?.availability?.price_per_minute ||
+                      Number(professional.rate_per_minute) ||
+                      0
+                    ).toFixed(2)}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.priceCardUnit,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    /min
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Status Badges Row */}
+            <View style={styles.statusBadgeRow}>
+              {/* Available Now Badge */}
+              {currentAvailability?.isActive && (
+                <View style={[styles.statusBadge, styles.statusBadgeAvailable]}>
+                  <Clock size={14} color={theme.colors.success} />
+                  <Text style={[styles.statusBadgeText, { color: theme.colors.success }]}>
+                    Available Now
+                  </Text>
+                </View>
+              )}
+
+              {/* Time Left Badge */}
+              {remainingTime !== null && (
+                <View style={[styles.statusBadge, styles.statusBadgeTime]}>
+                  <Clock size={14} color={theme.colors.pinkTwo} />
+                  <Text style={[styles.statusBadgeText, { color: theme.colors.pinkTwo }]}>
+                    {formatRemainingTime(remainingTime)}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         </View>
 
         {/* Tabs */}
-        <View style={styles.tabsContainer}>
-          <TabButtons
-            selectedKey={activeTab}
-            onSelect={(key: string) => setActiveTab(key as TabType)}
-            options={[
-              { key: 'about', label: 'About' },
-              { key: 'feed', label: 'Feed' },
-              { key: 'availability', label: 'Availability' },
-              { key: 'cv', label: 'CV' },
-            ]}
-          />
+        {/* Custom Tab Navigation */}
+        <View
+          style={[
+            styles.tabNavigation,
+            {
+              backgroundColor: theme.colors.card,
+              borderBottomColor: theme.colors.border,
+            },
+          ]}
+        >
+          {['feed', 'about', 'availability', 'cv'].map((tab) => {
+            const isActive = activeTab === tab;
+            return (
+              <TouchableOpacity
+                key={tab}
+                style={[
+                  styles.tab,
+                  isActive && {
+                    borderBottomColor: theme.colors.pinkTwo,
+                    borderBottomWidth: 2,
+                  },
+                ]}
+                onPress={() => setActiveTab(tab as TabType)}
+              >
+                <Text
+                  style={[
+                    styles.tabText,
+                    {
+                      color: isActive
+                        ? theme.colors.pinkTwo
+                        : theme.colors.textMuted,
+                    },
+                  ]}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {/* Tab Content */}
@@ -2145,98 +2244,7 @@ export default function ProfessionalProfileScreen() {
             { borderTopColor: theme.colors.tabBarBorder },
           ]}
         >
-          <View style={styles.priceRow}>
-            {currentAvailability &&
-            remainingTime !== null &&
-            remainingTime > 0 ? (
-              // Available time slot is active
-              professional.is_available ? (
-                // Available + Online → Green "Available Now"
-                <>
-                  <View style={styles.footerAvailabilityBadge}>
-                    <Clock size={14} color="#10B981" strokeWidth={2.5} />
-                    <Text
-                      style={[
-                        styles.footerAvailabilityText,
-                        { color: '#10B981' },
-                      ]}
-                    >
-                      Available Now
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.footerAvailabilityBadge,
-                      {
-                        backgroundColor: theme.colors.surface,
-                        borderColor: theme.colors.border,
-                      },
-                    ]}
-                  >
-                    <Clock
-                      size={14}
-                      color={theme.colors.textMuted}
-                      strokeWidth={2.5}
-                    />
-                    <Text
-                      style={[
-                        styles.footerAvailabilityText,
-                        { color: theme.colors.textMuted },
-                      ]}
-                    >
-                      {formatRemainingTime(remainingTime)}
-                    </Text>
-                  </View>
-                </>
-              ) : (
-                // Available but Offline → Orange/Warning
-                <>
-                  <View
-                    style={[
-                      styles.footerAvailabilityBadge,
-                      {
-                        backgroundColor: '#F59E0B' + '15',
-                        borderColor: '#F59E0B' + '40',
-                      },
-                    ]}
-                  >
-                    <AlertCircle size={14} color="#F59E0B" strokeWidth={2.5} />
-                    <Text
-                      style={[
-                        styles.footerAvailabilityText,
-                        { color: '#F59E0B' },
-                      ]}
-                    >
-                      Available but Offline
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.footerAvailabilityBadge,
-                      {
-                        backgroundColor: theme.colors.surface,
-                        borderColor: theme.colors.border,
-                      },
-                    ]}
-                  >
-                    <Clock
-                      size={14}
-                      color={theme.colors.textMuted}
-                      strokeWidth={2.5}
-                    />
-                    <Text
-                      style={[
-                        styles.footerAvailabilityText,
-                        { color: theme.colors.textMuted },
-                      ]}
-                    >
-                      {formatRemainingTime(remainingTime)}
-                    </Text>
-                  </View>
-                </>
-              )
-            ) : null}
-          </View>
+
           <View style={styles.callButtonsRow}>
             {isBlockedByProfessional ? (
               // Professional has blocked us - show warning message
@@ -2364,7 +2372,7 @@ export default function ProfessionalProfileScreen() {
                       {
                         backgroundColor:
                           buttonsEnabled && !isCalling
-                            ? theme.colors.primary
+                            ? theme.colors.pinkTwo
                             : theme.colors.border,
                         opacity: buttonsEnabled && !isCalling ? 1 : 0.5,
                       },
@@ -2444,7 +2452,7 @@ export default function ProfessionalProfileScreen() {
                           {
                             backgroundColor:
                               buttonsEnabled && !isCalling
-                                ? theme.colors.primary
+                                ? theme.colors.pinkTwo
                                 : theme.colors.border,
                             opacity: buttonsEnabled && !isCalling ? 1 : 0.5,
                           },
@@ -2554,6 +2562,16 @@ export default function ProfessionalProfileScreen() {
         onClose={() => setQrScannerVisible(false)}
       />
 
+      {/* Charity Info Modal */}
+      {mockCharitySettings.enabled &&
+        mockCharitySettings.charities.length > 0 && (
+          <CharityInfoModal
+            visible={charityInfoModalVisible}
+            onClose={() => setCharityInfoModalVisible(false)}
+            charities={mockCharitySettings.charities}
+          />
+        )}
+
       {/* Insufficient Balance Modal */}
       <Modal
         visible={insufficientBalanceModalVisible}
@@ -2636,7 +2654,7 @@ export default function ProfessionalProfileScreen() {
                 <Text
                   style={[
                     styles.balanceInfoValue,
-                    { color: theme.colors.primary },
+                    { color: theme.colors.pinkTwo },
                   ]}
                 >
                   ${minimumRequiredBalance.toFixed(2)}
@@ -2669,7 +2687,7 @@ export default function ProfessionalProfileScreen() {
                   styles.insufficientBalanceModalButton,
                   styles.insufficientBalanceModalButtonPrimary,
                   {
-                    backgroundColor: theme.colors.primary,
+                    backgroundColor: theme.colors.pinkTwo,
                   },
                 ]}
                 onPress={() => {
@@ -2728,40 +2746,44 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   profileHeader: {
-    padding: 24,
+    padding: 16,
     paddingBottom: 8,
     borderBottomWidth: 1,
   },
+  topSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 16,
+  },
   avatarContainer: {
     position: 'relative',
-    alignSelf: 'center',
-    marginBottom: 16,
-    width: 100,
-    height: 100,
+    width: 80,
+    height: 80,
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
   },
   avatarInitials: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitialsText: {
-    fontSize: 40,
+    fontSize: 32,
     fontFamily: 'Inter-Bold',
     color: '#FFFFFF',
   },
   favoriteIndicator: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    top: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: '#EF4444',
-    borderWidth: 2.5,
+    borderWidth: 2,
     borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2769,19 +2791,20 @@ const styles = StyleSheet.create({
   },
   onlineIndicator: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    bottom: 2,
+    right: 2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: '#10B981',
-    borderWidth: 2.5,
+    borderWidth: 2,
     borderColor: '#FFFFFF',
     zIndex: 1,
   },
   nameContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
+    flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
   },
   nameRow: {
     flexDirection: 'row',
@@ -2790,7 +2813,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   name: {
-    fontSize: 24,
+    fontSize: 22,
     fontFamily: 'Inter-Bold',
   },
   titleRow: {
@@ -2798,80 +2821,184 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flexWrap: 'wrap',
-    justifyContent: 'center',
   },
   title: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'Inter-Regular',
   },
-  featuredBadge: {
+  tabNavigation: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    borderBottomWidth: 1,
   },
-  featuredText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
+  tab: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  tabText: {
+    fontSize: 15,
+    fontFamily: 'Inter-Bold',
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginBottom: 16,
+    paddingVertical: 12,
   },
   statItem: {
     alignItems: 'center',
     flex: 1,
-  },
-  statIconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 4,
-    marginBottom: 4,
   },
   statValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
+    flexDirection: 'column',
+    alignItems: 'center',
     gap: 4,
     justifyContent: 'center',
-    flexWrap: 'nowrap',
   },
   statValue: {
-    fontSize: 18,
+    fontSize: 22,
     fontFamily: 'Inter-Bold',
+    lineHeight: 26,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: 'Inter-Regular',
   },
   durationContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'center',
-    marginTop: 2,
   },
   durationValue: {
-    fontSize: 18,
+    fontSize: 22,
     fontFamily: 'Inter-Bold',
-    lineHeight: 22,
+    lineHeight: 26,
   },
   durationUnit: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
     marginLeft: 2,
   },
   statDivider: {
     width: 1,
     height: 40,
   },
-  tabsContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
+  badges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 4,
   },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  badgeText: {
+    fontSize: 13,
+    fontFamily: 'Inter-Bold',
+  },
+  pricingSection: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+  },
+  pricingContent: {
+    alignItems: 'center',
+  },
+  pricingCardsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  priceCard: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  priceCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  priceCardLabel: {
+    fontSize: 13,
+    fontFamily: 'Inter-Medium',
+  },
+  priceCardAmount: {
+    fontSize: 24,
+    fontFamily: 'Inter-Bold',
+  },
+  priceCardUnit: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    marginLeft: 2,
+  },
+  pricingBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 8,
+  },
+  pricingBadgeText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Bold',
+  },
+  responseTimeText: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+
   feedContainer: {
     padding: 16,
+  },
+  postCard: {
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 16,
+  },
+  postHeader: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  postAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  postHeaderText: {
+    flex: 1,
+  },
+  postNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  postName: {
+    fontSize: 15,
+    fontFamily: 'Inter-Bold',
+  },
+  postTimestamp: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+  },
+  postContent: {
+    fontSize: 15,
+    fontFamily: 'Inter-Regular',
+    lineHeight: 22,
   },
   aboutContainer: {
     padding: 16,
@@ -2933,8 +3060,35 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     fontStyle: 'italic',
   },
+
   availabilityContainer: {
     padding: 16,
+  },
+  statusBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    backgroundColor: 'transparent',
+  },
+  statusBadgeAvailable: {
+    borderColor: '#4ade80', // specific green or theme.colors.success if available in object context
+  },
+  statusBadgeTime: {
+    borderColor: '#db2777', // specific pink or theme.colors.pinkTwo
+  },
+  statusBadgeText: {
+    fontSize: 13,
+    fontFamily: 'Inter-Medium',
   },
   availabilityCard: {
     marginBottom: 20,

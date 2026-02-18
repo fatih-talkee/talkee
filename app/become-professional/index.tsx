@@ -823,7 +823,7 @@ export default function BecomeProfessionalScreen() {
           />
         ) : (
           <Button
-            title={loading ? 'Creating...' : 'Save & Become Professional'}
+            title={loading ? 'Creating...' : 'Save & Start Using Talkee'}
             onPress={handleComplete}
             style={[styles.nextButtonFullWidth, { backgroundColor: theme.colors.pinkTwo || theme.colors.brandPink }]}
             disabled={loading}

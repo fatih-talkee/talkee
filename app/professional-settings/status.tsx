@@ -215,13 +215,13 @@ export default function StatusScreen() {
                     styles.iconContainer,
                     {
                       backgroundColor: isPublic
-                        ? theme.colors.primary + '15'
+                        ? theme.colors.pinkTwo + '15'
                         : theme.colors.textMuted + '15',
                     },
                   ]}
                 >
                   {isPublic ? (
-                    <Eye size={24} color={theme.colors.primary} />
+                    <Eye size={24} color={theme.colors.pinkTwo} />
                   ) : (
                     <EyeOff size={24} color={theme.colors.textMuted} />
                   )}
@@ -247,9 +247,9 @@ export default function StatusScreen() {
                 onValueChange={setIsPublic}
                 trackColor={{
                   false: theme.colors.border,
-                  true: theme.colors.primary + '80',
+                  true: theme.colors.pinkTwo + '80',
                 }}
-                thumbColor={isPublic ? theme.colors.primary : '#f4f3f4'}
+                thumbColor={isPublic ? theme.colors.pinkTwo : '#f4f3f4'}
               />
             </View>
           </Card>
@@ -259,12 +259,12 @@ export default function StatusScreen() {
             style={[
               styles.infoCard,
               {
-                backgroundColor: theme.colors.primary + '10',
-                borderColor: theme.colors.primary + '40',
+                backgroundColor: theme.colors.pinkTwo + '10',
+                borderColor: theme.colors.pinkTwo + '40',
               },
             ]}
           >
-            <Text style={[styles.infoTitle, { color: theme.colors.primary }]}>
+            <Text style={[styles.infoTitle, { color: theme.colors.pinkTwo }]}>
               💡 Information
             </Text>
             <Text
@@ -298,7 +298,7 @@ export default function StatusScreen() {
           title={saving ? 'Saving...' : 'Save Changes'}
           onPress={handleSave}
           disabled={saving}
-          style={styles.saveButton}
+          style={[styles.saveButton, { backgroundColor: theme.colors.pinkTwo }]}
         />
       </View>
     </SafeAreaView>

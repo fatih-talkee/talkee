@@ -317,7 +317,7 @@ export default function FeedScreen() {
                     borderColor: theme.colors.border,
                     borderLeftWidth: feed.is_pinned ? 4 : 1,
                     borderLeftColor: feed.is_pinned
-                      ? theme.colors.primary
+                      ? theme.colors.pinkTwo
                       : theme.colors.border,
                   },
                 ]}
@@ -328,10 +328,10 @@ export default function FeedScreen() {
                       <View
                         style={[
                           styles.pinBadge,
-                          { backgroundColor: theme.colors.primary + '20' },
+                          { backgroundColor: theme.colors.pinkTwo + '20' },
                         ]}
                       >
-                        <Pin size={14} color={theme.colors.primary} fill={theme.colors.primary} />
+                        <Pin size={14} color={theme.colors.pinkTwo} fill={theme.colors.pinkTwo} />
                       </View>
                     )}
                     <View style={styles.timeContainer}>
@@ -353,7 +353,7 @@ export default function FeedScreen() {
                         styles.actionButton,
                         {
                           backgroundColor: feed.is_pinned
-                            ? theme.colors.primary + '20'
+                            ? theme.colors.pinkTwo + '20'
                             : theme.colors.surface,
                         },
                       ]}
@@ -362,11 +362,11 @@ export default function FeedScreen() {
                         size={16}
                         color={
                           feed.is_pinned
-                            ? theme.colors.primary
+                            ? theme.colors.pinkTwo
                             : theme.colors.textMuted
                         }
                         fill={
-                          feed.is_pinned ? theme.colors.primary : 'transparent'
+                          feed.is_pinned ? theme.colors.pinkTwo : 'transparent'
                         }
                       />
                     </TouchableOpacity>
@@ -402,7 +402,7 @@ export default function FeedScreen() {
                 styles.addFeedButton,
                 {
                   backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.primary,
+                  borderColor: theme.colors.pinkTwo,
                   borderWidth: 1.5,
                   borderRadius: 12,
                   paddingVertical: 12,
@@ -414,12 +414,12 @@ export default function FeedScreen() {
                 },
               ]}
             >
-              <Plus size={20} color={theme.colors.primary} />
+              <Plus size={20} color={theme.colors.pinkTwo} />
               <Text
                 style={[
                   styles.addFeedText,
                   {
-                    color: theme.colors.primary,
+                    color: theme.colors.pinkTwo,
                     marginLeft: 8,
                     fontFamily: 'Inter-Bold',
                     fontSize: 15,
@@ -547,10 +547,10 @@ export default function FeedScreen() {
                       styles.pinToggle,
                       {
                         backgroundColor: isPinned
-                          ? theme.colors.primary + '20'
+                          ? theme.colors.pinkTwo + '20'
                           : theme.colors.card,
                         borderColor: isPinned
-                          ? theme.colors.primary
+                          ? theme.colors.pinkTwo
                           : theme.colors.border,
                       },
                     ]}
@@ -560,7 +560,7 @@ export default function FeedScreen() {
                         styles.pinToggleCircle,
                         {
                           borderColor: isPinned
-                            ? theme.colors.primary
+                            ? theme.colors.pinkTwo
                             : theme.colors.border,
                         },
                       ]}
@@ -569,7 +569,7 @@ export default function FeedScreen() {
                         <View
                           style={[
                             styles.pinToggleInner,
-                            { backgroundColor: theme.colors.primary },
+                            { backgroundColor: theme.colors.pinkTwo },
                           ]}
                         />
                       )}
@@ -589,8 +589,8 @@ export default function FeedScreen() {
                     </View>
                     <Pin
                       size={20}
-                      color={isPinned ? theme.colors.primary : theme.colors.textMuted}
-                      fill={isPinned ? theme.colors.primary : 'transparent'}
+                      color={isPinned ? theme.colors.pinkTwo : theme.colors.textMuted}
+                      fill={isPinned ? theme.colors.pinkTwo : 'transparent'}
                     />
                   </TouchableOpacity>
                 </View>
@@ -611,7 +611,7 @@ export default function FeedScreen() {
                     !feedContent.trim() ||
                     feedContent.length < 10
                   }
-                  style={styles.modalButtonFullWidth}
+                  style={[styles.modalButtonFullWidth, { backgroundColor: theme.colors.pinkTwo }]}
                 />
               </View>
             </View>
