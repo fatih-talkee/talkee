@@ -3,9 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   SafeAreaView,
-  Switch,
   TouchableOpacity,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -87,8 +85,7 @@ export default function CallCriteriaScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+      style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header
         showLogo={false}
         title="Call Criteria Settings"

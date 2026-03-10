@@ -234,8 +234,7 @@ export default function ProfessionalSettingsScreen() {
   if (loading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
+        style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <Header showLogo showBack onBackPress={() => router.push('/(tabs)')} />
         <PageLoading message="Loading settings..." />
       </SafeAreaView>
@@ -246,8 +245,7 @@ export default function ProfessionalSettingsScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+      style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header 
         title="Settings" // Standard header style
         showBack 

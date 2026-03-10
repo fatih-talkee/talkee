@@ -8,6 +8,7 @@ import { professionalsService } from '@/services/supabase/professionals.service'
 import { ProfessionalWithRelations } from '@/types/database.types';
 import { CACHE_CONFIG } from '@/lib/cacheConfig';
 import { logger } from '@/lib/logger';
+import type { FilterState } from '@/components/filters/FilterModal';
 
 // Query Keys Factory Pattern
 export const professionalsKeys = {
@@ -21,12 +22,12 @@ export const professionalsKeys = {
     [...professionalsKeys.all, 'featured', limit, categoryId] as const,
   details: () => [...professionalsKeys.all, 'detail'] as const,
   detail: (id: string) => [...professionalsKeys.details(), id] as const,
-  search: (query: string) =>
-    [...professionalsKeys.all, 'search', query] as const,
+  search: (query: string, filters?: Partial<FilterState>) =>
+    [...professionalsKeys.all, 'search', query, filters] as const,
   infinite: (categoryId?: string) =>
     [...professionalsKeys.all, 'infinite', categoryId] as const,
-  searchInfinite: (query: string) =>
-    [...professionalsKeys.all, 'search-infinite', query] as const,
+  searchInfinite: (query: string, filters?: Partial<FilterState>) =>
+    [...professionalsKeys.all, 'search-infinite', query, filters] as const,
 };
 
 /**
@@ -139,11 +140,11 @@ export function useProfessional(id: string, options?: { enabled?: boolean }) {
  * Cache: 1 minute (search results should be fresh)
  * ✅ Already orders by is_featured DESC in service
  */
-export function useSearchProfessionals(query: string) {
+export function useSearchProfessionals(query: string, filters?: Partial<FilterState>) {
   return useQuery<ProfessionalWithRelations[]>({
-    queryKey: professionalsKeys.search(query),
-    queryFn: () => professionalsService.searchProfessionals(query),
-    enabled: query.length > 0,
+    queryKey: professionalsKeys.search(query, filters),
+    queryFn: () => professionalsService.searchProfessionals(query, filters),
+    enabled: query.length > 0 || (filters ? Object.keys(filters).length > 0 : false),
     ...CACHE_CONFIG.PROFESSIONAL_SEARCH,
   });
 }
@@ -182,14 +183,15 @@ export function useInfiniteProfessionals(categoryId?: string) {
  * ✅ Orders by is_featured first, then total_calls
  * ✅ Supports pagination
  */
-export function useInfiniteSearchProfessionals(query: string) {
+export function useInfiniteSearchProfessionals(query: string, filters?: Partial<FilterState>) {
   const PAGE_SIZE = 20;
 
   return useInfiniteQuery<ProfessionalWithRelations[]>({
-    queryKey: professionalsKeys.searchInfinite(query),
+    queryKey: professionalsKeys.searchInfinite(query, filters),
     queryFn: ({ pageParam = 0 }) => {
       return professionalsService.searchProfessionals(
         query,
+        filters,
         PAGE_SIZE,
         (pageParam as number) * PAGE_SIZE
       );
@@ -202,7 +204,7 @@ export function useInfiniteSearchProfessionals(query: string) {
       return allPages.length;
     },
     initialPageParam: 0,
-    enabled: query.length > 0,
+    enabled: query.length > 0 || (filters ? Object.keys(filters).length > 0 : false),
     ...CACHE_CONFIG.PROFESSIONAL_SEARCH,
   });
 }

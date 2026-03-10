@@ -34,8 +34,7 @@ export function TabButtons({
 }: TabButtonsProps) {
   const { theme } = useTheme();
 
-  const wrapperBackground =
-    theme.name === 'dark' ? '#000000' : theme.colors.surface;
+  const wrapperBackground = theme.colors.background;
   const selectedBackground =
     theme.name === 'dark'
       ? theme.colors.accent

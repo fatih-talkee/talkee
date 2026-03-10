@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';

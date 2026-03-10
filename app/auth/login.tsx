@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -61,7 +61,10 @@ export default function LoginScreen() {
   const [pendingVerification, setPendingVerification] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
 
-  // ✅ Listen for deep links
+  // iOS double-fire guard: Aynı deep link'in iki kez işlenmesini engeller
+  const oauthProcessingRef = useRef(false);
+
+  // ✅ Deep link dinleyicisi
   useEffect(() => {
     const subscription = Linking.addEventListener('url', handleDeepLink);
 
@@ -75,16 +78,24 @@ export default function LoginScreen() {
   const handleDeepLink = async (event: { url: string }) => {
     logger.info('[OAuth] 🔗 RAW Deep link received:', { url: event.url });
 
+    // iOS Fix: Aynı OAuth callback'in iki kez işlenmesini engelle.
+    // iOS'ta openAuthSessionAsync + Linking.addEventListener kombinasyonu
+    // deep link'i birden fazla kez tetikleyebilir.
+    if (oauthProcessingRef.current) {
+      logger.info('[OAuth] ⏭️ Deep link zaten işleniyor, atlanıyor (iOS double-fire)');
+      return;
+    }
+
     try {
       const url = event.url;
 
-      // Handle both standard callback and direct scheme
+      // Auth callback veya token içermeyen URL'leri görmezden gel
       if (!url.includes('auth/callback') && !url.includes('access_token=')) {
-        logger.info('[OAuth] ⏭️ Not an auth callback or missing tokens, ignoring');
+        logger.info('[OAuth] ⏭️ Auth callback değil, atlanıyor');
         return;
       }
 
-      // Extract tokens from URL (more robustly)
+      // Token'ları URL'den çıkar
       let accessToken = '';
       let refreshToken = '';
 
@@ -93,8 +104,8 @@ export default function LoginScreen() {
         const params = new URLSearchParams(hash);
         accessToken = params.get('access_token') || '';
         refreshToken = params.get('refresh_token') || '';
-      } 
-      
+      }
+
       if (!accessToken && url.includes('?')) {
         const query = url.split('?')[1];
         const params = new URLSearchParams(query);
@@ -102,38 +113,48 @@ export default function LoginScreen() {
         refreshToken = params.get('refresh_token') || '';
       }
 
-      logger.info('[OAuth] Parsed tokens:', {
+      logger.info('[OAuth] Token parse edildi:', {
         hasAccessToken: !!accessToken,
         hasRefreshToken: !!refreshToken,
       });
 
       if (accessToken && refreshToken) {
-        logger.info('[OAuth] Setting session...');
+        // Guard'i aktif et — ikinci tetiklenmeyi engelle
+        oauthProcessingRef.current = true;
 
-        const { error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
+        try {
+          logger.info('[OAuth] Session set ediliyor...');
 
-        if (error) {
-          logger.error('[OAuth] Supabase setSession error:', error);
-          throw error;
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (error) {
+            logger.error('[OAuth] Supabase setSession hatası:', error);
+            throw error;
+          }
+
+          logger.info('[OAuth] Session başarıyla set edildi!');
+
+          // Session'in tam olarak yayılması için kısa bekle
+          await new Promise((resolve) => setTimeout(resolve, 800));
+
+          logger.info('[OAuth] Callback sayfasına yönlendiriliyor...');
+          router.replace('/auth/callback');
+        } finally {
+          // 3 saniye sonra guard'i sıfırla — yeni giriş denemelerini engelleme
+          setTimeout(() => {
+            oauthProcessingRef.current = false;
+          }, 3000);
         }
-
-        logger.info('[OAuth] Session set successfully!');
-
-        // Wait a bit to ensure session is fully propagated
-        await new Promise((resolve) => setTimeout(resolve, 800));
-
-        logger.info('[OAuth] Navigating to callback...');
-        // Use replace to ensure callback page remounts and picks up the session
-        router.replace('/auth/callback');
       } else {
-        logger.error('[OAuth] Missing tokens in URL. RAW URL:', url);
+        logger.error('[OAuth] URL\'de token bulunamadı. URL:', url);
         throw new Error('Could not find access tokens in the callback URL.');
       }
     } catch (error: any) {
-      logger.error('[OAuth] FATAL Deep link error:', error);
+      oauthProcessingRef.current = false;
+      logger.error('[OAuth] FATAL Deep link hatası:', error);
       toast.error({
         title: 'Authentication Failed',
         message: error.message || 'Please try again',
@@ -174,9 +195,14 @@ export default function LoginScreen() {
         redirectUri
       );
 
-      logger.info('[OAuth] Browser closed', { type: result.type });
+      logger.info('[OAuth] Browser closed', { type: result.type, hasUrl: !!(result as any).url });
 
-      // Note: Deep link handler will process the callback
+      // iOS Fix: ASWebAuthenticationSession token'ları Linking.addEventListener'a değil
+      // doğrudan result.url'e yazıyor. Android'de bu kod çalışsa bile oauthProcessingRef
+      // guard'ı çift işlemeyi engeller — regresyon yok.
+      if (result.type === 'success' && (result as any).url) {
+        await handleDeepLink({ url: (result as any).url });
+      }
     } catch (error: any) {
       logger.error(`[OAuth] ${provider} error:`, error);
       toast.error({

@@ -8,6 +8,7 @@ import type {
   ProfessionalExperienceInsert,
   Availability,
 } from '@/types/database.types';
+import type { FilterState } from '@/components/filters/FilterModal';
 
 // ============================================================================
 // PROFESSIONALS SERVICE - UPDATED WITH is_featured ONLY
@@ -310,33 +311,95 @@ class ProfessionalsService {
     }
   }
 
+  private applySearchFilters(queryBuilder: any, filters?: Partial<FilterState>) {
+    if (!filters) return queryBuilder;
+    let q = queryBuilder;
+    if (filters.priceRange && filters.priceRange.length === 2) {
+      q = q.gte('rate_per_minute', filters.priceRange[0]).lte('rate_per_minute', filters.priceRange[1]);
+    }
+    if (filters.availability === 'online' || filters.availability === 'urgent-call') {
+      q = q.eq('is_available', true);
+    }
+    if (filters.featured) {
+      q = q.eq('is_featured', true);
+    }
+    if (filters.categories && filters.categories.length > 0) {
+      q = q.in('category_id', filters.categories);
+    }
+    if (filters.languages && filters.languages.length > 0) {
+      q = q.contains('languages', filters.languages);
+    }
+    if (filters.specialties && filters.specialties.length > 0) {
+      q = q.contains('specialties', filters.specialties);
+    }
+    if (filters.skills && filters.skills.length > 0) {
+      q = q.contains('skills_certifications', filters.skills);
+    }
+    return q;
+  }
+
   /**
-   * Search professionals by name or title
-   * ✅ OPTIMIZED: Parallel queries instead of sequential
+   * Search professionals by name or title, and optional filters
+   * ✅ OPTIMIZED: Parallel queries if string is passed
    * ✅ OPTIMIZED: Supports pagination with limit and offset
    */
   async searchProfessionals(
     query: string,
+    filtersParam?: Partial<FilterState>,
     limit?: number,
     offset?: number
   ): Promise<ProfessionalWithRelations[]> {
     const startTime = Date.now();
     logger.info('[ProfessionalsService] 🔍 searchProfessionals started', {
       query: query.substring(0, 50),
+      hasFilters: !!filtersParam,
       limit,
       offset,
       timestamp: new Date().toISOString(),
     });
 
     try {
-      // Escape special characters for ilike pattern (%, _)
+      if (!query.trim()) {
+        let baseQuery = supabase
+          .from('professionals')
+          .select(
+            `
+            id,
+            category_id,
+            title,
+            profession,
+            rate_per_minute,
+            is_featured,
+            is_active,
+            is_available,
+            total_calls,
+            specialties,
+            users!inner(id, name, avatar_url, is_verified),
+            categories!inner(id, name, slug, icon_name)
+          `
+          )
+          .eq('is_active', true)
+          .eq('is_public', true);
+          
+        baseQuery = this.applySearchFilters(baseQuery, filtersParam)
+          .order('is_featured', { ascending: false })
+          .order('total_calls', { ascending: false });
+
+        if (limit !== undefined) {
+          const start = offset || 0;
+          baseQuery = baseQuery.range(start, start + limit - 1);
+        }
+
+        const { data, error } = await baseQuery;
+        if (error) throw error;
+        return (data || []) as unknown as ProfessionalWithRelations[];
+      }
+
       const escapedQuery = query.replace(/%/g, '\\%').replace(/_/g, '\\_');
       const searchPattern = `%${escapedQuery}%`;
 
-      // ✅ OPTIMIZED: Execute queries in parallel instead of sequential
-      // ✅ OPTIMIZED: Only select fields needed for list display (not all professional data)
       // Query 1: Search by title
-      const titleQuery = supabase
+      let titleQuery = supabase
         .from('professionals')
         .select(
           `
@@ -356,7 +419,9 @@ class ProfessionalsService {
         )
         .eq('is_active', true)
         .eq('is_public', true)
-        .ilike('title', searchPattern)
+        .ilike('title', searchPattern);
+
+      titleQuery = this.applySearchFilters(titleQuery, filtersParam)
         .order('is_featured', { ascending: false })
         .order('total_calls', { ascending: false });
 
@@ -366,7 +431,6 @@ class ProfessionalsService {
         .select('id')
         .ilike('name', searchPattern);
 
-      // ✅ Execute both queries in parallel
       const queryStartTime = Date.now();
       const [titleResult, usersResult] = await Promise.all([
         titleQuery,
@@ -375,43 +439,23 @@ class ProfessionalsService {
       const queryElapsed = Date.now() - queryStartTime;
 
       if (titleResult.error) {
-        logger.error(
-          '[ProfessionalsService] ❌ Error searching professionals by title',
-          titleResult.error,
-          {
-            query: query.substring(0, 50),
-            duration: `${Date.now() - startTime}ms`,
-            queryElapsed: `${queryElapsed}ms`,
-            timestamp: new Date().toISOString(),
-          }
-        );
+        logger.error('[ProfessionalsService] ❌ Error searching by title', titleResult.error);
         throw titleResult.error;
       }
 
       if (usersResult.error) {
-        logger.error(
-          '[ProfessionalsService] ❌ Error searching users by name',
-          usersResult.error,
-          {
-            query: query.substring(0, 50),
-            duration: `${Date.now() - startTime}ms`,
-            queryElapsed: `${queryElapsed}ms`,
-            timestamp: new Date().toISOString(),
-          }
-        );
+        logger.error('[ProfessionalsService] ❌ Error searching users', usersResult.error);
         throw usersResult.error;
       }
 
       const matchingUserIds = (usersResult.data || []).map((u) => u.id);
       const titleResults = titleResult.data || [];
 
-      // Query 3: Get professionals for matching users (only if we have matches)
-      // ✅ OPTIMIZED: Only select fields needed for list display
       let nameResults: any[] = [];
       let nameQueryElapsed = 0;
       if (matchingUserIds.length > 0) {
         const nameQueryStartTime = Date.now();
-        const { data: nameData, error: nameError } = await supabase
+        let nameQuery = supabase
           .from('professionals')
           .select(
             `
@@ -431,45 +475,35 @@ class ProfessionalsService {
           )
           .eq('is_active', true)
           .eq('is_public', true)
-          .in('user_id', matchingUserIds)
+          .in('user_id', matchingUserIds);
+
+        nameQuery = this.applySearchFilters(nameQuery, filtersParam)
           .order('is_featured', { ascending: false })
           .order('total_calls', { ascending: false });
+
+        const { data: nameData, error: nameError } = await nameQuery;
         nameQueryElapsed = Date.now() - nameQueryStartTime;
 
         if (nameError) {
-          logger.error(
-            '[ProfessionalsService] ❌ Error searching professionals by user name',
-            nameError,
-            {
-              query: query.substring(0, 50),
-              matchingUserIdsCount: matchingUserIds.length,
-              nameQueryElapsed: `${nameQueryElapsed}ms`,
-              timestamp: new Date().toISOString(),
-            }
-          );
+          logger.error('[ProfessionalsService] ❌ Error searching by name', nameError);
           throw nameError;
         }
 
         nameResults = nameData || [];
       }
 
-      // Combine results and remove duplicates by professional id
       const combinedResults = [...titleResults, ...nameResults];
       const uniqueResults = Array.from(
         new Map(combinedResults.map((item) => [item.id, item])).values()
       );
 
-      // Sort combined results
       uniqueResults.sort((a, b) => {
-        // Featured first
         if (a.is_featured !== b.is_featured) {
           return a.is_featured ? -1 : 1;
         }
-        // Then by total calls
         return (b.total_calls || 0) - (a.total_calls || 0);
       });
 
-      // Apply pagination manually
       let paginatedResults = uniqueResults;
       if (limit !== undefined) {
         const start = offset || 0;
@@ -483,12 +517,7 @@ class ProfessionalsService {
         duration: `${totalDuration}ms`,
         queryElapsed: `${queryElapsed}ms`,
         nameQueryElapsed: `${nameQueryElapsed}ms`,
-        titleResultsCount: titleResults.length,
-        nameResultsCount: nameResults.length,
-        uniqueResultsCount: uniqueResults.length,
         paginatedResultsCount: paginatedResults.length,
-        limit,
-        offset,
         timestamp: new Date().toISOString(),
       });
 
@@ -501,8 +530,6 @@ class ProfessionalsService {
         {
           query: query.substring(0, 50),
           duration: `${totalDuration}ms`,
-          limit,
-          offset,
           timestamp: new Date().toISOString(),
         }
       );

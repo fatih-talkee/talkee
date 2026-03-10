@@ -85,6 +85,9 @@ export default function AccountSettingsScreen() {
     totalMinutes: 0,
   });
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
+  
+  const [authProviders, setAuthProviders] = useState<string[]>([]);
+  const [authProviderEmails, setAuthProviderEmails] = useState<Record<string, string>>({});
 
   // Check if user has password (email provider means they registered with password)
   const hasPassword = user?.oauth_providers?.includes('email') ?? true;
@@ -114,9 +117,7 @@ export default function AccountSettingsScreen() {
           const result = await signInWithGoogle();
 
           if (result.success && result.session) {
-            // Session is established, callback handler will link the provider
-            toast.show({
-              type: 'info',
+            toast.info({
               title: 'Connecting...',
               message: 'Google account is being linked',
             });
@@ -132,8 +133,7 @@ export default function AccountSettingsScreen() {
             });
           } else {
             // Browser flow - callback handler will process
-            toast.show({
-              type: 'info',
+            toast.info({
               title: 'Connecting...',
               message: 'Please complete the Google authentication',
             });
@@ -165,8 +165,7 @@ export default function AccountSettingsScreen() {
             message: error.message || 'Failed to connect account',
           });
         } else {
-          toast.show({
-            type: 'info',
+          toast.info({
             title: 'Connecting...',
             message: `Please complete the ${provider} authentication`,
           });
@@ -191,6 +190,26 @@ export default function AccountSettingsScreen() {
       });
       loadUserStats();
     }
+    
+    // Fetch auth providers from Supabase source of truth
+    const fetchAuthData = async () => {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        setAuthProviders(authUser.app_metadata?.providers || []);
+        
+        const emails: Record<string, string> = {};
+        if (authUser.identities) {
+          authUser.identities.forEach(identity => {
+            if (identity.provider && identity.identity_data?.email) {
+              emails[identity.provider] = identity.identity_data.email;
+            }
+          });
+        }
+        setAuthProviderEmails(emails);
+      }
+    };
+    
+    fetchAuthData();
   }, [user]);
 
   // Listen for auth state changes (e.g., when provider is linked)
@@ -201,6 +220,21 @@ export default function AccountSettingsScreen() {
       if (session) {
         // Refresh profile data when auth state changes (e.g., after linking provider)
         await refetch();
+        
+        // Also update local auth provider states
+        const authUser = session.user;
+        if (authUser) {
+          setAuthProviders(authUser.app_metadata?.providers || []);
+          const emails: Record<string, string> = {};
+          if (authUser.identities) {
+            authUser.identities.forEach(identity => {
+              if (identity.provider && identity.identity_data?.email) {
+                emails[identity.provider] = identity.identity_data.email;
+              }
+            });
+          }
+          setAuthProviderEmails(emails);
+        }
       }
     });
 
@@ -353,8 +387,7 @@ export default function AccountSettingsScreen() {
   if (profileLoading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
+        style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <Header showLogo showBack />
         <PageLoading message="Loading..." />
       </SafeAreaView>
@@ -364,8 +397,7 @@ export default function AccountSettingsScreen() {
   if (!user) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
+        style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <Header showLogo showBack />
         <PageLoading message="User not found" />
       </SafeAreaView>
@@ -374,8 +406,7 @@ export default function AccountSettingsScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+      style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header
         showLogo
         showBack
@@ -652,10 +683,13 @@ export default function AccountSettingsScreen() {
           </Text>
           <View style={styles.connectedAccountsList}>
             {allProviders.map((providerInfo, index) => {
-              const isConnected = user.oauth_providers?.includes(
-                providerInfo.id
-              );
-              const providerEmail = user.oauth_emails?.[providerInfo.id];
+              // Check auth providers array first, fallback to user profile record
+              const isConnected = authProviders.includes(providerInfo.id) ||
+                user.oauth_providers?.includes(providerInfo.id) || false;
+                
+              const providerEmail = authProviderEmails[providerInfo.id] || 
+                user.oauth_emails?.[providerInfo.id];
+              
               const isLastItem = index === allProviders.length - 1;
 
               return (

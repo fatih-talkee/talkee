@@ -737,8 +737,8 @@ export default function ProfessionalProfileScreen() {
       return (
         <SafeAreaView
           style={[
-            styles.container,
-            { backgroundColor: theme.colors.background },
+          styles.container,
+          { backgroundColor: theme.colors.background },
           ]}
         >
           <Header showLogo showBack />

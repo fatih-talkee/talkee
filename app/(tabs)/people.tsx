@@ -129,7 +129,7 @@ export default function PeopleScreen() {
           styles.itemContainer,
           {
             borderBottomColor: theme.colors.divider,
-            backgroundColor: isEditMode && isSelected ? theme.colors.surface : '#FFFFFF',
+            backgroundColor: isEditMode && isSelected ? theme.colors.surface : theme.colors.background,
           },
         ]}
         onPress={() => {
@@ -165,7 +165,7 @@ export default function PeopleScreen() {
             </View>
           )}
           {(Boolean((item as any).is_active) && Boolean((item as any).is_available)) && (
-            <View style={[styles.onlineIndicator, { backgroundColor: theme.colors.success }]} />
+            <View style={[styles.onlineIndicator, { backgroundColor: theme.colors.success, borderColor: theme.colors.background }]} />
           )}
         </View>
 
@@ -201,7 +201,7 @@ export default function PeopleScreen() {
   // Loading state
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: '#FFFFFF' }]} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
         <Header
           showLogo={false}
           title="My People"
@@ -214,7 +214,7 @@ export default function PeopleScreen() {
   // Error state
   if (error) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: '#FFFFFF' }]} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
         <Header
           showLogo={false}
           title="My People"
@@ -231,7 +231,7 @@ export default function PeopleScreen() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView style={[styles.container, { backgroundColor: '#FFFFFF' }]} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
         <Header
           showLogo={false}
           title="My People"
@@ -367,7 +367,6 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 7,
     borderWidth: 2,
-    borderColor: '#ffffff',
   },
   contentContainer: {
     flex: 1,

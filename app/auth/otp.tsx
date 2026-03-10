@@ -246,6 +246,8 @@ export default function VerifyPhoneScreen() {
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
+    
+      edges={['bottom', 'left', 'right']}
     >
       <View style={styles.header}>
         <TouchableOpacity

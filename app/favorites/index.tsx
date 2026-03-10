@@ -94,8 +94,7 @@ export default function FavoritesScreen() {
           style={[
             styles.favoriteButton,
             {
-              backgroundColor:
-                theme.name === 'dark' ? '#000000' : theme.colors.surface,
+              backgroundColor: theme.colors.surface,
               borderWidth: theme.name === 'dark' ? 1 : 0,
               borderColor:
                 theme.name === 'dark'

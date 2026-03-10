@@ -3,9 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   SafeAreaView,
-  TextInput,
   TouchableOpacity,
   Platform,
 } from 'react-native';
@@ -164,8 +162,7 @@ export default function CategoriesScreen() {
   if (loading || profileLoading || categoriesLoading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
+        style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <Header showLogo={false} title="Call Criteria" showBack onBackPress={() => router.back()} />
         <PageLoading message="Loading categories..." />
       </SafeAreaView>
@@ -174,8 +171,7 @@ export default function CategoriesScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+      style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header showLogo={false} title="Call Criteria" showBack onBackPress={() => router.back()} />
       <ScrollView
         style={styles.scrollView}

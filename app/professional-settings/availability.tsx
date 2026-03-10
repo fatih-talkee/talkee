@@ -3,9 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   SafeAreaView,
-  Modal,
   Pressable,
   TouchableOpacity,
   TextInput,
@@ -392,8 +390,7 @@ export default function AvailabilityScreen() {
   if (loading || profileLoading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
+        style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <Header showLogo={false} title="Availability" showBack onBackPress={() => router.back()} />
         <PageLoading message="Loading availabilities..." />
       </SafeAreaView>
@@ -402,8 +399,7 @@ export default function AvailabilityScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+      style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header showLogo={false} title="Availability" showBack onBackPress={() => router.back()} />
       <ScrollView
         style={styles.scrollView}

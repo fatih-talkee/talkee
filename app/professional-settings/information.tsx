@@ -168,8 +168,7 @@ export default function InformationScreen() {
   if (loading || profileLoading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
+        style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <Header showLogo={false} title="Basic Information" showBack onBackPress={() => router.back()} />
         <PageLoading message="Loading information..." />
       </SafeAreaView>
@@ -178,8 +177,7 @@ export default function InformationScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+      style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header showLogo={false} title="Basic Information" showBack onBackPress={() => router.back()} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

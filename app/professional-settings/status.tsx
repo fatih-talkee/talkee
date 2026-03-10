@@ -3,9 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   SafeAreaView,
-  Switch,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -127,8 +125,7 @@ export default function StatusScreen() {
   if (loading || profileLoading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
+        style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <Header showLogo={false} title="Status & Visibility" showBack onBackPress={() => router.back()} />
         <PageLoading message="Loading status information..." />
       </SafeAreaView>
@@ -137,8 +134,7 @@ export default function StatusScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+      style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header showLogo={false} title="Status & Visibility" showBack onBackPress={() => router.back()} />
       <ScrollView
         style={styles.scrollView}
@@ -392,4 +388,3 @@ const styles = StyleSheet.create({
     width: '100%',
   },
 });
-

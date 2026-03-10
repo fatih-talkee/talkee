@@ -29,7 +29,7 @@ import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useCategories } from '@/hooks/useCategories';
 
-interface FilterState {
+export interface FilterState {
   priceRange: [number, number];
   availability: 'all' | 'online' | 'urgent-call';
   categories: string[];
@@ -201,6 +201,7 @@ export function FilterModal({
     >
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
+        edges={['bottom', 'left', 'right']}
       >
         {/* Header */}
         <View style={[styles.header, {

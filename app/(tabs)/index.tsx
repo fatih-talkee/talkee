@@ -84,10 +84,30 @@ export default function HomeScreen() {
     setFilterModalVisible(true);
   };
 
+  const handleSearchSubmit = () => {
+    if (searchValue.trim() || Object.keys(filters).length > 0) {
+      router.push({
+        pathname: '/search-results',
+        params: {
+          query: searchValue,
+          filters: JSON.stringify(filters)
+        }
+      });
+    }
+  };
+
   const handleApplyFilters = (newFilters: typeof filters) => {
     setFilters(newFilters);
-    // TODO: Apply filters to professional search/list
-    console.log('Filters applied:', newFilters);
+    setFilterModalVisible(false);
+    
+    // Launch global search with new filters applying current search text
+    router.push({
+      pathname: '/search-results',
+      params: {
+        query: searchValue,
+        filters: JSON.stringify(newFilters)
+      }
+    });
   };
 
   return (
@@ -107,6 +127,7 @@ export default function HomeScreen() {
         onLanguagePress={() => console.log('Language filter pressed')}
         onVerifiedToggle={() => setIsVerifiedSelected(!isVerifiedSelected)}
         isVerifiedSelected={isVerifiedSelected}
+        onSubmitEditing={handleSearchSubmit}
       />
 
       <ScrollView 

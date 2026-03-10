@@ -3,9 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   SafeAreaView,
-  TextInput,
   Modal,
   Pressable,
   TouchableOpacity,
@@ -255,8 +253,7 @@ export default function FeedScreen() {
   if (feedsLoading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
+        style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <Header showLogo={false} title="Feed Management" showBack onBackPress={() => router.back()} />
         <PageLoading message="Loading feeds..." />
       </SafeAreaView>
@@ -265,8 +262,7 @@ export default function FeedScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+      style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header showLogo={false} title="Feed Management" showBack onBackPress={() => router.back()} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -844,4 +840,3 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 });
-

@@ -12,6 +12,7 @@ import { ArrowLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Require logos at module level for proper bundling
 // Using relative paths because Metro bundler requires them for native platforms
@@ -87,17 +88,17 @@ export function PrimaryHeader({
     theme.name === 'dark' ? '#1C1C1E' : theme.colors.surface;
 
   return (
-    <View
-      style={[
-        styles.header,
-        {
-          backgroundColor: headerBackground,
-          paddingTop: Math.max(insets.top, 44),
-        },
-        containerStyle,
-      ]}
-    >
-      <View style={styles.leftSection}>
+    <SafeAreaView edges={['top']} style={{ backgroundColor: headerBackground }}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: headerBackground,
+          },
+          containerStyle,
+        ]}
+      >
+        <View style={styles.leftSection}>
         {showBack && (
           <View style={styles.leftButtonWrapper}>
             <TouchableOpacity
@@ -152,6 +153,7 @@ export function PrimaryHeader({
         ))}
       </View>
     </View>
+    </SafeAreaView>
   );
 }
 

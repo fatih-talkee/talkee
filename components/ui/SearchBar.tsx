@@ -40,8 +40,7 @@ export function SearchBar({
 }: SearchBarProps) {
   const { theme } = useTheme();
 
-  const wrapperBackground =
-    theme.name === 'dark' ? '#000000' : theme.colors.surface;
+  const wrapperBackground = theme.colors.background;
 
   return (
     <View

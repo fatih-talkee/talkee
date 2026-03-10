@@ -30,6 +30,7 @@ interface HomeHeaderSectionProps {
   onLanguagePress: () => void;
   onVerifiedToggle: () => void;
   isVerifiedSelected: boolean;
+  onSubmitEditing?: () => void;
 }
 
 export function HomeHeaderSection({
@@ -42,6 +43,7 @@ export function HomeHeaderSection({
   onLanguagePress,
   onVerifiedToggle,
   isVerifiedSelected = false,
+  onSubmitEditing,
 }: HomeHeaderSectionProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -115,6 +117,10 @@ export function HomeHeaderSection({
             placeholderTextColor="#9CA3AF"
             value={searchValue}
             onChangeText={onSearchChange}
+            onSubmitEditing={onSubmitEditing}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
           />
         </View>
       </View>

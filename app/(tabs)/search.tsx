@@ -95,7 +95,18 @@ export default function SearchScreen() {
   }, [allProfessionals, searchQuery, selectedCategory, categories, selectedTab]);
 
   const handleApplyFilters = (modalFilters: Omit<FilterState, 'featured'>) => {
-    setFilters({ ...modalFilters, featured: filters.featured });
+    const updatedFilters = { ...modalFilters, featured: filters.featured };
+    setFilters(updatedFilters);
+    setFilterVisible(false);
+    
+    // Auto-navigate to global search results on apply filters
+    router.push({
+      pathname: '/search-results',
+      params: {
+        query: searchQuery,
+        filters: JSON.stringify(updatedFilters)
+      }
+    });
   };
 
   const getInitialFiltersForModal = useMemo(() => ({
@@ -116,27 +127,48 @@ export default function SearchScreen() {
     >
       <Header
         showLogo={false}
+        title="Search Lists"
         leftButtons={<View style={styles.headerSpacer} />}
         rightButtons={
           <TouchableOpacity
             style={styles.filterIconButton}
             onPress={() => setFilterVisible(true)}
           >
-            <SlidersHorizontal size={24} color={theme.colors.pinkTwo} />
+            <SlidersHorizontal size={24} color={theme.name === 'light' ? theme.colors.pinkTwo : theme.colors.primary} />
           </TouchableOpacity>
         }
-      >
-        <View style={[styles.searchContainer, { backgroundColor: theme.colors.surface }]}>
+      />
+
+      {/* Floating Search Bar */}
+      <View style={[styles.searchWrapper, { backgroundColor: theme.name === 'dark' ? '#1C1C1E' : theme.colors.background }]}>
+        <View style={[
+          styles.searchContainer, 
+          { 
+            backgroundColor: theme.name === 'dark' ? '#2C2C2E' : '#FFFFFF',
+            borderColor: theme.name === 'dark' ? '#3A3A3C' : '#E5E5EA'
+          }
+        ]}>
           <Search size={20} color={theme.colors.textMuted} />
           <TextInput
             style={[styles.searchInput, { color: theme.colors.text }]}
-            placeholder="Search Lists"
+            placeholder="Search skills, names, or professions..."
             placeholderTextColor={theme.colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
+            onSubmitEditing={() => {
+              if (searchQuery.trim()) {
+                router.push({
+                  pathname: '/search-results',
+                  params: { query: searchQuery }
+                });
+              }
+            }}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
           />
         </View>
-      </Header>
+      </View>
 
       {/* Tabs */}
       <View style={[styles.tabContainer, { borderBottomColor: theme.colors.border }]}>
@@ -392,20 +424,30 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 40,
   },
+  searchWrapper: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    zIndex: 10,
+  },
   searchContainer: {
-    flex: 1,
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    marginHorizontal: 12,
-    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'Inter-Medium',
     padding: 0, // Remove default padding
   },
   filterIconButton: {

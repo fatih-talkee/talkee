@@ -281,7 +281,7 @@ export function CategoryGrid({ categories }: CategoryGridProps) {
         style={[
           styles.categoryItem,
           {
-            backgroundColor: categoryColor + '30',
+            backgroundColor: theme.colors.card,
             borderColor: theme.colors.border,
             borderWidth: 1,
           },

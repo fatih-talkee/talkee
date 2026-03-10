@@ -55,7 +55,7 @@ export const lightTheme: Theme = {
   name: 'light',
   displayName: 'Light',
   colors: {
-    background: '# ',
+    background: '#FFFFFF',
     surface: '#f8fafc',
 
     card: '#ffffff',

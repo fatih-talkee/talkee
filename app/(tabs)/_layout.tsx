@@ -22,10 +22,10 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: theme.colors.tabBarBackground,
           borderTopColor: theme.colors.tabBarBorder,
-          borderTopWidth: 1,
+          borderTopWidth: 0,
           paddingTop: 6,
           paddingBottom: bottomPadding,
-          height: Platform.OS === 'android' ? 70 + (bottomPadding - 8) : 70,
+          height: Platform.OS === 'android' ? 80 + (bottomPadding - 8) : 80,
           // shiny upward shadow/elevation
           ...(Platform.OS === 'web'
             ? { boxShadow: '0px -8px 16px rgba(0,0,0,0.08)' }
@@ -93,6 +93,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => (
             <User size={22} color={color} strokeWidth={2} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="search-results"
+        options={{
+          href: null,
+          title: 'Search Results',
         }}
       />
     </Tabs>
