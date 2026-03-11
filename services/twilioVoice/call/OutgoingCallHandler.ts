@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { callsService } from '@/services/calls.service';
 import { usersService } from '@/services/supabase/user.service';
 import { CallStatus as DbCallStatus, CallType } from '@/types/database.types';
+import { Platform } from 'react-native';
 import { PermissionManager, CallSidExtractor, getCallState } from '../utils';
 import { CallRepository } from '../database/CallRepository';
 import {
@@ -70,12 +71,22 @@ export class OutgoingCallHandler {
           debugId,
           timestamp: new Date().toISOString(),
         });
-        await getAccessToken();
-        finalAccessToken = accessToken; // Will be updated by getAccessToken
+        finalAccessToken = await getAccessToken();
+        
         logger.debug('[OutgoingCallHandler] ✅ Access token obtained', {
+          debugId,
+          tokenLength: finalAccessToken?.length,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // ✅ GUARD: Ensure we have a valid token
+      if (!finalAccessToken || !finalAccessToken.trim()) {
+        logger.error('[OutgoingCallHandler] ❌ Failed to obtain valid Twilio access token', undefined, {
           debugId,
           timestamp: new Date().toISOString(),
         });
+        throw new Error('Failed to obtain valid Twilio access token');
       }
 
       logger.debug('[OutgoingCallHandler] 🎤 Ensuring microphone permission', {
@@ -172,6 +183,31 @@ export class OutgoingCallHandler {
 
       const callerDisplayName = callerUser?.name || 'Talkee User';
 
+      // ✅ ENHANCED LOGGING: Pre-connection context
+      let hasPushCredential = false;
+      let hasApplicationSid = false;
+      try {
+        const tokenParts = finalAccessToken.split('.');
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(atob(tokenParts[1]));
+          hasPushCredential = !!payload?.grants?.voice?.push_credential_sid;
+          hasApplicationSid = !!payload?.grants?.voice?.outgoing?.application_sid;
+          
+          if (hasPushCredential) {
+            const pushSid = payload.grants.voice.push_credential_sid;
+            if (!pushSid.startsWith('CR')) {
+              logger.error('[OutgoingCallHandler] ❌ INVALID push_credential_sid format (must start with CR)', undefined, {
+                debugId,
+                prefix: pushSid.substring(0, 10),
+                timestamp: new Date().toISOString(),
+              });
+            }
+          }
+        }
+      } catch (e) {
+        logger.warn('[OutgoingCallHandler] ⚠️ Could not parse token for validation logs', { debugId });
+      }
+
       logger.info('[OutgoingCallHandler] 📡 Connecting via Twilio SDK...', {
         debugId,
         to: professionalUserId,
@@ -180,8 +216,12 @@ export class OutgoingCallHandler {
         callId: callRecord.id,
         callType: type,
         urgent,
+        accessTokenPresent: !!finalAccessToken,
         accessTokenLength: finalAccessToken?.length,
+        hasOutgoingApplicationSid: hasApplicationSid,
+        hasPushCredentialSid: hasPushCredential,
         voiceInitialized: !!voice,
+        platform: Platform.OS,
         timestamp: new Date().toISOString(),
       });
 
@@ -204,7 +244,7 @@ export class OutgoingCallHandler {
       });
 
       const connectStartTime = Date.now();
-      const call = await voice.connect(finalAccessToken!, connectParams);
+      const call = await voice.connect(finalAccessToken, connectParams);
       const connectElapsed = Date.now() - connectStartTime;
 
       logger.info(

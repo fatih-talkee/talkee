@@ -1,4 +1,4 @@
-// import { Voice, Call, CallInvite } from '@twilio/voice-react-native-sdk';
+import { Voice, Call, CallInvite } from '@twilio/voice-react-native-sdk';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { AppState, Platform } from 'react-native';
@@ -44,6 +44,7 @@ class TwilioVoiceService {
   private isMakingCall: boolean = false;
   private isAcceptingCall: boolean = false;
   private lastDisconnectWasConnected: boolean = false;
+  private isPushRegistryInitialized: boolean = false;
 
   constructor() {
     this.stateManager = new CallStateManager();
@@ -126,6 +127,11 @@ class TwilioVoiceService {
       const listenersElapsed = Date.now() - listenersStartTime;
 
       this.setupAppStateListener();
+
+      // ✅ GÖREV 2: Initialize PushKit registry for iOS
+      if (Platform.OS === 'ios') {
+        await this.initializePushRegistry();
+      }
 
       const totalElapsed = Date.now() - initStartTime;
       logger.info('[TwilioVoice] ✅ Initialized successfully', {
@@ -211,10 +217,16 @@ class TwilioVoiceService {
     try {
       const invokeStartTime = Date.now();
       logger.debug('[TwilioVoice] 📡 Invoking twilio-token function', {
+        platform: Platform.OS,
         timestamp: new Date().toISOString(),
       });
 
-      const { data, error } = await supabase.functions.invoke('twilio-token');
+      // ✅ GÖREV 3: Platform bilgisi ekleniyor
+      const { data, error } = await supabase.functions.invoke('twilio-token', {
+        headers: {
+          'x-platform': Platform.OS,
+        },
+      });
       const invokeElapsed = Date.now() - invokeStartTime;
 
       if (error) {
@@ -571,8 +583,8 @@ class TwilioVoiceService {
         ...params,
         voice: this.voice!,
         accessToken: this.accessToken,
-        getAccessToken: async (): Promise<void> => {
-          await this.getAccessToken();
+        getAccessToken: async (): Promise<string> => {
+          return await this.getAccessToken();
         },
         setupCallListeners: (
           call: Call,
@@ -1436,6 +1448,23 @@ class TwilioVoiceService {
         errorStack: error instanceof Error ? error.stack : undefined,
         timestamp: new Date().toISOString(),
       });
+    }
+  }
+
+  private async initializePushRegistry(): Promise<void> {
+    if (this.isPushRegistryInitialized) return;
+    if (!this.voice) {
+      logger.warn('[TwilioVoice] ⚠️ Cannot initialize push registry: Voice SDK not ready');
+      return;
+    }
+
+    try {
+      logger.info('[TwilioVoice] 📲 Initializing PushKit registry for iOS...');
+      await this.voice.initializePushRegistry();
+      this.isPushRegistryInitialized = true;
+      logger.info('[TwilioVoice] ✅ Push registry initialized');
+    } catch (error) {
+      logger.error('[TwilioVoice] ❌ Push registry init failed', error);
     }
   }
 }

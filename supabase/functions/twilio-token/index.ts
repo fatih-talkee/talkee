@@ -5,7 +5,7 @@ import { SignJWT } from 'https://deno.land/x/jose@v5.2.0/jwt/sign.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type',
+    'authorization, x-client-info, apikey, content-type, x-platform',
 };
 
 serve(async (req) => {
@@ -22,9 +22,38 @@ serve(async (req) => {
     const TWILIO_API_KEY = Deno.env.get('TWILIO_API_KEY');
     const TWILIO_API_SECRET = Deno.env.get('TWILIO_API_SECRET');
     const TWILIO_TWIML_APP_SID = Deno.env.get('TWILIO_TWIML_APP_SID');
-    const TWILIO_PUSH_CREDENTIAL_SID = Deno.env.get(
-      'TWILIO_PUSH_CREDENTIAL_SID'
-    );
+
+    // Platform bilgisini al (ios veya android)
+    const platform = req.headers.get('x-platform')?.toLowerCase();
+    console.log('📱 [twilio-token] Platform:', platform);
+
+    // Platforma göre doğru SID'yi seç
+    let PUSH_SID = '';
+    if (platform === 'ios') {
+      PUSH_SID = Deno.env.get('TWILIO_PUSH_CREDENTIAL_SID_IOS') || '';
+    } else if (platform === 'android') {
+      PUSH_SID = Deno.env.get('TWILIO_PUSH_CREDENTIAL_SID_ANDROID') || '';
+    }
+
+    // Fallback: Eğer platforma özel SID yoksa genel SID'yi kullan
+    if (!PUSH_SID) {
+      PUSH_SID = Deno.env.get('TWILIO_PUSH_CREDENTIAL_SID') || '';
+    }
+
+    // Seçilen SID'nin doğrulanması (CR ile başlamalı)
+    if (PUSH_SID) {
+      if (!PUSH_SID.startsWith('CR')) {
+        console.error(`⚠️ [twilio-token] Geçersiz SID formatı (${platform}):`, PUSH_SID.substring(0, 10) + '...');
+      } else {
+        console.log(`✅ [twilio-token] Geçerli SID seçildi (${platform}):`, PUSH_SID.substring(0, 10) + '...');
+      }
+    } else {
+      console.error(`❌ [twilio-token] No push credential SID resolved for platform: ${platform}`);
+      // Token üretimini tamamen kırmıyoruz (outbound için hala çalışabilir), 
+      // ama push bildirimleri çalışmayacaktır.
+    }
+
+    const TWILIO_PUSH_CREDENTIAL_SID = PUSH_SID;
 
     if (
       !TWILIO_ACCOUNT_SID ||
@@ -34,13 +63,6 @@ serve(async (req) => {
     ) {
       console.error('❌ [twilio-token] Missing Twilio credentials');
       throw new Error('Missing Twilio credentials');
-    }
-
-    // Validate push credential SID (required for incoming call push notifications)
-    if (!TWILIO_PUSH_CREDENTIAL_SID || TWILIO_PUSH_CREDENTIAL_SID.trim() === '') {
-      console.error('❌ [twilio-token] TWILIO_PUSH_CREDENTIAL_SID is missing or empty');
-      console.error('❌ [twilio-token] This will prevent incoming call push notifications from working');
-      throw new Error('TWILIO_PUSH_CREDENTIAL_SID is required for push notifications');
     }
 
     // Authenticate user
@@ -78,9 +100,9 @@ serve(async (req) => {
 
     const identity = profile.id;
     console.log('✅ [twilio-token] User identity:', identity);
-    console.log('🔑 [twilio-token] API Key:', TWILIO_API_KEY);
-    console.log('🔑 [twilio-token] Account SID:', TWILIO_ACCOUNT_SID);
-    console.log('🔑 [twilio-token] TwiML App SID:', TWILIO_TWIML_APP_SID);
+    console.log('🔑 [twilio-token] API Key:', TWILIO_API_KEY ? `${TWILIO_API_KEY.substring(0, 8)}...` : 'MISSING');
+    console.log('🔑 [twilio-token] Account SID:', TWILIO_ACCOUNT_SID ? `${TWILIO_ACCOUNT_SID.substring(0, 8)}...` : 'MISSING');
+    console.log('🔑 [twilio-token] TwiML App SID:', TWILIO_TWIML_APP_SID ? `${TWILIO_TWIML_APP_SID.substring(0, 8)}...` : 'MISSING');
     console.log(
       '🔑 [twilio-token] Push Credential SID:',
       TWILIO_PUSH_CREDENTIAL_SID ? `${TWILIO_PUSH_CREDENTIAL_SID.substring(0, 10)}...` : 'MISSING'
