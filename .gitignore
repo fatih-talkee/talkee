@@ -56,4 +56,5 @@ ios/sentry.properties
 *.tsbuildinfo
 
 .agent/
+docs
 backup/
