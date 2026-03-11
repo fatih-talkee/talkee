@@ -88,7 +88,7 @@ export function PrimaryHeader({
     theme.name === 'dark' ? '#1C1C1E' : theme.colors.surface;
 
   return (
-    <SafeAreaView edges={['top']} style={{ backgroundColor: headerBackground }}>
+    <View edges={['top']} style={{ backgroundColor: headerBackground }}>
       <View
         style={[
           styles.header,
@@ -99,61 +99,62 @@ export function PrimaryHeader({
         ]}
       >
         <View style={styles.leftSection}>
-        {showBack && (
-          <View style={styles.leftButtonWrapper}>
+          {showBack && (
+            <View style={styles.leftButtonWrapper}>
+              <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+                <ArrowLeft size={20} color={theme.colors.pinkTwo} />
+              </TouchableOpacity>
+            </View>
+          )}
+          {renderLeft.map((btn, idx) => (
+            <View key={idx} style={styles.leftButtonWrapper}>
+              {btn}
+            </View>
+          ))}
+          {showLogo && !title ? (
             <TouchableOpacity
-              onPress={handleBack}
-              style={styles.backButton}
+              disabled={!onLogoPress}
+              onPress={onLogoPress}
+              style={styles.logoContainer}
+              activeOpacity={onLogoPress ? 0.7 : 1}
             >
-              <ArrowLeft size={20} color={theme.colors.pinkTwo} />
+              <Image
+                source={logo}
+                style={styles.logoImage}
+                resizeMode="contain"
+                accessibilityLabel="Talkee Logo"
+              />
             </TouchableOpacity>
+          ) : null}
+        </View>
+
+        {title && (
+          <View style={styles.centerSectionAbsolute}>
+            <Text
+              style={[
+                styles.titleText,
+                { color: titleColor || theme.colors.text },
+              ]}
+              numberOfLines={1}
+            >
+              {title}
+            </Text>
           </View>
         )}
-        {renderLeft.map((btn, idx) => (
-          <View key={idx} style={styles.leftButtonWrapper}>
-            {btn}
-          </View>
-        ))}
-        {showLogo && !title ? (
-          <TouchableOpacity
-            disabled={!onLogoPress}
-            onPress={onLogoPress}
-            style={styles.logoContainer}
-            activeOpacity={onLogoPress ? 0.7 : 1}
-          >
-            <Image
-              source={logo}
-              style={styles.logoImage}
-              resizeMode="contain"
-              accessibilityLabel="Talkee Logo"
-            />
-          </TouchableOpacity>
-        ) : null}
-      </View>
 
-      {title && (
-        <View style={styles.centerSectionAbsolute}>
-          <Text style={[styles.titleText, { color: titleColor || theme.colors.text }]} numberOfLines={1}>
-            {title}
-          </Text>
+        {!title && children && (
+          <View style={styles.centerSection}>{children}</View>
+        )}
+
+        <View style={styles.rightSection}>
+          {renderRight.map((btn, idx) => (
+            <View key={idx} style={styles.rightButtonWrapper}>
+              {btn}
+            </View>
+          ))}
         </View>
-      )}
-
-      {!title && children && (
-        <View style={styles.centerSection}>
-          {children}
-        </View>
-      )}
-
-      <View style={styles.rightSection}>
-        {renderRight.map((btn, idx) => (
-          <View key={idx} style={styles.rightButtonWrapper}>
-            {btn}
-          </View>
-        ))}
       </View>
     </View>
-    </SafeAreaView>
   );
 }
 

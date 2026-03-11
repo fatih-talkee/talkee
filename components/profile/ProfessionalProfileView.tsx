@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Platform, ActivityIndicator, Modal, TextInput, Pressable, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Image, Platform, ActivityIndicator, Modal, TextInput, Pressable, KeyboardAvoidingView } from 'react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Header } from '@/components/ui/Header';
 import { 
@@ -575,8 +575,9 @@ export const ProfessionalProfileView = () => {
   const ratePerMinute = currentAvailability?.availability?.price_per_minute || professional?.rate_per_minute || 0;
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
       <Header
         showLogo={true}
         leftButtons={
@@ -1014,7 +1015,7 @@ export const ProfessionalProfileView = () => {
           </View>
         </Modal>
       )}
-    </View>
+    </SafeAreaView>
   );
 };
 
