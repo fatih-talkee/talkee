@@ -450,39 +450,39 @@ class Logger {
           console.warn(prefix, message);
         }
         break;
-      case 'error':
+      case 'error': {
+        const args: any[] = [prefix, message];
+        
         if (error) {
-          // Handle error object properly
           if (error instanceof Error) {
-            console.error(prefix, message, error.message, error.stack);
+            args.push(error.message, '\nStack:', error.stack);
           } else if (typeof error === 'object') {
             try {
-              // capture all properties including non-enumerable
               const serialized = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
-              
-              // If the serialized object is just empty or has [object Object] as a value
               if (serialized.includes('[object Object]')) {
-                console.error(prefix, message, 'Serializing complex error object:', error);
+                args.push('\nError Object:', error);
               } else {
-                console.error(prefix, message, serialized);
+                args.push('\nError Details:', serialized);
               }
             } catch (e) {
-              console.error(prefix, message, error);
+              args.push('\nError (unserializable):', error);
             }
           } else {
-            console.error(prefix, message, error);
+            args.push('\nError:', String(error));
           }
-        } else {
-          console.error(prefix, message);
         }
+        
         if (context && Object.keys(context).length > 0) {
           try {
-            console.error('Context:', this.safeStringify(context, 2));
+            args.push('\nContext:', this.safeStringify(context, 2));
           } catch (e) {
-            console.error('Context:', '[Context serialization failed]');
+            args.push('\nContext: [Context serialization failed]');
           }
         }
+        
+        console.error(...args);
         break;
+      }
     }
   }
 

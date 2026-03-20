@@ -194,13 +194,43 @@ export class VoiceEventListener {
 
       // ✅ SECURITY: Check authentication AFTER storing callInvite in state
       try {
-        const currentUser = await usersService.getCurrentUser();
+        let currentUser = null;
+        let retries = 0;
+        // Amaç: 1 ilk deneme + 3 ek deneme (toplam 4 deneme).
+        // Eğer Supabase session henüz hazır değilse, her hata sonrasında 500ms bekler.
+        const maxRetries = 3; 
+
+        while (retries <= maxRetries) {
+          currentUser = await usersService.getCurrentUser();
+          
+          if (currentUser) {
+            if (retries > 0) {
+              logger.info('[VoiceEventListener] ✅ Authentication successful after retry', {
+                callSid: inviteSid,
+                retriesCount: retries,
+                timestamp: new Date().toISOString(),
+              });
+            }
+            break;
+          }
+
+          if (retries < maxRetries) {
+            logger.warn(`[VoiceEventListener] ⚠️ Authentication miss on try ${retries + 1}, retrying in 500ms...`, {
+              callSid: inviteSid,
+              timestamp: new Date().toISOString(),
+            });
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          retries++;
+        }
+
         if (!currentUser) {
           logger.error(
-            '[VoiceEventListener] ❌ Incoming call rejected - user not authenticated',
+            `[VoiceEventListener] ❌ Incoming call rejected - user not authenticated after ${maxRetries + 1} total tries`,
             undefined,
             {
               callSid: inviteSid,
+              totalTries: maxRetries + 1,
               timestamp: new Date().toISOString(),
             }
           );

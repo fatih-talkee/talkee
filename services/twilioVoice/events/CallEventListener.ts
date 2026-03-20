@@ -66,6 +66,17 @@ export class CallEventListener {
     });
 
     const connectedHandler = async () => {
+      // ✅ PATCH E: Do not re-process if already marked connected
+      const state = this.deps.getState();
+      if (state.status === 'connected') {
+        logger.info('[CallEventListener] ⏭️ Ignoring connected event - already connected', {
+          debugId: this.debugId,
+          callId: this.callId,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
       const connectedTimestamp = Date.now();
 
       logger.info('[CallEventListener] ✅ Call connected', {
@@ -441,6 +452,17 @@ export class CallEventListener {
     });
 
     const ringingHandler = () => {
+      // ✅ PATCH E: Ignore ringing if call is already connected
+      const state = this.deps.getState();
+      if (state.status === 'connected') {
+        logger.info('[CallEventListener] ⏭️ Ignoring ringing event - call is already connected', {
+          debugId: this.debugId,
+          callId: this.callId,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
       logger.info('[CallEventListener] 📞 Call ringing', {
         debugId: this.debugId,
         callId: this.callId,
@@ -635,6 +657,7 @@ export class CallEventListener {
         isMuted: false,
         isOnHold: false,
         duration: 0,
+        callInvite: null, // ✅ PATCH D: Ensure invite is cleared on disconnect
       });
 
       logger.info(

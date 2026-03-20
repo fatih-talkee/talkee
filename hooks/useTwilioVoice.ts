@@ -438,6 +438,14 @@ export function useTwilioVoice() {
           );
         }
 
+        // ✅ PATCH C: Readiness guard
+        if (!twilioVoiceService.isReadyForCalls()) {
+          logger.warn('[useTwilioVoice] ⚠️ Cannot make call - SDK not ready', {
+            timestamp: new Date().toISOString(),
+          });
+          throw new Error('Twilio SDK is not fully initialized and registered. Please try again.');
+        }
+
         logger.info('[useTwilioVoice] 📞 Making call...', {
           debugId: params.debugId,
           professionalId: params.professionalId,
@@ -528,6 +536,15 @@ export function useTwilioVoice() {
           hasCallInvite: !!callState.callInvite,
           timestamp: new Date().toISOString(),
         });
+
+        // ✅ PATCH C: Readiness guard
+        if (!twilioVoiceService.isReadyForCalls()) {
+          logger.warn('[useTwilioVoice] ⚠️ Cannot accept call - SDK not ready', {
+            debugId: params.debugId,
+            timestamp: new Date().toISOString(),
+          });
+          throw new Error('Twilio SDK is not fully initialized and registered. Please try again.');
+        }
 
         const serviceAcceptStartTime = Date.now();
         await twilioVoiceService.acceptIncomingCall(params);

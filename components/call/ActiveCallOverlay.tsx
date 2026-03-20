@@ -27,6 +27,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { logger } from '@/lib/logger';
 import { useProfile } from '@/hooks/useProfile';
 import { useCallDetails } from '@/hooks/useCallDetails';
+import { isCallConnected } from '@/services/twilioVoice/utils/TwilioTypeGuards';
 
 /**
  * ActiveCallOverlay
@@ -47,6 +48,10 @@ export default function ActiveCallOverlay() {
   const [showOverlay, setShowOverlay] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [speakerEnabled, setSpeakerEnabled] = useState(false);
+  const [fallbackConnectedAt, setFallbackConnectedAt] = useState<number | null>(
+    null
+  );
+  const [fallbackNow, setFallbackNow] = useState(() => Date.now());
   const [fadeAnim] = useState(new Animated.Value(0));
   const [pulseAnim] = useState(new Animated.Value(1));
 
@@ -224,6 +229,46 @@ export default function ActiveCallOverlay() {
     [callDetails]
   );
 
+  const isEffectivelyConnected = useMemo(() => {
+    return (
+      callState.status === 'connected' ||
+      (!!callState.call && isCallConnected(callState.call))
+    );
+  }, [callState.status, callState.call]);
+
+  useEffect(() => {
+    if (isEffectivelyConnected) {
+      setFallbackConnectedAt((prev) => prev ?? Date.now());
+      return;
+    }
+
+    setFallbackConnectedAt(null);
+  }, [isEffectivelyConnected]);
+
+  useEffect(() => {
+    if (!isEffectivelyConnected || callState.duration > 0) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setFallbackNow(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isEffectivelyConnected, callState.duration]);
+
+  const displayedDuration = useMemo(() => {
+    if (callState.duration > 0) {
+      return callState.duration;
+    }
+
+    if (!isEffectivelyConnected || !fallbackConnectedAt) {
+      return 0;
+    }
+
+    return Math.max(0, Math.floor((fallbackNow - fallbackConnectedAt) / 1000));
+  }, [callState.duration, isEffectivelyConnected, fallbackConnectedAt, fallbackNow]);
+
   if (!showOverlay) {
     return null;
   }
@@ -315,8 +360,8 @@ export default function ActiveCallOverlay() {
                   { color: theme.colors.textMuted },
                 ]}
               >
-                {callState.status === 'connected'
-                  ? formatDuration(callState.duration)
+                {isEffectivelyConnected
+                  ? formatDuration(displayedDuration)
                   : callState.status === 'ringing'
                   ? 'Ringing...'
                   : 'Connecting...'}
@@ -371,7 +416,7 @@ export default function ActiveCallOverlay() {
                 <Minimize2 size={20} color={theme.colors.textMuted} />
               </Pressable>
               <View style={styles.statusIndicator}>
-                {callState.status === 'connected' ? (
+                {isEffectivelyConnected ? (
                   <>
                     <View
                       style={[
@@ -565,7 +610,7 @@ export default function ActiveCallOverlay() {
               </View>
 
               {/* Call Stats - Only show duration/cost when connected */}
-              {callState.status === 'connected' ? (
+              {isEffectivelyConnected ? (
                 <View
                   style={[
                     styles.statsContainer,
@@ -576,7 +621,7 @@ export default function ActiveCallOverlay() {
                   ]}
                 >
                   <Text style={[styles.statText, { color: theme.colors.text }]}>
-                    {formatDuration(callState.duration)}
+                    {formatDuration(displayedDuration)}
                   </Text>
                   <Text
                     style={[
@@ -588,7 +633,7 @@ export default function ActiveCallOverlay() {
                     |{' '}
                   </Text>
                   <Text style={[styles.statText, { color: theme.colors.text }]}>
-                    ${calculateCost(callState.duration, displayDetails.ratePerMinute)}
+                    ${calculateCost(displayedDuration, displayDetails.ratePerMinute)}
                   </Text>
                 </View>
               ) : (
@@ -617,7 +662,7 @@ export default function ActiveCallOverlay() {
               )}
 
               {/* Controls - Only show when connected */}
-              {callState.status === 'connected' && (
+              {isEffectivelyConnected && (
                 <View style={styles.controls}>
                   {/* Mute Button */}
                   <Pressable
@@ -1005,4 +1050,3 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
   },
 });
-

@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   TextInput,
   Platform,
+  ScrollView,
+  Modal,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';

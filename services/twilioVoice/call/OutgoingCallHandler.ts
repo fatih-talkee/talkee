@@ -258,11 +258,8 @@ export class OutgoingCallHandler {
         }
       );
 
-      // Extract and save call SID
-      await this.saveCallSid(call, callRecord.id, debugId, getCallRepository);
-
       logger.debug(
-        '[OutgoingCallHandler] 🔧 Setting active call and listeners',
+        '[OutgoingCallHandler] 🔧 Setting active call and listeners immediately',
         {
           debugId,
           callId: callRecord.id,
@@ -270,6 +267,7 @@ export class OutgoingCallHandler {
         }
       );
 
+      // ✅ PATCH B: Setup listeners synchronously immediately after obtaining Call object
       setupCallListeners(
         call,
         callRecord.id,
@@ -278,8 +276,22 @@ export class OutgoingCallHandler {
         userBalance
       );
 
-      // Update state to connecting
-      updateState({ status: 'connecting', call });
+      // ✅ PATCH E/B: Check if the native call state is ALREADY connected
+      const immediateState = getCallState(call);
+      if (immediateState === 'connected') {
+        logger.info('[OutgoingCallHandler] ⚡ Call already nominally connected natively immediately after voice.connect', { debugId });
+        updateState({ status: 'connected', call });
+      }
+
+      // Extract and save call SID (async operation moved after critical section)
+      await this.saveCallSid(call, callRecord.id, debugId, getCallRepository);
+
+      // Update state to connecting only if native state is not already connected.
+      // Otherwise we regress the UI back to "connecting" after the call is live.
+      updateState({
+        status: immediateState === 'connected' ? 'connected' : 'connecting',
+        call,
+      });
 
       const totalElapsed = Date.now() - makeCallStartTime;
       logger.info('[OutgoingCallHandler] ✅ Call initiated successfully', {

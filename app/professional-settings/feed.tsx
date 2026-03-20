@@ -9,6 +9,9 @@ import {
   TouchableOpacity,
   Platform,
   KeyboardAvoidingView,
+  ScrollView,
+  Switch,
+  TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';

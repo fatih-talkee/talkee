@@ -45,19 +45,33 @@ class TwilioVoiceService {
   private isAcceptingCall: boolean = false;
   private lastDisconnectWasConnected: boolean = false;
   private isPushRegistryInitialized: boolean = false;
+  private isInitializing: boolean = false;
+  private initializationPromise: Promise<void> | null = null;
 
   constructor() {
     this.stateManager = new CallStateManager();
   }
 
   async initialize(): Promise<void> {
-    const initStartTime = Date.now();
-    logger.info('[TwilioVoice] 🎬 Initializing Twilio Voice SDK (delayed)...', {
-      hasVoice: !!this.voice,
-      timestamp: new Date().toISOString(),
-    });
+    if (this.voice) {
+      logger.debug('[TwilioVoice] ℹ️ SDK already initialized, skipping');
+      return;
+    }
 
-    try {
+    if (this.isInitializing && this.initializationPromise) {
+      logger.info('[TwilioVoice] ⏳ Initialization already in progress, waiting...');
+      return this.initializationPromise;
+    }
+
+    this.isInitializing = true;
+    this.initializationPromise = (async () => {
+      const initStartTime = Date.now();
+      logger.info('[TwilioVoice] 🎬 Initializing Twilio Voice SDK (delayed)...', {
+        hasVoice: !!this.voice,
+        timestamp: new Date().toISOString(),
+      });
+
+      try {
       // ✅ FIX: Wait for React Native context to be fully ready before loading native module
       // This prevents the NullPointerException: jsEventEmitter on null object
       await new Promise(resolve => setTimeout(resolve, 3000));
@@ -149,8 +163,13 @@ class TwilioVoiceService {
         timestamp: new Date().toISOString(),
       });
       throw error;
+    } finally {
+      this.isInitializing = false;
     }
-  }
+  })();
+  
+  return this.initializationPromise;
+}
 
   private setupAppStateListener(): void {
     logger.info('[TwilioVoice] 🔧 Setting up AppState listener', {
@@ -204,6 +223,19 @@ class TwilioVoiceService {
       timestamp: new Date().toISOString(),
     });
     return isInitialized;
+  }
+
+  // ✅ PATCH C: Readiness check
+  isReadyForCalls(): boolean {
+    const isReady = this.isSdkInitialized() && this.isRegistered;
+    if (!isReady) {
+      logger.warn('[TwilioVoice] ⚠️ SDK is not fully ready for calls', {
+        isSdkInitialized: this.isSdkInitialized(),
+        isRegistered: this.isRegistered,
+        timestamp: new Date().toISOString()
+      });
+    }
+    return isReady;
   }
 
   async getAccessToken(): Promise<string> {
