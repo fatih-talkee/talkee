@@ -175,6 +175,9 @@ export class VoiceEventListener {
       logger.info('[VoiceEventListener] 📞 Incoming call invite received', {
         callSid: inviteSid,
         inviteSidPrefix: inviteSid ? inviteSid.substring(0, 20) + '...' : null,
+        from: typeof callInvite.getFrom === 'function' ? callInvite.getFrom() : 'unknown',
+        to: typeof callInvite.getTo === 'function' ? callInvite.getTo() : 'unknown',
+        customParameters: typeof callInvite.getCustomParameters === 'function' ? callInvite.getCustomParameters() : {},
         timestamp: new Date().toISOString(),
       });
 

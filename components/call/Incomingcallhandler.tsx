@@ -186,15 +186,16 @@ export default function IncomingCallHandler() {
         ? CallSidExtractor.extractFromCallInvite(
             callState.callInvite,
             'IncomingCallHandler-check'
-          )?.substring(0, 20) + '...'
+          )
         : null,
       timestamp: new Date().toISOString(),
     });
 
     if (shouldShow) {
       if (!showModal) {
-        logger.info('[IncomingCallHandler] ✅ Showing incoming call modal', {
+        logger.info('[IncomingCallHandler] ✅ Showing incoming call modal (Modal Visible = true)', {
           status: callState.status,
+          inviteSid: callState.callInvite ? CallSidExtractor.extractFromCallInvite(callState.callInvite) : null,
           hasCallInvite: !!callState.callInvite,
           timestamp: new Date().toISOString(),
         });
@@ -332,9 +333,10 @@ export default function IncomingCallHandler() {
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
-    logger.info('[IncomingCallHandler] ✅ User accepted call', {
+    logger.info('[IncomingCallHandler] 👍 Accept pressed (User accepted call)', {
       callerName: callDetails?.callerName,
       userId: currentUser.id,
+      inviteSid: callState.callInvite ? CallSidExtractor.extractFromCallInvite(callState.callInvite) : null,
       timestamp: new Date().toISOString(),
     });
 
@@ -358,11 +360,12 @@ export default function IncomingCallHandler() {
         debugId: `accept-${Date.now()}`,
       });
 
-      logger.info('[IncomingCallHandler] ✅ Call accepted successfully', {
+      logger.info('[IncomingCallHandler] ✅ Accept success (Call accepted successfully)', {
+        inviteSid: callState.callInvite ? CallSidExtractor.extractFromCallInvite(callState.callInvite) : null,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      logger.error('[IncomingCallHandler] ❌ Failed to accept call', error, {
+      logger.error('[IncomingCallHandler] ❌ Accept fail (Failed to accept call)', error, {
         errorMessage: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString(),
       });
@@ -385,8 +388,9 @@ export default function IncomingCallHandler() {
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
-    logger.info('[IncomingCallHandler] ❌ User declined call', {
+    logger.info('[IncomingCallHandler] 👎 Reject pressed (User declined call)', {
       callerName: callDetails?.callerName,
+      inviteSid: callState.callInvite ? CallSidExtractor.extractFromCallInvite(callState.callInvite) : null,
       timestamp: new Date().toISOString(),
     });
 

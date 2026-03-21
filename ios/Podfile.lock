@@ -54,11 +54,11 @@ PODS:
     - ExpoModulesCore
   - ExpoFileSystem (19.0.21):
     - ExpoModulesCore
-  - ExpoFont (14.0.11):
+  - ExpoFont (14.0.10):
     - ExpoModulesCore
   - ExpoHaptics (15.0.8):
     - ExpoModulesCore
-  - ExpoHead (6.0.22):
+  - ExpoHead (6.0.21):
     - ExpoModulesCore
     - RNScreens
   - ExpoImageManipulator (14.0.8):
@@ -2286,9 +2286,13 @@ PODS:
     - StripeUICore (= 24.19.0)
   - StripeUICore (24.19.0):
     - StripeCore (= 24.19.0)
+  - twilio-video-react-native-sdk (3.5.0):
+    - React
+    - TwilioVideo (~> 5.11.0)
   - twilio-voice-react-native (1.7.0):
     - React-Core
     - TwilioVoice (= 6.13.3)
+  - TwilioVideo (5.11.2)
   - TwilioVoice (6.13.3)
   - Yoga (0.0.0)
   - ZXingObjC/Core (3.6.9)
@@ -2407,6 +2411,7 @@ DEPENDENCIES:
   - RNSVG (from `../node_modules/react-native-svg`)
   - RNWorklets (from `../node_modules/react-native-worklets`)
   - "stripe-react-native (from `../node_modules/@stripe/stripe-react-native`)"
+  - "twilio-video-react-native-sdk (from `../node_modules/@twilio/video-react-native-sdk`)"
   - "twilio-voice-react-native (from `../node_modules/@twilio/voice-react-native-sdk`)"
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
@@ -2424,6 +2429,7 @@ SPEC REPOS:
     - StripePaymentSheet
     - StripePaymentsUI
     - StripeUICore
+    - TwilioVideo
     - TwilioVoice
     - ZXingObjC
 
@@ -2645,6 +2651,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-worklets"
   stripe-react-native:
     :path: "../node_modules/@stripe/stripe-react-native"
+  twilio-video-react-native-sdk:
+    :path: "../node_modules/@twilio/video-react-native-sdk"
   twilio-voice-react-native:
     :path: "../node_modules/@twilio/voice-react-native-sdk"
   Yoga:
@@ -2665,9 +2673,9 @@ SPEC CHECKSUMS:
   ExpoCrypto: b6105ebaa15d6b38a811e71e43b52cd934945322
   ExpoDevice: 6327c3c200816795708885adf540d26ecab83d1a
   ExpoFileSystem: 858a44267a3e6e9057e0888ad7c7cfbf55d52063
-  ExpoFont: f543ce20a228dd702813668b1a07b46f51878d47
+  ExpoFont: 35ac6191ed86bbf56b3ebd2d9154eda9fad5b509
   ExpoHaptics: d3a6375d8dcc3a1083d003bc2298ff654fafb536
-  ExpoHead: 4425246bc93411f0fe7f6945f95f698e91db8780
+  ExpoHead: 9719a74953454fac328e90f34eea55ebbb3bbbf9
   ExpoImageManipulator: 607a5c8c88085381639458a46cc55fb9d3869148
   ExpoImagePicker: 1af3e4e31512d2f34c95c2a3018a3edc40aee748
   ExpoKeepAwake: 55f75eca6499bb9e4231ebad6f3e9cb8f99c0296
@@ -2771,11 +2779,13 @@ SPEC CHECKSUMS:
   StripePaymentSheet: b126816213ae4f56ff4525ad25f94bb985a43e27
   StripePaymentsUI: 05d4be35b34f821d5ddc8617dee04219f3646253
   StripeUICore: d07bd63a4b53dee8cab4d6f81ce5a7ab3e28511e
+  twilio-video-react-native-sdk: 54402e985f91823d1c4bf6aad251a20f7616a478
   twilio-voice-react-native: f672df1bebb45ca95daaeaff47a48fd15222c855
+  TwilioVideo: 3120ef3bb32558f5354437c98c24af6294b075e5
   TwilioVoice: 0eea89db614225bfea6b25cf2c909728dfcefa59
   Yoga: 65431d43277b661ebc7289c6c5d82f64ce42cfe0
   ZXingObjC: 8898711ab495761b2dbbdec76d90164a6d7e14c5
 
-PODFILE CHECKSUM: 1a9d6fdbce9873587b9b614f5f3389883e8ad55a
+PODFILE CHECKSUM: 93691271a8120d3eeee5571e68937a5c3f573ec6
 
 COCOAPODS: 1.16.2

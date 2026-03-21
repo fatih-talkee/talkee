@@ -12,3 +12,9 @@
 -keep class com.facebook.react.turbomodule.** { *; }
 
 # Add any project specific keep options here:
+
+# Twilio Video & WebRTC Rules
+-keep class com.twilio.video.** { *; }
+-keep class tvi.webrtc.** { *; }
+-keep class org.webrtc.** { *; }
+-dontwarn com.twilio.video.**

@@ -81,9 +81,7 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
-// Sentry source map upload - disabled until proper configuration is set
-// To enable: set SENTRY_AUTH_TOKEN, SENTRY_ORG, and SENTRY_PROJECT environment variables
-// apply from: new File(["node", "--print", "require('path').dirname(require.resolve('@sentry/react-native/package.json'))"].execute().text.trim(), "sentry.gradle")
+apply from: new File(["node", "--print", "require('path').dirname(require.resolve('@sentry/react-native/package.json'))"].execute().text.trim(), "sentry.gradle")
 
 android {
     ndkVersion rootProject.ext.ndkVersion

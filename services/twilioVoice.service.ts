@@ -445,6 +445,20 @@ class TwilioVoiceService {
         const registerCallStartTime = Date.now();
         if (this.voice && typeof this.voice.register === 'function') {
           await this.voice.register(token);
+          
+          try {
+            const deviceToken = await this.voice.getDeviceToken();
+            logger.info('[TwilioVoice] 📱 Push Device Token (FCM/APNS)', {
+              deviceTokenPrefix: deviceToken ? deviceToken.substring(0, 15) + '...' : 'null',
+              deviceTokenLength: deviceToken?.length,
+              timestamp: new Date().toISOString(),
+            });
+          } catch (tokenError) {
+            logger.warn('[TwilioVoice] ⚠️ Could not fetch device token', {
+              error: tokenError instanceof Error ? tokenError.message : String(tokenError),
+              timestamp: new Date().toISOString(),
+            });
+          }
         } else {
           throw new Error('this.voice or register method is unexpectedly null');
         }

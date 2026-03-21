@@ -108,6 +108,30 @@ serve(async (req) => {
       TWILIO_PUSH_CREDENTIAL_SID ? `${TWILIO_PUSH_CREDENTIAL_SID.substring(0, 10)}...` : 'MISSING'
     );
 
+    // Parse mode and room parameters from URL query or JSON body
+    const url = new URL(req.url);
+    let requestBody: any = {};
+    if (req.method === 'POST') {
+      try {
+        requestBody = await req.json();
+      } catch (e) {
+        // Ignore payload read errors to prevent breaking legacy voice calls
+      }
+    }
+
+    const mode = url.searchParams.get('mode') || requestBody.mode || 'voice';
+    const roomName = (url.searchParams.get('roomName') || requestBody.roomName || '').trim();
+
+    console.log(`📡 [twilio-token] Token Request Mode: ${mode}${mode === 'video' ? ', Room: ' + roomName : ''}`);
+
+    if (mode === 'video' && !roomName) {
+      console.error('❌ [twilio-token] Validation Error: roomName is required for video mode');
+      return new Response(JSON.stringify({ error: 'roomName is required for video mode' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      });
+    }
+
     // Create JWT token for Twilio using jose (Deno-compatible)
     const now = Math.floor(Date.now() / 1000);
     const exp = now + 3600; // 1 hour expiry
@@ -119,6 +143,20 @@ serve(async (req) => {
     console.log('🆔 [twilio-token] JTI:', jti);
     console.log('⏰ [twilio-token] Now:', now, 'Exp:', exp);
 
+    const voiceGrants = {
+      outgoing: {
+        application_sid: TWILIO_TWIML_APP_SID,
+      },
+      incoming: {
+        allow: true,
+      },
+      ...(TWILIO_PUSH_CREDENTIAL_SID && {
+        push_credential_sid: TWILIO_PUSH_CREDENTIAL_SID,
+      }),
+    };
+
+    const videoGrants = { room: roomName };
+
     // Create JWT with jose - include all claims in payload
     const token = await new SignJWT({
       jti,
@@ -128,18 +166,8 @@ serve(async (req) => {
       exp,
       grants: {
         identity,
-        voice: {
-          outgoing: {
-            application_sid: TWILIO_TWIML_APP_SID,
-          },
-          incoming: {
-            allow: true,
-          },
-          // Include push_credential_sid only if it's set (required for push notifications)
-          ...(TWILIO_PUSH_CREDENTIAL_SID && {
-            push_credential_sid: TWILIO_PUSH_CREDENTIAL_SID,
-          }),
-        },
+        ...(mode === 'voice' && { voice: voiceGrants }),
+        ...(mode === 'video' && { video: videoGrants }),
       },
     })
       .setProtectedHeader({
@@ -160,6 +188,7 @@ serve(async (req) => {
       JSON.stringify({
         token,
         identity,
+        ...(mode === 'video' && roomName && { roomName }),
         expiresAt: new Date(exp * 1000).toISOString(),
       }),
       {
