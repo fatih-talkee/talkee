@@ -172,7 +172,7 @@ export default function IncomingCallHandler() {
           <LinearGradient colors={['#1f2937', '#111827']} style={styles.card}>
             <View style={styles.typeBadge}>
               <Phone size={14} color="#10b981" />
-              <Text style={styles.typeText}>Gelen Sesli Arama</Text>
+              <Text style={styles.typeText}>Incoming Voice Call</Text>
             </View>
 
             <Animated.View style={[styles.avatarWrapper, { transform: [{ scale: pulseAnim }] }]}>
@@ -186,7 +186,7 @@ export default function IncomingCallHandler() {
             </Animated.View>
 
             <Text style={styles.callerName}>{callerName}</Text>
-            <Text style={styles.statusText}>Arıyor...</Text>
+            <Text style={styles.statusText}>Calling...</Text>
 
             <View style={styles.buttonRow}>
               <TouchableOpacity style={[styles.actionBtn, styles.declineBtn]} onPress={handleDecline} disabled={loading}>

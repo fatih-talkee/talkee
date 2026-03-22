@@ -231,9 +231,9 @@ export default function ActiveCallOverlay() {
             </View>
           )}
           <View style={styles.minimizedInfo}>
-            <Text style={styles.minimizedName} numberOfLines={1}>{displayDetails.callerName || 'Bilinmeyen'}</Text>
+            <Text style={styles.minimizedName} numberOfLines={1}>{displayDetails.callerName || 'Unknown'}</Text>
             <Text style={styles.minimizedDuration}>
-              {isEffectivelyConnected ? formatDuration(displayedDuration) : 'Bağlanıyor...'}
+              {isEffectivelyConnected ? formatDuration(displayedDuration) : 'Connecting...'}
             </Text>
           </View>
           <TouchableOpacity
@@ -271,9 +271,9 @@ export default function ActiveCallOverlay() {
             </TouchableOpacity>
             <View style={styles.headerCallInfo}>
               <Text style={styles.headerStatusText}>
-                {!isEffectivelyConnected ? 'Bağlanıyor...' : 'Bağlı'}
+                {!isEffectivelyConnected ? 'Connecting...' : 'Connected'}
               </Text>
-              <Text style={styles.headerTypeText}>Sesli Arama</Text>
+              <Text style={styles.headerTypeText}>Voice Call</Text>
             </View>
             <TouchableOpacity style={styles.headerIconButton}>
               <PhoneCall size={24} color="#ffffff" />
@@ -294,7 +294,7 @@ export default function ActiveCallOverlay() {
                 </View>
               )}
             </Animated.View>
-            <Text style={styles.callerName}>{displayDetails.callerName || 'Yükleniyor...'}</Text>
+            <Text style={styles.callerName}>{displayDetails.callerName || 'Loading...'}</Text>
             {displayDetails.category && (
               <Text style={styles.callerCategory}>{displayDetails.category}</Text>
             )}
@@ -303,21 +303,21 @@ export default function ActiveCallOverlay() {
           {/* Stats Bar (Horizontal card from reference) */}
           <View style={styles.statsBar}>
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Süre</Text>
+              <Text style={styles.statLabel}>Duration</Text>
               <Text style={styles.statValue}>{formatDuration(displayedDuration)}</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Maliyet</Text>
+              <Text style={styles.statLabel}>Cost</Text>
               <Text style={styles.statValue}>
                 {'$' + calculateCost(displayedDuration, displayDetails.ratePerMinute)}
               </Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Ücret</Text>
+              <Text style={styles.statLabel}>Rate</Text>
               <Text style={styles.statValue}>
-                {'$' + displayDetails.ratePerMinute.toFixed(2)}/dk
+                {'$' + displayDetails.ratePerMinute.toFixed(2)}/min
               </Text>
             </View>
           </View>
@@ -330,7 +330,7 @@ export default function ActiveCallOverlay() {
                 onPress={handleMuteToggle}
               >
                 {callState.isMuted ? <MicOff size={28} color="#ffffff" /> : <Mic size={28} color="#ffffff" />}
-                <Text style={styles.controlLabel}>{callState.isMuted ? 'Aç' : 'Sustur'}</Text>
+                <Text style={styles.controlLabel}>{callState.isMuted ? 'Unmute' : 'Mute'}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -338,12 +338,12 @@ export default function ActiveCallOverlay() {
                 onPress={handleSpeakerToggle}
               >
                 {speakerEnabled ? <Volume2 size={28} color="#ffffff" /> : <VolumeX size={28} color="#ffffff" />}
-                <Text style={styles.controlLabel}>Hoparlör</Text>
+                <Text style={styles.controlLabel}>Speaker</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.roundControl}>
                 <PhoneCall size={28} color="#ffffff" />
-                <Text style={styles.controlLabel}>Sohbet</Text>
+                <Text style={styles.controlLabel}>Chat</Text>
               </TouchableOpacity>
 
               <TouchableOpacity

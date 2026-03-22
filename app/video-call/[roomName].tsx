@@ -88,7 +88,7 @@ export default function VideoCallScreen() {
 
   // --- Room Events ---
   const onRoomDidConnect = useCallback(() => {
-    logger.info('✅ [VideoCallScreen] Odaya bağlandı');
+    logger.info('✅ [VideoCallScreen] Connected to room');
     setRoomState('connected');
     const timer = setInterval(() => setDuration((d) => d + 1), 1000);
     setDurationTimer(timer);
@@ -96,9 +96,9 @@ export default function VideoCallScreen() {
 
   const onRoomDidDisconnect = useCallback(
     ({ error: err }: any) => {
-      logger.info('👋 [VideoCallScreen] Odadan ayrıldı', { err });
+      logger.info('👋 [VideoCallScreen] Left the room', { err });
       setRoomState('disconnected');
-      if (err) setError(err.message || 'Ayrılırken hata oluştu');
+      if (err) setError(err.message || 'Error while leaving');
       if (durationTimer) clearInterval(durationTimer);
     },
     [setRoomState, setError, durationTimer]
@@ -106,9 +106,9 @@ export default function VideoCallScreen() {
 
   const onRoomDidFailToConnect = useCallback(
     ({ error: err }: any) => {
-      logger.error('❌ [VideoCallScreen] Bağlantı başarısız', err);
+      logger.error('❌ [VideoCallScreen] Connection failed', err);
       setRoomState('disconnected');
-      setError(err?.message || 'Bağlantı kurulamadı');
+      setError(err?.message || 'Could not establish connection');
     },
     [setRoomState, setError]
   );
@@ -134,7 +134,7 @@ export default function VideoCallScreen() {
     [removeParticipant]
   );
 
-  // --- Kontrol İşlevleri ---
+  // --- Control Functions ---
   const handleConnect = useCallback(() => {
     if (roomName) connectToRoom(roomName);
   }, [roomName, connectToRoom]);
@@ -199,9 +199,9 @@ export default function VideoCallScreen() {
                   <Text style={{ color: '#fff', fontSize: 40, fontWeight: 'bold' }}>{callerName?.charAt(0) || '?'}</Text>
                 </View>
               )}
-              <Text style={styles.waitingName}>{callerName || 'Katılımcı Bekleniyor'}</Text>
+              <Text style={styles.waitingName}>{callerName || 'Waiting for Participant'}</Text>
               <Text style={styles.waitingStatus}>
-                {roomState === 'connecting' ? 'Bağlanıyor...' : 'Bağlantı Bekleniyor'}
+                {roomState === 'connecting' ? 'Connecting...' : 'Waiting for Connection'}
               </Text>
             </View>
           </LinearGradient>
@@ -228,9 +228,9 @@ export default function VideoCallScreen() {
         </TouchableOpacity>
         <View style={styles.headerTitle}>
           <Text style={styles.headerStatusText}>
-            {roomState === 'connected' ? 'Bağlı' : 'Hazırlanıyor'}
+            {roomState === 'connected' ? 'Connected' : 'Preparing'}
           </Text>
-          <Text style={styles.headerTypeText}>Görüntülü Arama</Text>
+          <Text style={styles.headerTypeText}>Video Call</Text>
         </View>
         <TouchableOpacity style={styles.headerBtn}>
           <PhoneCall size={24} color="#ffffff" />
@@ -242,18 +242,18 @@ export default function VideoCallScreen() {
         {/* Stats Card (Horizontal from reference) */}
         <View style={styles.statsBar}>
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Süre</Text>
+            <Text style={styles.statLabel}>Duration</Text>
             <Text style={styles.statValue}>{formatDuration(duration)}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Maliyet</Text>
+            <Text style={styles.statLabel}>Cost</Text>
             <Text style={styles.statValue}>{'$' + calculateCost(duration, rate)}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Ücret</Text>
-            <Text style={styles.statValue}>{'$' + rate.toFixed(2)}/dk</Text>
+            <Text style={styles.statLabel}>Rate</Text>
+            <Text style={styles.statValue}>{'$' + rate.toFixed(2)}/min</Text>
           </View>
         </View>
 
@@ -264,7 +264,7 @@ export default function VideoCallScreen() {
             onPress={handleToggleMute}
           >
             {isMuted ? <MicOff size={28} color="#ffffff" /> : <Mic size={28} color="#ffffff" />}
-            <Text style={styles.controlLabel}>{isMuted ? 'Aç' : 'Sustur'}</Text>
+            <Text style={styles.controlLabel}>{isMuted ? 'Unmute' : 'Mute'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -272,12 +272,12 @@ export default function VideoCallScreen() {
             onPress={handleToggleCamera}
           >
             {isCameraOff ? <VideoOff size={28} color="#ffffff" /> : <Video size={28} color="#ffffff" />}
-            <Text style={styles.controlLabel}>Kamera</Text>
+            <Text style={styles.controlLabel}>Camera</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.roundControl} onPress={handleFlipCamera}>
             <CameraIcon size={28} color="#ffffff" />
-            <Text style={styles.controlLabel}>Çevir</Text>
+            <Text style={styles.controlLabel}>Flip</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.endCallCircle} onPress={handleEndCall}>

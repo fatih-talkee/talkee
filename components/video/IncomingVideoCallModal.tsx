@@ -122,7 +122,7 @@ export default function IncomingVideoCallModal() {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       await supabase.from('calls').update({ status: 'cancelled' }).eq('id', active.id);
     } catch (e) {
-      logger.error('[IncomingVideoCallModal] ❌ Reddetme hatası', e);
+      logger.error('[IncomingVideoCallModal] ❌ Decline error', e);
     } finally {
       setLoading(false);
     }
@@ -148,14 +148,14 @@ export default function IncomingVideoCallModal() {
         },
       });
     } catch (e) {
-      logger.error('[IncomingVideoCallModal] ❌ Kabul hatası', e);
+      logger.error('[IncomingVideoCallModal] ❌ Accept error', e);
       setLoading(false);
     }
   }, [callRecord, loading]);
 
   if (!showModal) return null;
 
-  const callerName = callRecord?.caller?.name || 'Bilinmeyen';
+  const callerName = callRecord?.caller?.name || 'Unknown';
   const callerAvatar = callRecord?.caller?.avatar_url;
   const rate = callRecord?.rate_per_minute;
 
@@ -167,7 +167,7 @@ export default function IncomingVideoCallModal() {
             {/* Call Type Badge */}
             <View style={styles.typeBadge}>
               <Video size={14} color="#3b82f6" />
-              <Text style={styles.typeText}>Gelen Video Arama</Text>
+              <Text style={styles.typeText}>Incoming Video Call</Text>
             </View>
 
             {/* Avatar Section */}
@@ -183,7 +183,7 @@ export default function IncomingVideoCallModal() {
 
             <Text style={styles.callerName}>{callerName}</Text>
             {rate && rate > 0 && (
-              <Text style={styles.rateText}>${rate.toFixed(2)} / dakika</Text>
+                <Text style={styles.rateText}>${rate.toFixed(2)} / minute</Text>
             )}
 
             {/* Action Buttons */}
@@ -194,7 +194,7 @@ export default function IncomingVideoCallModal() {
                 disabled={loading}
               >
                 <PhoneOff size={24} color="#ffffff" />
-                <Text style={styles.btnLabel}>Reddet</Text>
+                <Text style={styles.btnLabel}>Decline</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -207,7 +207,7 @@ export default function IncomingVideoCallModal() {
                 ) : (
                   <>
                     <Phone size={24} color="#ffffff" />
-                    <Text style={styles.btnLabel}>Cevapla</Text>
+                    <Text style={styles.btnLabel}>Answer</Text>
                   </>
                 )}
               </TouchableOpacity>
