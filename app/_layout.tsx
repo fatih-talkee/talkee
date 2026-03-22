@@ -57,6 +57,13 @@ const ActiveCallOverlay = lazy(() =>
     return { default: () => null };
   })
 );
+// Video call davet modalı — Supabase Realtime üzerinden gelen video davetlerini yakalar
+const IncomingVideoCallModal = lazy(() =>
+  import('@/components/video/IncomingVideoCallModal').catch((error) => {
+    logger.error('[App] ❌ Failed to load IncomingVideoCallModal', error);
+    return { default: () => null };
+  })
+);
 import { GlobalLoadingOverlay } from '@/components/ui/GlobalLoadingOverlay';
 
 // ✅ NEW: Import notification setup with response listener
@@ -520,9 +527,14 @@ export default function RootLayout() {
                     </Suspense>
 
                     <Suspense fallback={null}>
-                      {/* ✅ Active Call Overlay - Shows custom UI during active call */}
-                      <ActiveCallOverlay />
-                    </Suspense>
+                    {/* ✅ Active Call Overlay - Shows custom UI during active call */}
+                    <ActiveCallOverlay />
+                  </Suspense>
+
+                  <Suspense fallback={null}>
+                    {/* ✅ Incoming Video Call Modal - Supabase Realtime ile video davetleri yakalar */}
+                    <IncomingVideoCallModal />
+                  </Suspense>
                   </>
                 )}
 

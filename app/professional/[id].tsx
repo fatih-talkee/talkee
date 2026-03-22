@@ -521,27 +521,27 @@ export default function ProfessionalProfileScreen() {
   };
 
   const handleVideoCall = async () => {
-    // ✅ SECURITY: Check authentication FIRST before any other checks
+    // Kimlik doğrulama kontrolü
     if (!currentUser) {
       Alert.alert('Error', 'You must be logged in to make a call');
       return;
     }
 
-    // Check balance before making call
+    // Bakiye kontrolü
     if (!hasSufficientBalance) {
       setInsufficientBalanceModalVisible(true);
       return;
     }
 
     try {
-      setIsCalling(true); // ✅ Start calling state
+      setIsCalling(true);
 
-      logger.info('[ProfessionalProfile] Initiating video call', {
+      logger.info('[ProfessionalProfile] Görüntülü arama başlatılıyor', {
         professionalId: id,
         userId: currentUser.id,
       });
 
-      // ✅ Get video call rate if enabled, otherwise use voice rate
+      // Video call ücreti hesapla
       const effectiveRatePerMinute = currentAvailability
         ? currentAvailability.availability.video_call_enabled &&
           currentAvailability.availability.video_call_rate_per_minute
@@ -549,37 +549,63 @@ export default function ProfessionalProfileScreen() {
           : currentAvailability.availability.price_per_minute
         : professional?.rate_per_minute || 0;
 
-      // ✅ Double-check user authentication (defense in depth)
+      // Kimlik tekrar doğrula (güvenlik katmanı)
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) {
-        setIsCalling(false); // ✅ Reset on error
+        setIsCalling(false);
         Alert.alert('Error', 'You must be logged in to make a call');
         return;
       }
 
-      // ✅ Get user balance
-      const userBalance = walletBalance; // Already loaded via useWalletBalance
+      // Benzersiz oda adı — hem arayan hem aranan buraya bağlanır
+      const roomName = `video-${id}-${currentUser.id}-${Date.now()}`;
 
-      // ✅ Make call directly (Twilio native screen will open)
-      await makeCall({
-        professionalId: id as string,
-        professionalUserId: professional?.user_id || '',
-        type: 'video',
-        urgent: false,
-        debugId: `video-${Date.now()}`,
-        ratePerMinute: Number(effectiveRatePerMinute),
-        userBalance,
+      // calls tablosuna video call kaydı yaz
+      // room_sid: video oda adı, call_type: 'video', status: 'pending'
+      const { data: callData, error: callError } = await supabase
+        .from('calls')
+        .insert({
+          caller_id: currentUser.id,
+          professional_id: id as string,
+          call_type: 'video',
+          status: 'pending',
+          room_sid: roomName,
+          rate_per_minute: Number(effectiveRatePerMinute),
+          total_cost: 0,
+          duration_minutes: 0,
+        })
+        .select('id')
+        .single();
+
+      if (callError) {
+        throw new Error(`Görüntülü arama kaydı oluşturulamadı: ${callError.message}`);
+      }
+
+      logger.info('[ProfessionalProfile] ✅ Video call kaydı oluşturuldu', {
+        callId: callData?.id,
+        roomName,
       });
 
-      logger.info('[ProfessionalProfile] ✅ Video call initiated successfully');
-      // Note: isCalling will be reset by useEffect when callState changes
+      setIsCalling(false);
+
+      // VideoCallScreen'e git — arayan direkt bağlanır
+      router.push({
+        pathname: `/video-call/${roomName}` as any,
+        params: {
+          callerName: professional?.users?.name || '',
+          callerAvatar: professional?.users?.avatar_url || '',
+          ratePerMinute: effectiveRatePerMinute.toString(),
+          inviteId: callData?.id || '',
+          autoConnect: 'true',
+        },
+      });
     } catch (error) {
-      setIsCalling(false); // ✅ Reset on error
-      logger.error('[ProfessionalProfile] Video call error:', error);
+      setIsCalling(false);
+      logger.error('[ProfessionalProfile] Görüntülü arama hatası:', error);
       Alert.alert(
-        'Call Failed',
-        'Could not start the call. Please try again.',
-        [{ text: 'OK' }]
+        'Arama Başlatılamadı',
+        'Görüntülü arama başlatılamadı. Lütfen tekrar deneyin.',
+        [{ text: 'Tamam' }]
       );
     }
   };
