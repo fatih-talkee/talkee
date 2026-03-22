@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, useRouter } from 'expo-router';
 import { ProfessionalCard } from '@/components/listings/ProfessionalCard';
 import { CategoryGrid } from '@/components/listings/CategoryGrid';
@@ -16,7 +15,6 @@ import { SectionLoading } from '@/components/ui/SectionLoading';
 import { InlineLoading } from '@/components/ui/InlineLoading';
 import { HomeHeaderSection } from '@/components/home/HomeHeaderSection';
 import { FilterModal } from '@/components/filters/FilterModal';
-import { VideoCallTest } from '@/components/video/VideoCallTest';
 
 // ✅ API HOOKS
 import { useFeaturedProfessionals } from '@/hooks/useProfessionals';
@@ -25,7 +23,6 @@ import { useFeaturedPromotions } from '@/hooks/usePromotions';
 import { useProfile } from '@/hooks/useProfile';
 import { ProfessionalWithRelations } from '@/types/database.types';
 import { logger } from '@/lib/logger';
-import { useEffect } from 'react';
 
 export default function HomeScreen() {
   const { theme } = useTheme();
@@ -33,7 +30,6 @@ export default function HomeScreen() {
   
   // Local state for header interactions
   const [searchValue, setSearchValue] = useState('');
-  const [twilioVideoStatus, setTwilioVideoStatus] = useState<string | null>(null);
   const [isVerifiedSelected, setIsVerifiedSelected] = useState(false);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [filters, setFilters] = useState({
@@ -50,38 +46,6 @@ export default function HomeScreen() {
     logger.info('[Home] 🏠 Home screen mounted', {
       timestamp: new Date().toISOString(),
     });
-
-    // --- DEBUG: Access Token ---
-    import('@/lib/supabase').then(({ supabase }) => {
-      supabase.auth.getSession().then(({ data }) => {
-        if (data.session?.access_token) {
-          console.log('\\n====================================');
-          console.log('🔑 [DEBUG] SUPABASE ACCESS TOKEN:');
-          console.log(data.session.access_token);
-          console.log('====================================\\n');
-        }
-      });
-    });
-    // ---------------------------
-
-    // --- DEBUG: Twilio Video SDK Smoke Test ---
-    import('@twilio/video-react-native-sdk')
-      .then((TwilioVideo) => {
-        console.log('\\n====================================');
-        console.log('🎥 [DEBUG] TWILIO VIDEO SDK LOADED');
-        console.log('Exports:', Object.keys(TwilioVideo));
-        console.log('Native Module exists:', !!TwilioVideo.default);
-        console.log('====================================\\n');
-        setTwilioVideoStatus('✅ Twilio Video SDK API Loaded (See Console)');
-      })
-      .catch((error) => {
-        console.error('\\n====================================');
-        console.error('❌ [DEBUG] TWILIO VIDEO SDK ERROR');
-        console.error(error);
-        console.error('====================================\\n');
-        setTwilioVideoStatus(`❌ Twilio Video Error: ${error.message}`);
-      });
-    // ------------------------------------------
   }, []);
 
   // ✅ Get user profile to check if professional
@@ -111,7 +75,6 @@ export default function HomeScreen() {
 
   const handleSearchChange = (text: string) => {
     setSearchValue(text);
-    // Debounce search logic would go here or navigate to search page
   };
 
   const handleFiltersPress = () => {
@@ -134,7 +97,6 @@ export default function HomeScreen() {
     setFilters(newFilters);
     setFilterModalVisible(false);
     
-    // Launch global search with new filters applying current search text
     router.push({
       pathname: '/search-results',
       params: {
@@ -146,11 +108,6 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* 
-        ✅ NEW HEADER integration 
-        Note: Removed SafeAreaView top edge locally because the header handles its own safe area padding
-        to allow the background color to extend to the top of the screen.
-      */}
       <HomeHeaderSection
         userName={userName}
         searchValue={searchValue}
@@ -163,19 +120,6 @@ export default function HomeScreen() {
         isVerifiedSelected={isVerifiedSelected}
         onSubmitEditing={handleSearchSubmit}
       />
-
-      {/* --- DEBUG BANNER --- */}
-      {twilioVideoStatus && (
-        <View style={{ backgroundColor: twilioVideoStatus.includes('Error') ? '#fee2e2' : '#dcfce7', padding: 8, alignItems: 'center' }}>
-          <Text style={{ fontSize: 12, color: twilioVideoStatus.includes('Error') ? '#991b1b' : '#166534', fontFamily: 'Inter-Medium' }}>
-            {twilioVideoStatus}
-          </Text>
-        </View>
-      )}
-      {/* ------------------ */}
-
-      {/* --- MVP VIDEO TEST --- */}
-      <VideoCallTest />
 
       <ScrollView 
         style={styles.content} 
@@ -274,7 +218,7 @@ const styles = StyleSheet.create({
   },
   carouselSection: {
     marginBottom: 16,
-    marginTop: 16, // Added spacing since header is different
+    marginTop: 16,
   },
   section: {
     marginBottom: 32,

@@ -3,10 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   Image,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,11 +23,14 @@ import {
   MicOff,
   CameraIcon,
   Minimize2,
+  PhoneCall,
 } from 'lucide-react-native';
 import { useTwilioVideo } from '@/hooks/useTwilioVideo';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { useTheme } from '@/contexts/ThemeContext';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function VideoCallScreen() {
   const { roomName, callerName, callerAvatar, ratePerMinute, inviteId, autoConnect } =
@@ -65,21 +68,22 @@ export default function VideoCallScreen() {
   const remoteTracks = Object.values(remoteParticipantTracks);
   const rate = ratePerMinute ? parseFloat(ratePerMinute) : 0;
 
-  // autoConnect=true ise mount anında otomatik bağlan
   useEffect(() => {
     if (autoConnect === 'true' && roomName && roomState === 'disconnected') {
       connectToRoom(roomName);
     }
-    // Yalnızca mount anında çalışsın
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-
 
   const formatDuration = (secs: number) => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
     const s = (secs % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
+  };
+
+  const calculateCost = (secs: number, rateVal: number) => {
+    if (rateVal <= 0) return '0.00';
+    const minutes = Math.floor(secs / 60) + 1;
+    return (minutes * rateVal).toFixed(2);
   };
 
   // --- Room Events ---
@@ -111,9 +115,6 @@ export default function VideoCallScreen() {
 
   const onParticipantAddedVideoTrack = useCallback(
     ({ participant, track }: any) => {
-      logger.info('📹 [VideoCallScreen] Katılımcı video ekledi', {
-        identity: participant.identity,
-      });
       addRemoteVideoTrack(participant, track);
     },
     [addRemoteVideoTrack]
@@ -128,9 +129,6 @@ export default function VideoCallScreen() {
 
   const onRoomParticipantDidDisconnect = useCallback(
     ({ participant }: any) => {
-      logger.info('👋 [VideoCallScreen] Katılımcı ayrıldı', {
-        identity: participant.identity,
-      });
       removeParticipant(participant);
     },
     [removeParticipant]
@@ -145,13 +143,8 @@ export default function VideoCallScreen() {
     try {
       disconnect();
       if (durationTimer) clearInterval(durationTimer);
-
-      // calls tablosunda status'u 'ended' olarak güncelle
       if (inviteId) {
-        await supabase
-          .from('calls')
-          .update({ status: 'ended' })
-          .eq('id', inviteId);
+        await supabase.from('calls').update({ status: 'ended' }).eq('id', inviteId);
       }
     } catch (e) {
       logger.error('[VideoCallScreen] ❌ Arama bitirilirken hata', e);
@@ -164,7 +157,6 @@ export default function VideoCallScreen() {
     if (videoRef.current) {
       const newMutedState = !isMuted;
       setIsMuted(newMutedState);
-      // Twilio Video yerel ses track'ini enable/disable et
       (videoRef.current as any).setLocalAudioEnabled(!newMutedState);
     }
   }, [isMuted, videoRef]);
@@ -185,398 +177,294 @@ export default function VideoCallScreen() {
   }, [videoRef]);
 
   return (
-    <LinearGradient colors={['#0f172a', '#1e293b']} style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        {/* Üst Bilgi Şeridi */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.headerBtn} onPress={() => {}}>
-            <Minimize2 size={18} color="#ffffff" />
-          </TouchableOpacity>
-
-          <View style={styles.headerCenter}>
-            {roomState === 'connected' && (
-              <View style={styles.durationBadge}>
-                <View style={styles.liveDot} />
-                <Text style={styles.durationText}>
-                  {formatDuration(duration)}
-                </Text>
-              </View>
-            )}
-            {roomState === 'connecting' && (
-              <Text style={styles.statusText}>Bağlanıyor...</Text>
-            )}
-            {roomState === 'disconnected' && (
-              <Text style={styles.statusText}>Bağlantı kesildi</Text>
-            )}
-          </View>
-
-          {rate > 0 && (
-            <View style={styles.rateChip}>
-              <Text style={styles.rateText}>${rate.toFixed(2)}/dk</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Ana Video Alanı */}
-        <View style={styles.mainVideoArea}>
-          {remoteTracks.length > 0 ? (
-            // Uzak katılımcının video'su tam ekran
-            <TwilioVideoParticipantView
-              style={StyleSheet.absoluteFill}
-              trackIdentifier={{
-                participantSid: remoteTracks[0].participantSid,
-                videoTrackSid: remoteTracks[0].videoTrackSid,
-              }}
-              scaleType="fill"
-            />
-          ) : (
-            // Bekleme ekranı — karşı taraf yoksa
+    <View style={styles.container}>
+      {/* Background Layer: Remote Video or Placeholder */}
+      <View style={styles.backgroundLayer}>
+        {remoteTracks.length > 0 ? (
+          <TwilioVideoParticipantView
+            style={StyleSheet.absoluteFill}
+            trackIdentifier={{
+              participantSid: remoteTracks[0].participantSid,
+              videoTrackSid: remoteTracks[0].videoTrackSid,
+            }}
+            scaleType="fill"
+          />
+        ) : (
+          <LinearGradient colors={['#111827', '#1f2937']} style={StyleSheet.absoluteFill}>
             <View style={styles.waitingContainer}>
               {callerAvatar ? (
-                <Image
-                  source={{ uri: callerAvatar }}
-                  style={styles.callerAvatar}
-                />
+                <Image source={{ uri: callerAvatar }} style={styles.waitingAvatar} />
               ) : (
-                <LinearGradient
-                  colors={['#3b82f6', '#1d4ed8']}
-                  style={styles.callerAvatarPlaceholder}
-                >
-                  <Text style={styles.callerAvatarText}>
-                    {callerName?.charAt(0)?.toUpperCase() || '?'}
-                  </Text>
-                </LinearGradient>
+                <View style={[styles.waitingAvatar, { backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={{ color: '#fff', fontSize: 40, fontWeight: 'bold' }}>{callerName?.charAt(0) || '?'}</Text>
+                </View>
               )}
-
-              {callerName && (
-                <Text style={styles.callerName}>{callerName}</Text>
-              )}
-
-              <Text style={styles.waitingText}>
-                {roomState === 'connected'
-                  ? 'Katılımcı bekleniyor...'
-                  : roomState === 'connecting'
-                  ? 'Bağlanıyor...'
-                  : 'Video Call'}
+              <Text style={styles.waitingName}>{callerName || 'Katılımcı Bekleniyor'}</Text>
+              <Text style={styles.waitingStatus}>
+                {roomState === 'connecting' ? 'Bağlanıyor...' : 'Bağlantı Bekleniyor'}
               </Text>
-
-              {error && <Text style={styles.errorText}>{error}</Text>}
             </View>
-          )}
+          </LinearGradient>
+        )}
+      </View>
 
-          {/* Kendi Kamerası — Köşede Küçük */}
-          {roomState === 'connected' && !isCameraOff && (
-            <View style={styles.localVideoWrapper}>
-              <TwilioVideoLocalView
-                enabled={true}
-                style={styles.localVideo}
-                scaleType="fill"
-              />
-              <View style={styles.localLabel}>
-                <Text style={styles.localLabelText}>Siz</Text>
-              </View>
-            </View>
-          )}
-
-          {/* Kamera kapalıysa "Kameranız Kapalı" göster */}
-          {roomState === 'connected' && isCameraOff && (
-            <View style={styles.localVideoOff}>
-              <VideoOff size={16} color="#9ca3af" />
+      {/* Local Video PIP (Picture-in-Picture) */}
+      {roomState === 'connected' && (
+        <View style={styles.pipContainer}>
+          {!isCameraOff ? (
+            <TwilioVideoLocalView enabled={true} style={styles.pipVideo} scaleType="fill" />
+          ) : (
+            <View style={styles.pipCameraOff}>
+              <VideoOff size={24} color="#9ca3af" />
             </View>
           )}
         </View>
+      )}
 
-        {/* Alt Kontrol Çubuğu */}
-        <View style={styles.controls}>
-          {/* Başlat butonu (henüz bağlanmadıysa) */}
-          {roomState === 'disconnected' && !error && (
-            <TouchableOpacity
-              style={styles.startBtn}
-              onPress={handleConnect}
-            >
-              <Text style={styles.startBtnText}>Aramayı Başlat</Text>
-            </TouchableOpacity>
-          )}
+      {/* Header Over Video */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()}>
+          <Minimize2 size={24} color="#ffffff" />
+        </TouchableOpacity>
+        <View style={styles.headerTitle}>
+          <Text style={styles.headerStatusText}>
+            {roomState === 'connected' ? 'Bağlı' : 'Hazırlanıyor'}
+          </Text>
+          <Text style={styles.headerTypeText}>Görüntülü Arama</Text>
+        </View>
+        <TouchableOpacity style={styles.headerBtn}>
+          <PhoneCall size={24} color="#ffffff" />
+        </TouchableOpacity>
+      </View>
 
-          {/* Bağlanınca kontroller */}
-          {(roomState === 'connecting' || roomState === 'connected') && (
-            <View style={styles.callControls}>
-              {/* Mute */}
-              <TouchableOpacity
-                style={[
-                  styles.ctrlBtn,
-                  isMuted && styles.ctrlBtnActive,
-                ]}
-                onPress={handleToggleMute}
-              >
-                {isMuted ? (
-                  <MicOff size={22} color="#fff" />
-                ) : (
-                  <Mic size={22} color="#fff" />
-                )}
-                <Text style={styles.ctrlLabel}>
-                  {isMuted ? 'Susturuldu' : 'Mikrofon'}
-                </Text>
-              </TouchableOpacity>
-
-              {/* Kamerayı Çevir */}
-              <TouchableOpacity style={styles.ctrlBtn} onPress={handleFlipCamera}>
-                <CameraIcon size={22} color="#fff" />
-                <Text style={styles.ctrlLabel}>Çevir</Text>
-              </TouchableOpacity>
-
-              {/* Kamera Kapat */}
-              <TouchableOpacity
-                style={[styles.ctrlBtn, isCameraOff && styles.ctrlBtnActive]}
-                onPress={handleToggleCamera}
-              >
-                {isCameraOff ? (
-                  <VideoOff size={22} color="#fff" />
-                ) : (
-                  <Video size={22} color="#fff" />
-                )}
-                <Text style={styles.ctrlLabel}>
-                  {isCameraOff ? 'Kamera Kapalı' : 'Kamera'}
-                </Text>
-              </TouchableOpacity>
-
-              {/* Aramayı Bitir */}
-              <TouchableOpacity style={styles.endBtn} onPress={handleEndCall}>
-                <PhoneOff size={26} color="#fff" />
-                <Text style={styles.ctrlLabel}>Bitir</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+      {/* Bottom Content Area */}
+      <View style={styles.bottomArea}>
+        {/* Stats Card (Horizontal from reference) */}
+        <View style={styles.statsBar}>
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>Süre</Text>
+            <Text style={styles.statValue}>{formatDuration(duration)}</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>Maliyet</Text>
+            <Text style={styles.statValue}>{'$' + calculateCost(duration, rate)}</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>Ücret</Text>
+            <Text style={styles.statValue}>{'$' + rate.toFixed(2)}/dk</Text>
+          </View>
         </View>
 
-        {/* Twilio Video Motoru */}
-        <TwilioVideo
-          ref={videoRef}
-          onRoomDidConnect={onRoomDidConnect}
-          onRoomDidDisconnect={onRoomDidDisconnect}
-          onRoomDidFailToConnect={onRoomDidFailToConnect}
-          onRoomParticipantDidConnect={() => {}}
-          onRoomParticipantDidDisconnect={onRoomParticipantDidDisconnect}
-          onParticipantAddedVideoTrack={onParticipantAddedVideoTrack}
-          onParticipantRemovedVideoTrack={onParticipantRemovedVideoTrack}
-        />
-      </SafeAreaView>
-    </LinearGradient>
+        {/* Call Controls */}
+        <View style={styles.controlsRow}>
+          <TouchableOpacity
+            style={[styles.roundControl, isMuted && styles.roundControlActive]}
+            onPress={handleToggleMute}
+          >
+            {isMuted ? <MicOff size={28} color="#ffffff" /> : <Mic size={28} color="#ffffff" />}
+            <Text style={styles.controlLabel}>{isMuted ? 'Aç' : 'Sustur'}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.roundControl, isCameraOff && styles.roundControlActive]}
+            onPress={handleToggleCamera}
+          >
+            {isCameraOff ? <VideoOff size={28} color="#ffffff" /> : <Video size={28} color="#ffffff" />}
+            <Text style={styles.controlLabel}>Kamera</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.roundControl} onPress={handleFlipCamera}>
+            <CameraIcon size={28} color="#ffffff" />
+            <Text style={styles.controlLabel}>Çevir</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.endCallCircle} onPress={handleEndCall}>
+            <PhoneOff size={32} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Twilio Video Engine */}
+      <TwilioVideo
+        ref={videoRef}
+        onRoomDidConnect={onRoomDidConnect}
+        onRoomDidDisconnect={onRoomDidDisconnect}
+        onRoomDidFailToConnect={onRoomDidFailToConnect}
+        onRoomParticipantDidConnect={() => {}}
+        onRoomParticipantDidDisconnect={onRoomParticipantDidDisconnect}
+        onParticipantAddedVideoTrack={onParticipantAddedVideoTrack}
+        onParticipantRemovedVideoTrack={onParticipantRemovedVideoTrack}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#000',
   },
-  safeArea: {
-    flex: 1,
-  },
-  // --- Header ---
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 12 : 4,
-    paddingBottom: 12,
-    zIndex: 10,
-  },
-  headerBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  durationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 6,
-  },
-  liveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#10b981',
-  },
-  durationText: {
-    fontSize: 14,
-    color: '#fff',
-    fontFamily: 'Inter-Medium',
-    letterSpacing: 1,
-  },
-  statusText: {
-    fontSize: 13,
-    color: '#9ca3af',
-    fontFamily: 'Inter-Regular',
-  },
-  rateChip: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  rateText: {
-    fontSize: 12,
-    color: '#e5e7eb',
-    fontFamily: 'Inter-Medium',
-  },
-  // --- Ana Video ---
-  mainVideoArea: {
-    flex: 1,
-    position: 'relative',
-    backgroundColor: '#0f172a',
+  backgroundLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
   },
   waitingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 14,
   },
-  callerAvatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+  waitingAvatar: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: 'rgba(255,255,255,0.2)',
+    marginBottom: 20,
   },
-  callerAvatarPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+  waitingName: {
+    color: '#ffffff',
+    fontSize: 28,
+    fontFamily: 'Inter-Bold',
+    textAlign: 'center',
+  },
+  waitingStatus: {
+    color: '#9ca3af',
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    marginTop: 8,
+  },
+  pipContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 120 : 100,
+    right: 20,
+    width: 110,
+    height: 160,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#1f2937',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    zIndex: 10,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10 },
+      android: { elevation: 15 },
+    }),
+  },
+  pipVideo: {
+    flex: 1,
+  },
+  pipCameraOff: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: '#374151',
   },
-  callerAvatarText: {
-    fontSize: 40,
-    color: '#fff',
-    fontFamily: 'Inter-Bold',
-  },
-  callerName: {
-    fontSize: 22,
-    color: '#fff',
-    fontFamily: 'Inter-Bold',
-  },
-  waitingText: {
-    fontSize: 14,
-    color: '#6b7280',
-    fontFamily: 'Inter-Regular',
-  },
-  errorText: {
-    fontSize: 12,
-    color: '#ef4444',
-    fontFamily: 'Inter-Regular',
-    textAlign: 'center',
-    marginHorizontal: 20,
-  },
-  // --- Yerel Video (köşe) ---
-  localVideoWrapper: {
+  header: {
     position: 'absolute',
-    right: 14,
-    top: 14,
-    width: 100,
-    height: 140,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#000',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.2)',
-    ...(Platform.OS === 'ios'
-      ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8 }
-      : { elevation: 8 }),
-  },
-  localVideo: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  localLabel: {
-    position: 'absolute',
-    bottom: 6,
+    top: Platform.OS === 'ios' ? 60 : 40,
     left: 0,
     right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  localLabelText: {
-    fontSize: 10,
-    color: '#fff',
-    fontFamily: 'Inter-Medium',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  localVideoOff: {
-    position: 'absolute',
-    right: 14,
-    top: 14,
-    width: 100,
-    height: 140,
-    borderRadius: 12,
-    backgroundColor: '#1e293b',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // --- Alt Kontroller ---
-  controls: {
-    paddingBottom: Platform.OS === 'android' ? 24 : 12,
     paddingHorizontal: 20,
-    paddingTop: 12,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    zIndex: 20,
   },
-  startBtn: {
-    backgroundColor: '#10b981',
-    borderRadius: 14,
-    paddingVertical: 14,
+  headerBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  startBtnText: {
-    color: '#fff',
-    fontSize: 16,
+  headerTitle: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  headerStatusText: {
+    color: '#d1d5db',
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+  },
+  headerTypeText: {
+    color: '#ffffff',
+    fontSize: 15,
     fontFamily: 'Inter-Bold',
   },
-  callControls: {
+  bottomArea: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: Platform.OS === 'ios' ? 50 : 30,
+    paddingHorizontal: 20,
+    zIndex: 20,
+  },
+  statsBar: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingVertical: 15,
+    borderRadius: 20,
+    marginBottom: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  statBox: {
+    flex: 1,
     alignItems: 'center',
   },
-  ctrlBtn: {
-    alignItems: 'center',
-    gap: 6,
-    width: 70,
-    paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  ctrlBtnActive: {
-    backgroundColor: '#ef4444',
-  },
-  ctrlLabel: {
-    fontSize: 10,
-    color: '#e5e7eb',
+  statLabel: {
+    color: '#9ca3af',
+    fontSize: 11,
     fontFamily: 'Inter-Regular',
-    textAlign: 'center',
+    textTransform: 'uppercase',
   },
-  endBtn: {
+  statValue: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignSelf: 'center',
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  roundControl: {
     alignItems: 'center',
     gap: 6,
-    width: 70,
-    paddingVertical: 10,
-    borderRadius: 14,
+  },
+  roundControlActive: {
+    opacity: 0.6,
+  },
+  controlLabel: {
+    color: '#d1d5db',
+    fontSize: 11,
+    fontFamily: 'Inter-Medium',
+  },
+  endCallCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: '#ef4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+    elevation: 10,
   },
 });

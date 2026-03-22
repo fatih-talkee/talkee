@@ -47,6 +47,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { ShareProfileModal } from '@/components/profile/ShareProfileModal';
 import { QRCodeScanner } from '@/components/qr/QRCodeScanner';
 import { CharityInfoModal } from '@/components/charity/CharityInfoModal';
+import { CallConfirmationModal } from '@/components/call/CallConfirmationModal';
 import { PageLoading } from '@/components/ui/PageLoading';
 import { SectionLoading } from '@/components/ui/SectionLoading';
 import { useIsOnline } from '@/hooks/useNetworkStatus';
@@ -83,6 +84,10 @@ export default function ProfessionalProfileScreen() {
   const [isCalling, setIsCalling] = useState(false);
   const [insufficientBalanceModalVisible, setInsufficientBalanceModalVisible] =
     useState(false);
+  const [confirmCallModalVisible, setConfirmCallModalVisible] = useState(false);
+  const [pendingCallType, setPendingCallType] = useState<
+    'voice' | 'video' | 'urgent' | null
+  >(null);
   const [charityInfoModalVisible, setCharityInfoModalVisible] = useState(false);
 
   // Mock posts data
@@ -460,7 +465,7 @@ export default function ProfessionalProfileScreen() {
     }
   }, [callState.status]);
 
-  const handleVoiceCall = async () => {
+  const initiateVoiceCall = async () => {
     // ✅ SECURITY: Check authentication FIRST before any other checks
     if (!currentUser) {
       Alert.alert('Error', 'You must be logged in to make a call');
@@ -520,7 +525,7 @@ export default function ProfessionalProfileScreen() {
     }
   };
 
-  const handleVideoCall = async () => {
+  const initiateVideoCall = async () => {
     // Kimlik doğrulama kontrolü
     if (!currentUser) {
       Alert.alert('Error', 'You must be logged in to make a call');
@@ -610,7 +615,7 @@ export default function ProfessionalProfileScreen() {
     }
   };
 
-  const handleUrgentCall = async () => {
+  const initiateUrgentCall = async () => {
     // ✅ SECURITY: Check authentication FIRST before any other checks
     if (!currentUser) {
       Alert.alert('Error', 'You must be logged in to make a call');
@@ -706,6 +711,33 @@ export default function ProfessionalProfileScreen() {
         [{ text: 'OK' }]
       );
     }
+  };
+
+  const handleConfirmCall = () => {
+    setConfirmCallModalVisible(false);
+    if (pendingCallType === 'voice') {
+      void initiateVoiceCall();
+    } else if (pendingCallType === 'video') {
+      void initiateVideoCall();
+    } else if (pendingCallType === 'urgent') {
+      void initiateUrgentCall();
+    }
+    setPendingCallType(null);
+  };
+
+  const requestVoiceCall = () => {
+    setPendingCallType('voice');
+    setConfirmCallModalVisible(true);
+  };
+
+  const requestVideoCall = () => {
+    setPendingCallType('video');
+    setConfirmCallModalVisible(true);
+  };
+
+  const requestUrgentCall = () => {
+    setPendingCallType('urgent');
+    setConfirmCallModalVisible(true);
   };
 
   // Determine button states
@@ -2310,7 +2342,7 @@ export default function ProfessionalProfileScreen() {
                       opacity: buttonsEnabled && !isCalling ? 1 : 0.5,
                     },
                   ]}
-                  onPress={handleUrgentCall}
+                  onPress={requestUrgentCall}
                   disabled={!buttonsEnabled || isCalling}
                 >
                   {isCalling ? (
@@ -2403,7 +2435,7 @@ export default function ProfessionalProfileScreen() {
                         opacity: buttonsEnabled && !isCalling ? 1 : 0.5,
                       },
                     ]}
-                    onPress={handleVoiceCall}
+                    onPress={requestVoiceCall}
                     disabled={!buttonsEnabled || isCalling}
                   >
                     {isCalling ? (
@@ -2483,7 +2515,7 @@ export default function ProfessionalProfileScreen() {
                             opacity: buttonsEnabled && !isCalling ? 1 : 0.5,
                           },
                         ]}
-                        onPress={handleVideoCall}
+                        onPress={requestVideoCall}
                         disabled={!buttonsEnabled || isCalling}
                       >
                         {isCalling ? (
@@ -2734,6 +2766,35 @@ export default function ProfessionalProfileScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <CallConfirmationModal
+        visible={confirmCallModalVisible}
+        onClose={() => setConfirmCallModalVisible(false)}
+        onConfirm={handleConfirmCall}
+        callType={pendingCallType || 'voice'}
+        professional={{
+          name: professional?.users?.name || '',
+          title: professional?.title || '',
+          avatar: professional?.users?.avatar_url || null,
+          ratePerMinute:
+            pendingCallType === 'video'
+              ? currentAvailability?.availability?.video_call_rate_per_minute ||
+                professional?.rate_per_minute ||
+                0
+              : pendingCallType === 'urgent'
+              ? Number(
+                  availabilitiesData.find(
+                    (avail) => avail.available_at === 'urgent'
+                  )?.price_per_minute ||
+                    professional?.rate_per_minute ||
+                    0
+                )
+              : currentAvailability?.availability?.price_per_minute ||
+                professional?.rate_per_minute ||
+                0,
+          isVerified: professional?.is_verified,
+        }}
+      />
     </SafeAreaView>
   );
 }
