@@ -170,14 +170,17 @@ export default function LoginScreen() {
     try {
       // ✅ Always use custom scheme for mobile
       const redirectUri = 'net.talkee.app://auth/callback';
+      
+      // ✅ Supabase LinkedIn OIDC uses 'linkedin_oidc' provider name
+      const supabaseProvider = provider === 'linkedin' ? 'linkedin_oidc' : provider;
 
-      logger.info(`[OAuth] Starting ${provider} login`, {
+      logger.info(`[OAuth] Starting ${supabaseProvider} login`, {
         redirectUri,
-        provider,
+        provider: supabaseProvider,
       });
 
       const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
+        provider: supabaseProvider as any,
         options: {
           redirectTo: redirectUri,
           skipBrowserRedirect: true,

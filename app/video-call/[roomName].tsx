@@ -29,6 +29,7 @@ import { useTwilioVideo } from '@/hooks/useTwilioVideo';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { useTheme } from '@/contexts/ThemeContext';
+import { PerMinuteBilling } from '@/services/twilioVoice/billing/PerMinuteBilling';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -64,16 +65,13 @@ export default function VideoCallScreen() {
   const [isFrontCamera, setIsFrontCamera] = useState(true);
   const [duration, setDuration] = useState(0);
   const [durationTimer, setDurationTimer] = useState<ReturnType<typeof setInterval> | null>(null);
+  const billingRef = React.useRef<PerMinuteBilling | null>(null);
+  const callStartTimeRef = React.useRef<number | null>(null);
 
   const remoteTracks = Object.values(remoteParticipantTracks);
   const rate = ratePerMinute ? parseFloat(ratePerMinute) : 0;
 
-  useEffect(() => {
-    if (autoConnect === 'true' && roomName && roomState === 'disconnected') {
-      connectToRoom(roomName);
-    }
-  }, []);
-
+  // --- Helper Functions ---
   const formatDuration = (secs: number) => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
     const s = (secs % 60).toString().padStart(2, '0');
@@ -86,13 +84,93 @@ export default function VideoCallScreen() {
     return (minutes * rateVal).toFixed(2);
   };
 
+  // --- IMPORTANT: Logic Functions (Define before Effects) ---
+  const handleEndCall = useCallback(async () => {
+    try {
+      logger.info('🔚 [VideoCallScreen] Ending call...');
+      disconnect();
+      if (durationTimer) clearInterval(durationTimer);
+      if (billingRef.current) {
+        billingRef.current.stop();
+        billingRef.current = null;
+      }
+      if (inviteId) {
+        await supabase.from('calls').update({ status: 'ended' }).eq('id', inviteId);
+      }
+    } catch (e) {
+      logger.error('[VideoCallScreen] ❌ Error while ending call', e);
+    } finally {
+      router.back();
+    }
+  }, [disconnect, durationTimer, inviteId]);
+
+  const handleConnect = useCallback(() => {
+    if (roomName) connectToRoom(roomName);
+  }, [roomName, connectToRoom]);
+
+  // --- Effects ---
+  useEffect(() => {
+    if (autoConnect === 'true' && roomName && roomState === 'disconnected') {
+      connectToRoom(roomName);
+    }
+  }, [autoConnect, roomName, roomState, connectToRoom]);
+
+  // ✅ Supabase Status Listener: Auto-end if status becomes ended/cancelled
+  useEffect(() => {
+    if (!inviteId) return;
+
+    logger.info('🔌 [VideoCallScreen] Setting up Supabase listener for inviteId:', inviteId);
+    
+    const channel = supabase
+      .channel(`call_status_${inviteId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'calls',
+          filter: `id=eq.${inviteId}`,
+        },
+        (payload) => {
+          const updated = payload.new as any;
+          if (updated.status === 'ended' || updated.status === 'cancelled') {
+            logger.info('🔔 [VideoCallScreen] Call status updated externally:', updated.status);
+            handleEndCall();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      logger.info('🔌 [VideoCallScreen] Removing Supabase listener');
+      supabase.removeChannel(channel);
+    };
+  }, [inviteId, handleEndCall]);
+
   // --- Room Events ---
   const onRoomDidConnect = useCallback(() => {
     logger.info('✅ [VideoCallScreen] Connected to room');
     setRoomState('connected');
-    const timer = setInterval(() => setDuration((d) => d + 1), 1000);
-    setDurationTimer(timer);
-  }, [setRoomState]);
+    
+    // Eğer odaya girdiğimizde zaten buralarda biri varsa (biz alıcıysak) sayacı ve ücretlendirmeyi başlat
+    if (remoteTracks.length > 0 && !durationTimer) {
+      logger.info('⏱️ [VideoCallScreen] Remote participant already present, starting timer and billing');
+      const now = Date.now();
+      callStartTimeRef.current = now;
+      
+      const timer = setInterval(() => setDuration((d) => d + 1), 1000);
+      setDurationTimer(timer);
+
+      if (inviteId && rate > 0) {
+        billingRef.current = new PerMinuteBilling(
+          inviteId,
+          rate,
+          () => Math.floor((Date.now() - (callStartTimeRef.current || Date.now())) / 1000)
+        );
+        billingRef.current.start();
+      }
+    }
+  }, [setRoomState, remoteTracks.length, durationTimer]);
 
   const onRoomDidDisconnect = useCallback(
     ({ error: err }: any) => {
@@ -130,29 +208,14 @@ export default function VideoCallScreen() {
   const onRoomParticipantDidDisconnect = useCallback(
     ({ participant }: any) => {
       removeParticipant(participant);
+      logger.info('👋 [VideoCallScreen] Remote participant left, ending call...');
+      // Bu bir 1-on-1 uygulama olduğu için, diğer katılımcı ayrıldığında arama bitmelidir.
+      handleEndCall();
     },
-    [removeParticipant]
+    [removeParticipant, handleEndCall]
   );
 
-  // --- Control Functions ---
-  const handleConnect = useCallback(() => {
-    if (roomName) connectToRoom(roomName);
-  }, [roomName, connectToRoom]);
-
-  const handleEndCall = useCallback(async () => {
-    try {
-      disconnect();
-      if (durationTimer) clearInterval(durationTimer);
-      if (inviteId) {
-        await supabase.from('calls').update({ status: 'ended' }).eq('id', inviteId);
-      }
-    } catch (e) {
-      logger.error('[VideoCallScreen] ❌ Arama bitirilirken hata', e);
-    } finally {
-      router.back();
-    }
-  }, [disconnect, durationTimer, inviteId]);
-
+  // --- Control Interactions ---
   const handleToggleMute = useCallback(() => {
     if (videoRef.current) {
       const newMutedState = !isMuted;
@@ -292,7 +355,26 @@ export default function VideoCallScreen() {
         onRoomDidConnect={onRoomDidConnect}
         onRoomDidDisconnect={onRoomDidDisconnect}
         onRoomDidFailToConnect={onRoomDidFailToConnect}
-        onRoomParticipantDidConnect={() => {}}
+        onRoomParticipantDidConnect={() => {
+          logger.info('👥 [VideoCallScreen] Remote participant connected');
+          if (!durationTimer) {
+            logger.info('⏱️ [VideoCallScreen] Starting duration timer and billing');
+            const now = Date.now();
+            callStartTimeRef.current = now;
+
+            const timer = setInterval(() => setDuration((d) => d + 1), 1000);
+            setDurationTimer(timer);
+
+            if (inviteId && rate > 0) {
+              billingRef.current = new PerMinuteBilling(
+                inviteId,
+                rate,
+                () => Math.floor((Date.now() - (callStartTimeRef.current || Date.now())) / 1000)
+              );
+              billingRef.current.start();
+            }
+          }
+        }}
         onRoomParticipantDidDisconnect={onRoomParticipantDidDisconnect}
         onParticipantAddedVideoTrack={onParticipantAddedVideoTrack}
         onParticipantRemovedVideoTrack={onParticipantRemovedVideoTrack}

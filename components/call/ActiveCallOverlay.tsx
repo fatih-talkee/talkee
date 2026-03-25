@@ -163,7 +163,8 @@ export default function ActiveCallOverlay() {
   }, []);
 
   const calculateCost = useCallback((duration: number, rate: number): string => {
-    if (rate <= 0) return '0.00';
+    // Arama cevaplanana kadar veya ilk saniye dolana kadar maliyeti 0 göster
+    if (rate <= 0 || duration === 0) return '0.00';
     const minutes = Math.floor(duration / 60) + 1;
     const cost = minutes * rate;
     return cost.toFixed(2);

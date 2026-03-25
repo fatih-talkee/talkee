@@ -21,11 +21,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { User, Phone, Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskInput from 'react-native-mask-input';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/lib/toastService';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/lib/supabase';
+import { logger } from '@/lib/logger';
 import { UserPreferencesService } from '@/services/supabase/userPreferences.service';
 
 // Turkish phone mask: +90 XXX XXX XX XX
@@ -181,34 +184,127 @@ export default function RegisterScreen() {
     }
   };
 
+  // iOS double-fire guard: Aynı deep link'in iki kez işlenmesini engeller
+  const oauthProcessingRef = React.useRef(false);
+
+  // ✅ Deep link listener for OAuth
+  React.useEffect(() => {
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink({ url });
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  const handleDeepLink = async (event: { url: string }) => {
+    logger.info('[OAuth] 🔗 RAW Deep link received (Register):', { url: event.url });
+
+    if (oauthProcessingRef.current) {
+      logger.info('[OAuth] ⏭️ Deep link zaten işleniyor, atlanıyor (iOS double-fire)');
+      return;
+    }
+
+    try {
+      const url = event.url;
+
+      if (!url.includes('auth/callback') && !url.includes('access_token=')) {
+        return;
+      }
+
+      let accessToken = '';
+      let refreshToken = '';
+
+      if (url.includes('#')) {
+        const hash = url.split('#')[1];
+        const params = new URLSearchParams(hash);
+        accessToken = params.get('access_token') || '';
+        refreshToken = params.get('refresh_token') || '';
+      }
+
+      if (!accessToken && url.includes('?')) {
+        const query = url.split('?')[1];
+        const params = new URLSearchParams(query);
+        accessToken = params.get('access_token') || '';
+        refreshToken = params.get('refresh_token') || '';
+      }
+
+      if (accessToken && refreshToken) {
+        oauthProcessingRef.current = true;
+
+        try {
+          logger.info('[OAuth] Session set ediliyor (Register)...');
+
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (error) throw error;
+
+          logger.info('[OAuth] Session başarıyla set edildi (Register)!');
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          router.replace('/auth/callback');
+        } finally {
+          setTimeout(() => {
+            oauthProcessingRef.current = false;
+          }, 3000);
+        }
+      }
+    } catch (error: any) {
+      oauthProcessingRef.current = false;
+      logger.error('[OAuth] FATAL Deep link hatası (Register):', error);
+      toast.error({
+        title: 'Authentication Failed',
+        message: error.message || 'Please try again',
+      });
+    }
+  };
+
   const handleSocialRegister = async (
     provider: 'google' | 'facebook' | 'linkedin'
   ) => {
     setSocialLoading(provider);
 
     try {
-      const redirectUrl =
-        Platform.OS === 'web' && typeof window !== 'undefined'
-          ? `${window.location.origin}/auth/callback`
-          : 'talkee://auth/callback';
+      // ✅ Standardize redirect URI
+      const redirectUri = 'net.talkee.app://auth/callback';
+      
+      // ✅ LinkedIn OIDC fix
+      const supabaseProvider = provider === 'linkedin' ? 'linkedin_oidc' : provider;
 
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
+      logger.info(`[OAuth] Starting ${supabaseProvider} registration`, {
+        redirectUri,
+        provider: supabaseProvider,
+      });
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: supabaseProvider as any,
         options: {
-          redirectTo: redirectUrl,
+          redirectTo: redirectUri,
+          skipBrowserRedirect: true,
         },
       });
 
-      if (error) {
-        toast.error({
-          title: 'Registration Failed',
-          message: error.message || `Failed to register with ${provider}`,
-        });
+      if (error) throw error;
+      if (!data?.url) throw new Error('No OAuth URL received');
+
+      logger.info('[OAuth] Opening browser...', { url: data.url });
+
+      const result = await WebBrowser.openAuthSessionAsync(
+        data.url,
+        redirectUri
+      );
+
+      if (result.type === 'success' && (result as any).url) {
+        await handleDeepLink({ url: (result as any).url });
       }
     } catch (error: any) {
+      logger.error(`[OAuth] ${provider} register error:`, error);
       toast.error({
-        title: 'Error',
-        message: 'An unexpected error occurred. Please try again.',
+        title: 'Registration Failed',
+        message: error.message || 'An error occurred',
       });
     } finally {
       setSocialLoading(null);

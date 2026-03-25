@@ -276,20 +276,17 @@ export class OutgoingCallHandler {
         userBalance
       );
 
-      // ✅ PATCH E/B: Check if the native call state is ALREADY connected
+      // ✅ REMOVED prematurely setting status to connected.
+      // We should wait for the actual 'Connected' event from CallEventListener to ensure the call is answered.
+      // This prevents billing from starting while the other side's phone is still ringing.
       const immediateState = getCallState(call);
-      if (immediateState === 'connected') {
-        logger.info('[OutgoingCallHandler] ⚡ Call already nominally connected natively immediately after voice.connect', { debugId });
-        updateState({ status: 'connected', call });
-      }
 
       // Extract and save call SID (async operation moved after critical section)
       await this.saveCallSid(call, callRecord.id, debugId, getCallRepository);
 
-      // Update state to connecting only if native state is not already connected.
-      // Otherwise we regress the UI back to "connecting" after the call is live.
+      // Always start with 'connecting' status for outgoing calls
       updateState({
-        status: immediateState === 'connected' ? 'connected' : 'connecting',
+        status: 'connecting',
         call,
       });
 
