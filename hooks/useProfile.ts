@@ -16,6 +16,12 @@ const processedUsersRef = new Set<string>();
 // This ensures we only fetch session once, even if multiple components use useProfile
 let hasInitialized = false;
 
+// ✅ FIX: Session yenileme için kullanılacak - logout sonrası sıfırlanır
+export function resetProfileInitialization() {
+  hasInitialized = false;
+  processedUsersRef.clear();
+}
+
 export function useProfile() {
   const queryClient = useQueryClient();
   const [userId, setUserId] = useState<string | null>(null);
@@ -32,11 +38,10 @@ export function useProfile() {
     const getCurrentUser = async () => {
       if (!isMountedRef.current) return;
       
-      // If we've already initialized globally, skip fetching (auth state manager will handle updates)
+      // Eğer globalde zaten başlatıldıysa, yeniden fetch etme (auth state manager güncellemeleri yönetir)
       if (hasInitialized) {
-        // ✅ FIX: Don't log every skip - too verbose. Only log on first skip per component instance
-        setIsSessionLoading(false);
-        // Still set userId from authStateManager if available (for this component instance)
+        // ✅ FIX: getSession() tamamlanmadan önce session loading'i false yapmıyoruz
+        // Race condition önleme: userId null iken loading false olmasın
         try {
           const { data: { session } } = await authStateManager.getSession();
           const newUserId = session?.user?.id || null;
@@ -45,7 +50,11 @@ export function useProfile() {
             previousUserIdRef.current = newUserId;
           }
         } catch (error) {
-          // Silent fail - auth state manager will handle it
+          // Silent fail - auth state manager handles updates via subscribe
+        } finally {
+          if (isMountedRef.current) {
+            setIsSessionLoading(false);
+          }
         }
         return;
       }
@@ -116,27 +125,29 @@ export function useProfile() {
           return;
         }
 
-             // ✅ FIX: Skip INITIAL_SESSION if user hasn't changed
-             if (event === 'INITIAL_SESSION' && previousUserId === newUserId && newUserId) {
-               setIsSessionLoading(false);
-               return;
-             }
+        // ✅ FIX: Skip INITIAL_SESSION if user hasn't changed
+        if (event === 'INITIAL_SESSION' && previousUserId === newUserId && newUserId) {
+          setIsSessionLoading(false);
+          return;
+        }
 
         if (previousUserId !== newUserId) {
           if (previousUserId && !newUserId) {
-            // Logout: Clear all cache
-            logger.info('[useProfile] User logged out, clearing cache');
+            // Logout: Tüm cache'i temizle ve hasInitialized'ı sıfırla
+            logger.info('[useProfile] User logged out, clearing cache and resetting init flag');
             clearUserCache(queryClient).catch((err) => {
               logger.error('[useProfile] Cache clear error:', err);
             });
-            // Clear processed users on logout
+            // ✅ FIX: Logout sonrası hasInitialized sıfırlanıyor
+            // Böylece tekrar login'de session doğru şekilde yeniden yüklenir
+            hasInitialized = false;
             processedUsersRef.clear();
           } else if (
             previousUserId &&
             newUserId &&
             previousUserId !== newUserId
           ) {
-            // User switched: Clear cache
+            // Kullanıcı değişti: Cache temizle
             logger.info('[useProfile] User switched, clearing cache', {
               previousUserId: previousUserId.substring(0, 8) + '...',
               newUserId: newUserId.substring(0, 8) + '...',
@@ -144,16 +155,17 @@ export function useProfile() {
             clearUserCache(queryClient).catch((err) => {
               logger.error('[useProfile] Cache clear error:', err);
             });
-            // Clear processed users on switch
+            // ✅ FIX: Kullanıcı değişince de hasInitialized sıfırla
+            hasInitialized = false;
             processedUsersRef.clear();
           } else if (!previousUserId && newUserId) {
-            // New login: Invalidate to ensure fresh data (only once)
-            // ✅ FIX: Check if we already processed this user to prevent duplicate invalidations
+            // Yeni giriş: Fresh data için invalidate (sadece bir kez)
+            // ✅ FIX: Aynı kullanıcı için tekrar invalidation yapmayı önle
             if (!processedUsersRef.has(newUserId)) {
               logger.info('[useProfile] New user logged in, invalidating cache', {
                 userId: newUserId.substring(0, 8) + '...',
               });
-              // ✅ FIX: Exclude calls from invalidation to prevent call history refresh loops
+              // ✅ FIX: call history refresh loop'unu önlemek için calls hariç tut
               invalidateUserQueries(queryClient, newUserId, [['calls']]);
               processedUsersRef.add(newUserId);
             } else {
@@ -268,16 +280,18 @@ export function useProfile() {
     return success;
   };
 
-  // Combined loading state
-  const combinedIsLoading = isSessionLoading || (userId && isLoading);
+  // Birleşik yükleme durumu
+  const combinedIsLoading = isSessionLoading || (!!userId && isLoading);
 
   return {
     profileData,
     user: profileData?.user,
+    userId, // ✅ Export: Twilio kaydı için profile beklemeden userId'ye erişim
     stats: profileData?.stats,
     isProfessional: profileData?.is_professional || false,
     professional: profileData?.professional,
     isLoading: combinedIsLoading,
+    isSessionLoading, // ✅ Export: Session yükleme durumuna ayrı erişim
     error,
     refetch,
     updatePreferences,

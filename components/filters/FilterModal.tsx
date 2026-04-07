@@ -6,12 +6,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   Switch,
   TextInput,
   Platform,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import {
   X,
   DollarSign,
@@ -24,6 +23,7 @@ import {
   Award,
   Wifi,
   Timer,
+  Search,
 } from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -39,6 +39,8 @@ export interface FilterState {
   skills: string[];
 }
 
+export type FilterMode = 'all' | 'categories' | 'availability' | 'language';
+
 interface FilterModalProps {
   visible: boolean;
   onClose: () => void;
@@ -46,6 +48,7 @@ interface FilterModalProps {
   initialFilters: Omit<FilterState, 'featured'>;
   featured?: boolean;
   onFeaturedChange?: (featured: boolean) => void;
+  mode?: FilterMode;
 }
 
 export function FilterModal({
@@ -55,6 +58,7 @@ export function FilterModal({
   initialFilters,
   featured = false,
   onFeaturedChange,
+  mode = 'all',
 }: FilterModalProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -134,6 +138,19 @@ export function FilterModal({
     return commonLanguages.filter((lang) => lang.toLowerCase().includes(query));
   }, [languageSearch]);
 
+  const getModalTitle = () => {
+    switch (mode) {
+      case 'categories':
+        return 'Categories';
+      case 'availability':
+        return 'Availability';
+      case 'language':
+        return 'Language';
+      default:
+        return 'Filters';
+    }
+  };
+
   const handleApply = () => {
     const { featured, ...filtersToApply } = filters;
     onApply(filtersToApply);
@@ -141,19 +158,29 @@ export function FilterModal({
   };
 
   const handleReset = () => {
-    setFilters({
-      priceRange: [0, 100],
-      availability: 'all',
-      categories: [],
-      featured: false,
-      languages: [],
-      specialties: [],
-      skills: [],
-    });
-    setCategorySearch('');
-    setLanguageSearch('');
-    setSpecialtySearch('');
-    setSkillSearch('');
+    if (mode === 'categories') {
+      setFilters({ ...filters, categories: [] });
+      setCategorySearch('');
+    } else if (mode === 'availability') {
+      setFilters({ ...filters, availability: 'all' });
+    } else if (mode === 'language') {
+      setFilters({ ...filters, languages: [] });
+      setLanguageSearch('');
+    } else {
+      setFilters({
+        priceRange: [0, 100],
+        availability: 'all',
+        categories: [],
+        featured: false,
+        languages: [],
+        specialties: [],
+        skills: [],
+      });
+      setCategorySearch('');
+      setLanguageSearch('');
+      setSpecialtySearch('');
+      setSkillSearch('');
+    }
   };
 
   const toggleCategory = (categoryId: string) => {
@@ -210,7 +237,7 @@ export function FilterModal({
           borderBottomColor: theme.colors.border,
           paddingTop: topPadding
         }]}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Filters</Text>
+                    <Text style={[styles.title, { color: theme.colors.text }]}>{getModalTitle()}</Text>
           <View style={styles.headerRight}>
             <TouchableOpacity
               onPress={handleReset}
@@ -248,6 +275,7 @@ export function FilterModal({
           keyboardShouldPersistTaps="handled"
         >
           {/* Price Range */}
+          {mode === 'all' && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <DollarSign size={20} color={theme.colors.pinkTwo} />
@@ -293,8 +321,10 @@ export function FilterModal({
               })}
             </View>
           </View>
+          )}
 
           {/* Availability */}
+          {(mode === 'all' || mode === 'availability') && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Clock size={20} color={theme.colors.pinkTwo || theme.colors.primary} />
@@ -341,8 +371,10 @@ export function FilterModal({
               })}
             </View>
           </View>
+          )}
 
           {/* Featured */}
+          {mode === 'all' && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Star size={20} color={theme.colors.pinkTwo} />
@@ -368,8 +400,10 @@ export function FilterModal({
               </Text>
             </View>
           </View>
+          )}
 
           {/* Categories */}
+          {(mode === 'all' || mode === 'categories') && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Tag size={20} color={theme.colors.pinkTwo} />
@@ -377,20 +411,52 @@ export function FilterModal({
                 Categories
               </Text>
             </View>
-            <TextInput
-              style={[
-                styles.searchInput,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                  color: theme.colors.text,
-                },
-              ]}
-              placeholder="Search categories..."
-              placeholderTextColor={theme.colors.textMuted}
-              value={categorySearch}
-              onChangeText={setCategorySearch}
-            />
+
+            <View style={styles.searchBarWrapper}>
+              <View
+                style={[
+                  styles.searchContainer,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <Search size={20} color={theme.colors.textMuted} />
+                <TextInput
+                  value={categorySearch}
+                  onChangeText={setCategorySearch}
+                  placeholder="Search categories..."
+                  placeholderTextColor={theme.colors.textMuted}
+                  style={[styles.searchInput, { color: theme.colors.text }]}
+                />
+                {categorySearch.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setCategorySearch('')}
+                    style={styles.clearButton}
+                  >
+                    <X size={18} color={theme.colors.textMuted} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Selection Count */}
+            {filters.categories.length > 0 && (
+              <View style={styles.selectedCountContainer}>
+                <Text
+                  style={[
+                    styles.selectedCountText,
+                    { color: '#007AFF' }, // Consistent Blue
+                  ]}
+                >
+                  {filters.categories.length}{' '}
+                  {filters.categories.length === 1 ? 'category' : 'categories'}{' '}
+                  selected
+                </Text>
+              </View>
+            )}
+
             <View style={styles.categoryGrid}>
               {filteredCategories.slice(0, 20).map((category) => {
                 const isSelected = filters.categories.includes(category.id);
@@ -398,13 +464,13 @@ export function FilterModal({
                   <TouchableOpacity
                     key={category.id}
                     style={[
-                      styles.categoryChip,
+                      styles.categoryPill,
                       {
                         backgroundColor: isSelected
-                          ? selectedBackground
-                          : theme.colors.card,
+                          ? '#007AFF'
+                          : theme.colors.surface,
                         borderColor: isSelected
-                          ? selectedBackground
+                          ? '#007AFF'
                           : theme.colors.border,
                       },
                     ]}
@@ -412,14 +478,23 @@ export function FilterModal({
                   >
                     <Text
                       style={[
-                      styles.categoryChipText,
-                      {
-                        color: isSelected ? selectedTextColor : theme.colors.text,
+                        styles.categoryPillText,
+                        {
+                          color: '#FFFFFF',
                         },
                       ]}
                     >
-                      {category.emoji ? `${category.emoji} ` : ''}
                       {category.name}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.categoryPillIcon,
+                        {
+                          color: '#FFFFFF',
+                        },
+                      ]}
+                    >
+                      {isSelected ? '✓' : '+'}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -433,8 +508,10 @@ export function FilterModal({
               </Text>
             )}
           </View>
+          )}
 
           {/* Languages */}
+          {(mode === 'all' || mode === 'language') && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Globe size={20} color={theme.colors.pinkTwo} />
@@ -442,20 +519,36 @@ export function FilterModal({
                 Languages
               </Text>
             </View>
-            <TextInput
-              style={[
-                styles.searchInput,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                  color: theme.colors.text,
-                },
-              ]}
-              placeholder="Search languages..."
-              placeholderTextColor={theme.colors.textMuted}
-              value={languageSearch}
-              onChangeText={setLanguageSearch}
-            />
+
+            <View style={styles.searchBarWrapper}>
+              <View
+                style={[
+                  styles.searchContainer,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <Search size={20} color={theme.colors.textMuted} />
+                <TextInput
+                  value={languageSearch}
+                  onChangeText={setLanguageSearch}
+                  placeholder="Search languages..."
+                  placeholderTextColor={theme.colors.textMuted}
+                  style={[styles.searchInput, { color: theme.colors.text }]}
+                />
+                {languageSearch.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setLanguageSearch('')}
+                    style={styles.clearButton}
+                  >
+                    <X size={18} color={theme.colors.textMuted} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
             <View style={styles.tagGrid}>
               {filteredLanguages.map((language) => {
                 const isSelected = filters.languages.includes(language);
@@ -466,10 +559,10 @@ export function FilterModal({
                       styles.tagChip,
                       {
                         backgroundColor: isSelected
-                          ? selectedBackground
-                          : theme.colors.card,
+                          ? '#007AFF'
+                          : theme.colors.surface,
                         borderColor: isSelected
-                          ? selectedBackground
+                          ? '#007AFF'
                           : theme.colors.border,
                       },
                     ]}
@@ -479,19 +572,31 @@ export function FilterModal({
                       style={[
                         styles.tagChipText,
                         {
-                          color: isSelected ? selectedTextColor : theme.colors.text,
+                          color: '#FFFFFF',
                         },
                       ]}
                     >
                       {language}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.categoryPillIcon,
+                        {
+                          color: '#FFFFFF',
+                        },
+                      ]}
+                    >
+                      {isSelected ? '✓' : '+'}
                     </Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
           </View>
+          )}
 
           {/* Specialties */}
+          {mode === 'all' && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Briefcase size={20} color={theme.colors.pinkTwo} />
@@ -544,8 +649,10 @@ export function FilterModal({
               </View>
             )}
           </View>
+          )}
 
           {/* Skills & Certifications */}
+          {mode === 'all' && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Award size={20} color={theme.colors.pinkTwo} />
@@ -598,6 +705,7 @@ export function FilterModal({
               </View>
             )}
           </View>
+          )}
         </ScrollView>
 
         {/* Footer */}
@@ -721,45 +829,75 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   searchInput: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
+    flex: 1,
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-    marginBottom: 12,
+  },
+  searchBarWrapper: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 24,
+    borderWidth: 2,
+    gap: 12,
+  },
+  clearButton: {
+    padding: 4,
+  },
+  selectedCountContainer: {
+    marginBottom: 8,
+    marginTop: -8,
+  },
+  selectedCountText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
   },
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
     marginTop: 12,
   },
-  categoryChip: {
-    paddingHorizontal: 16,
+  categoryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 10,
-    borderRadius: 20,
+    paddingHorizontal: 16,
+    borderRadius: 24,
     borderWidth: 1.5,
+    gap: 8,
   },
-  categoryChipText: {
+  categoryPillText: {
     fontSize: 14,
-    fontFamily: 'Inter-Medium',
+    fontFamily: 'Inter-SemiBold',
+  },
+  categoryPillIcon: {
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   tagGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 12,
     marginTop: 12,
   },
   tagChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 24,
     borderWidth: 1.5,
+    gap: 8,
   },
   tagChipText: {
-    fontSize: 13,
-    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
   },
   moreText: {
     fontSize: 12,

@@ -253,7 +253,7 @@ export default function WalletScreen() {
                 { color: theme.colors.textSecondary },
               ]}
             >
-              Current Balance
+              Total Balance
             </Text>
           </View>
           {balanceLoading ? (

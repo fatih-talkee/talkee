@@ -253,10 +253,12 @@ class TwilioVoiceService {
         timestamp: new Date().toISOString(),
       });
 
-      // ✅ GÖREV 3: Platform bilgisi ekleniyor
+      // ✅ GÖREV 3: Platform ve Environment bilgisi ekleniyor
+      const BUILD_ENV = __DEV__ ? 'development' : 'production';
       const { data, error } = await supabase.functions.invoke('twilio-token', {
         headers: {
           'x-platform': Platform.OS,
+          'x-build-environment': BUILD_ENV,
         },
       });
       const invokeElapsed = Date.now() - invokeStartTime;

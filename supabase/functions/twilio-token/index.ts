@@ -25,12 +25,27 @@ serve(async (req) => {
 
     // Platform bilgisini al (ios veya android)
     const platform = req.headers.get('x-platform')?.toLowerCase();
-    console.log('📱 [twilio-token] Platform:', platform);
+    const buildEnv = req.headers.get('x-build-environment')?.toLowerCase();
+    console.log('📱 [twilio-token] Platform:', platform, '| Env:', buildEnv || 'unknown');
 
     // Platforma göre doğru SID'yi seç
     let PUSH_SID = '';
+    let usedFallback = false;
+    let iosDecision = '';
+
     if (platform === 'ios') {
-      PUSH_SID = Deno.env.get('TWILIO_PUSH_CREDENTIAL_SID_IOS') || '';
+      if (buildEnv === 'development') {
+        PUSH_SID = Deno.env.get('TWILIO_PUSH_CREDENTIAL_SID_IOS_DEV') || '';
+        iosDecision = 'DEV credentials selected';
+      } else if (buildEnv === 'production') {
+        PUSH_SID = Deno.env.get('TWILIO_PUSH_CREDENTIAL_SID_IOS_PROD') || '';
+        iosDecision = 'PROD credentials selected';
+      } else {
+        // Fallback for older apps not sending environment
+        PUSH_SID = Deno.env.get('TWILIO_PUSH_CREDENTIAL_SID_IOS_PROD') || Deno.env.get('TWILIO_PUSH_CREDENTIAL_SID_IOS') || '';
+        iosDecision = 'No build env - fallback to PROD/Old credentials';
+      }
+      console.log(`📱 [twilio-token] iOS Environment Decision: ${iosDecision}`);
     } else if (platform === 'android') {
       PUSH_SID = Deno.env.get('TWILIO_PUSH_CREDENTIAL_SID_ANDROID') || '';
     }
@@ -38,6 +53,7 @@ serve(async (req) => {
     // Fallback: Eğer platforma özel SID yoksa genel SID'yi kullan
     if (!PUSH_SID) {
       PUSH_SID = Deno.env.get('TWILIO_PUSH_CREDENTIAL_SID') || '';
+      usedFallback = true;
     }
 
     // Seçilen SID'nin doğrulanması (CR ile başlamalı)
@@ -45,10 +61,10 @@ serve(async (req) => {
       if (!PUSH_SID.startsWith('CR')) {
         console.error(`⚠️ [twilio-token] Geçersiz SID formatı (${platform}):`, PUSH_SID.substring(0, 10) + '...');
       } else {
-        console.log(`✅ [twilio-token] Geçerli SID seçildi (${platform}):`, PUSH_SID.substring(0, 10) + '...');
+        console.log(`✅ [twilio-token] Geçerli SID seçildi (${platform}):`, PUSH_SID.substring(0, 10) + '...', '| Fallback:', usedFallback);
       }
     } else {
-      console.error(`❌ [twilio-token] No push credential SID resolved for platform: ${platform}`);
+      console.error(`❌ [twilio-token] No push credential SID resolved for platform: ${platform} | Env: ${buildEnv}`);
       // Token üretimini tamamen kırmıyoruz (outbound için hala çalışabilir), 
       // ama push bildirimleri çalışmayacaktır.
     }

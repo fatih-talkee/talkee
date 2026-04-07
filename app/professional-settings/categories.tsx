@@ -166,7 +166,7 @@ export default function CategoriesScreen() {
     return (
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <Header showLogo={false} title="Call Criteria" showBack onBackPress={() => router.back()} />
+        <Header showLogo={false} title="Professions" showBack onBackPress={() => router.back()} />
         <PageLoading message="Loading categories..." />
       </SafeAreaView>
     );
@@ -175,7 +175,7 @@ export default function CategoriesScreen() {
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Header showLogo={false} title="Call Criteria" showBack onBackPress={() => router.back()} />
+      <Header showLogo={false} title="Professions" showBack onBackPress={() => router.back()} />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}

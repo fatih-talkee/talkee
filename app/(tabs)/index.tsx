@@ -32,6 +32,9 @@ export default function HomeScreen() {
   const [searchValue, setSearchValue] = useState('');
   const [isVerifiedSelected, setIsVerifiedSelected] = useState(false);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [availabilityModalVisible, setAvailabilityModalVisible] = useState(false);
+  const [languageModalVisible, setLanguageModalVisible] = useState(false);
   const [filters, setFilters] = useState({
     priceRange: [0, 100] as [number, number],
     availability: 'all' as 'all' | 'online' | 'urgent-call',
@@ -81,6 +84,18 @@ export default function HomeScreen() {
     setFilterModalVisible(true);
   };
 
+  const handleCategoryPress = () => {
+    setCategoryModalVisible(true);
+  };
+
+  const handleAvailabilityPress = () => {
+    setAvailabilityModalVisible(true);
+  };
+
+  const handleLanguagePress = () => {
+    setLanguageModalVisible(true);
+  };
+
   const handleSearchSubmit = () => {
     if (searchValue.trim() || Object.keys(filters).length > 0) {
       router.push({
@@ -113,9 +128,9 @@ export default function HomeScreen() {
         searchValue={searchValue}
         onSearchChange={handleSearchChange}
         onFiltersPress={handleFiltersPress}
-        onCategoryPress={() => console.log('Category filter pressed')}
-        onAvailabilityPress={() => console.log('Availability filter pressed')}
-        onLanguagePress={() => console.log('Language filter pressed')}
+        onCategoryPress={handleCategoryPress}
+        onAvailabilityPress={handleAvailabilityPress}
+        onLanguagePress={handleLanguagePress}
         onVerifiedToggle={() => setIsVerifiedSelected(!isVerifiedSelected)}
         isVerifiedSelected={isVerifiedSelected}
         onSubmitEditing={handleSearchSubmit}
@@ -196,7 +211,7 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {/* Filter Modal */}
+      {/* Filter Modals */}
       <FilterModal
         visible={filterModalVisible}
         onClose={() => setFilterModalVisible(false)}
@@ -204,6 +219,31 @@ export default function HomeScreen() {
         initialFilters={filters}
         featured={isVerifiedSelected}
         onFeaturedChange={setIsVerifiedSelected}
+        mode="all"
+      />
+
+      <FilterModal
+        visible={categoryModalVisible}
+        onClose={() => setCategoryModalVisible(false)}
+        onApply={handleApplyFilters}
+        initialFilters={filters}
+        mode="categories"
+      />
+
+      <FilterModal
+        visible={availabilityModalVisible}
+        onClose={() => setAvailabilityModalVisible(false)}
+        onApply={handleApplyFilters}
+        initialFilters={filters}
+        mode="availability"
+      />
+
+      <FilterModal
+        visible={languageModalVisible}
+        onClose={() => setLanguageModalVisible(false)}
+        onApply={handleApplyFilters}
+        initialFilters={filters}
+        mode="language"
       />
     </View>
   );
