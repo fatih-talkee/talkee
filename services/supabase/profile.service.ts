@@ -84,7 +84,7 @@ export class ProfileService {
         supabase
           .from('professionals')
           .select(
-            'id, title, total_calls, is_verified, rate_per_minute, specialties'
+            'id, title, total_calls, total_minutes, is_verified, rate_per_minute, specialties, is_available, is_featured, bio'
           )
           .eq('user_id', user.id)
           .maybeSingle(),
@@ -115,7 +115,15 @@ export class ProfileService {
       };
 
       // Handle professional result
-      const { data: profData } = profResult;
+      const { data: profData, error: profError } = profResult;
+      
+      if (profError) {
+          logger.error('[ProfileService] ❌ Professional query error', {
+              error: profError.message,
+              code: profError.code,
+          });
+      }
+
       const professional = profData || null;
       const is_professional = !!profData;
 

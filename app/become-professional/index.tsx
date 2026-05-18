@@ -676,7 +676,7 @@ export default function BecomeProfessionalScreen() {
           style={[
             styles.progressBarFill,
             {
-              backgroundColor: theme.colors.primary,
+              backgroundColor: theme.colors.pinkTwo,
               width: progressAnim.interpolate({
                 inputRange: [0, 100],
                 outputRange: ['0%', '100%'],
@@ -809,7 +809,7 @@ export default function BecomeProfessionalScreen() {
         style={[
           styles.footer,
           {
-            backgroundColor: '#000000',
+            backgroundColor: theme.colors.surface,
             borderTopColor: theme.colors.border,
             paddingBottom: Math.max(insets.bottom, 16) + 24,
           },
@@ -819,13 +819,13 @@ export default function BecomeProfessionalScreen() {
           <Button
             title="Continue"
             onPress={handleNextStep}
-            style={styles.nextButtonFullWidth}
+            style={[styles.nextButtonFullWidth, { backgroundColor: theme.colors.pinkTwo || theme.colors.brandPink }]}
           />
         ) : (
           <Button
-            title={loading ? 'Creating...' : 'Save & Become Professional'}
+            title={loading ? 'Creating...' : 'Save & Start Using Talkee'}
             onPress={handleComplete}
-            style={styles.nextButtonFullWidth}
+            style={[styles.nextButtonFullWidth, { backgroundColor: theme.colors.pinkTwo || theme.colors.brandPink }]}
             disabled={loading}
           />
         )}
@@ -956,7 +956,7 @@ export default function BecomeProfessionalScreen() {
                             {
                               backgroundColor:
                                 availabilityFormData.availableAt === 'every'
-                                  ? theme.colors.primary + '20'
+                                  ? theme.colors.pinkTwo + '20'
                                   : 'transparent',
                               borderBottomColor: theme.colors.border,
                             },
@@ -977,7 +977,7 @@ export default function BecomeProfessionalScreen() {
                               {
                                 color:
                                   availabilityFormData.availableAt === 'every'
-                                    ? theme.colors.primary
+                                    ? theme.colors.pinkTwo
                                     : theme.colors.text,
                                 fontFamily:
                                   availabilityFormData.availableAt === 'every'
@@ -989,7 +989,7 @@ export default function BecomeProfessionalScreen() {
                             Every Week
                           </Text>
                           {availabilityFormData.availableAt === 'every' && (
-                            <Check size={18} color={theme.colors.primary} />
+                            <Check size={18} color={theme.colors.pinkTwo} />
                           )}
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -998,7 +998,7 @@ export default function BecomeProfessionalScreen() {
                             {
                               backgroundColor:
                                 availabilityFormData.availableAt === 'specific'
-                                  ? theme.colors.primary + '20'
+                                  ? theme.colors.pinkTwo + '20'
                                   : 'transparent',
                               borderBottomColor: theme.colors.border,
                             },
@@ -1019,7 +1019,7 @@ export default function BecomeProfessionalScreen() {
                               {
                                 color:
                                   availabilityFormData.availableAt === 'specific'
-                                    ? theme.colors.primary
+                                    ? theme.colors.pinkTwo
                                     : theme.colors.text,
                                 fontFamily:
                                   availabilityFormData.availableAt === 'specific'
@@ -1031,7 +1031,7 @@ export default function BecomeProfessionalScreen() {
                             Specific Date
                           </Text>
                           {availabilityFormData.availableAt === 'specific' && (
-                            <Check size={18} color={theme.colors.primary} />
+                            <Check size={18} color={theme.colors.pinkTwo} />
                           )}
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -1105,10 +1105,10 @@ export default function BecomeProfessionalScreen() {
                               availabilityModalStyles.dayButton,
                               {
                                 backgroundColor: isSelected
-                                  ? theme.colors.primary + '20'
+                                  ? theme.colors.pinkTwo + '20'
                                   : theme.colors.card,
                                 borderColor: isSelected
-                                  ? theme.colors.primary
+                                  ? theme.colors.pinkTwo
                                   : theme.colors.border,
                               },
                             ]}
@@ -1130,7 +1130,7 @@ export default function BecomeProfessionalScreen() {
                                 availabilityModalStyles.dayButtonText,
                                 {
                                   color: isSelected
-                                    ? theme.colors.primary
+                                    ? theme.colors.pinkTwo
                                     : theme.colors.text,
                                 },
                               ]}
@@ -1402,7 +1402,7 @@ export default function BecomeProfessionalScreen() {
                                     (showTimePicker === 'end' &&
                                       availabilityFormData.endHour ===
                                         time.value)
-                                      ? theme.colors.primary + '20'
+                                      ? theme.colors.pinkTwo + '20'
                                       : 'transparent',
                                   borderBottomColor: theme.colors.border,
                                 },
@@ -1442,7 +1442,7 @@ export default function BecomeProfessionalScreen() {
                                       (showTimePicker === 'end' &&
                                         availabilityFormData.endHour ===
                                           time.value)
-                                        ? theme.colors.primary
+                                        ? theme.colors.pinkTwo
                                         : theme.colors.text,
                                   },
                                 ]}
@@ -1513,10 +1513,10 @@ export default function BecomeProfessionalScreen() {
                         availabilityModalStyles.checkbox,
                         {
                           backgroundColor: availabilityFormData.videoCallEnabled
-                            ? theme.colors.primary
+                            ? theme.colors.pinkTwo
                             : 'transparent',
                           borderColor: availabilityFormData.videoCallEnabled
-                            ? theme.colors.primary
+                            ? theme.colors.pinkTwo
                             : theme.colors.border,
                         },
                       ]}
@@ -1589,7 +1589,7 @@ export default function BecomeProfessionalScreen() {
                 <Button
                   title="Add"
                   onPress={handleSaveAvailability}
-                  style={availabilityModalStyles.modalButtonFullWidth}
+                  style={[availabilityModalStyles.modalButtonFullWidth, { backgroundColor: theme.colors.pinkTwo || theme.colors.brandPink }]}
                   disabled={isSaveButtonDisabled}
                 />
               </View>

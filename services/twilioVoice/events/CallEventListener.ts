@@ -8,6 +8,8 @@ import { lookupCallMetadata } from '@/services/callRecordLookup.service';
 import { OUTGOING_CALL_TIMEOUT_MS } from '../constants';
 import { CallEventListenerDependencies } from '../types';
 import { CallSidExtractor, getCallState } from '../utils';
+import { Audio } from 'expo-av';
+import { Platform } from 'react-native';
 
 export class CallEventListener {
   private call: Call;
@@ -66,6 +68,17 @@ export class CallEventListener {
     });
 
     const connectedHandler = async () => {
+      // ✅ PATCH E: Do not re-process if already marked connected
+      const state = this.deps.getState();
+      if (state.status === 'connected') {
+        logger.info('[CallEventListener] ⏭️ Ignoring connected event - already connected', {
+          debugId: this.debugId,
+          callId: this.callId,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
       const connectedTimestamp = Date.now();
 
       logger.info('[CallEventListener] ✅ Call connected', {
@@ -74,6 +87,34 @@ export class CallEventListener {
         connectedTimestamp: new Date(connectedTimestamp).toISOString(),
         timestamp: new Date().toISOString(),
       });
+
+      // ✅ FIX: Set Android audio mode to MODE_IN_COMMUNICATION to prevent expo-av conflicts and ensure mic/speaker work
+      if (Platform.OS === 'android') {
+        try {
+          logger.info('[CallEventListener] 🔊 Configuring Android Audio Mode (MODE_IN_COMMUNICATION)');
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: true,
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: true,
+            playThroughEarpieceAndroid: false, // Explicitly route to speaker or let the OS decide based on ear proximity
+            shouldDuckAndroid: true,
+          });
+          logger.info('[CallEventListener] ✅ Android Audio Mode configured successfully');
+        } catch (audioError) {
+           logger.warn('[CallEventListener] ⚠️ Failed to set Android Audio Mode', {
+             error: audioError instanceof Error ? audioError.message : String(audioError),
+           });
+        }
+        
+        logger.info('[CallEventListener] 🔍 Audio Route Diagnostics', {
+           debugId: this.debugId,
+           audioRoute: 'SPEAKER (Forced via expo-av AudioMode)',
+           micState: this.call.isMuted() ? 'MUTED' : 'UNMUTED (System active)',
+           speakerState: 'ON (playThroughEarpieceAndroid: false)',
+           callState: getCallState(this.call),
+           timestamp: new Date().toISOString(),
+        });
+      }
 
       // Clear outgoing call timeout when connected
       const timeout = this.deps.getOutgoingCallTimeout();
@@ -441,6 +482,17 @@ export class CallEventListener {
     });
 
     const ringingHandler = () => {
+      // ✅ PATCH E: Ignore ringing if call is already connected
+      const state = this.deps.getState();
+      if (state.status === 'connected') {
+        logger.info('[CallEventListener] ⏭️ Ignoring ringing event - call is already connected', {
+          debugId: this.debugId,
+          callId: this.callId,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
       logger.info('[CallEventListener] 📞 Call ringing', {
         debugId: this.debugId,
         callId: this.callId,
@@ -540,6 +592,24 @@ export class CallEventListener {
         timestamp: new Date().toISOString(),
       });
 
+      // ✅ FIX: Reset Android audio mode to default normal mode on disconnect
+      if (Platform.OS === 'android') {
+        try {
+          logger.info('[CallEventListener] 🔊 Resetting Android Audio Mode to default');
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: false,
+            playThroughEarpieceAndroid: false, // Default is speaker
+            shouldDuckAndroid: false,
+          });
+        } catch (audioError) {
+          logger.warn('[CallEventListener] ⚠️ Failed to reset Android Audio Mode', {
+            error: audioError instanceof Error ? audioError.message : String(audioError),
+          });
+        }
+      }
+
       this.deps.setActiveCall(null);
 
       // Stop duration tracking
@@ -635,6 +705,7 @@ export class CallEventListener {
         isMuted: false,
         isOnHold: false,
         duration: 0,
+        callInvite: null, // ✅ PATCH D: Ensure invite is cleared on disconnect
       });
 
       logger.info(

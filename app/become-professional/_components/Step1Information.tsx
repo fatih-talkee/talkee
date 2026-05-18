@@ -41,21 +41,12 @@ export function Step1Information({
   return (
     <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
       <View style={[styles.stepContent, styles.stepContentCompact]}>
-        <View
-          style={[
-            styles.iconContainerCompact,
-            { backgroundColor: theme.colors.surface },
-          ]}
-        >
-          <View
-            style={[
-              styles.iconCircleCompact,
-              { backgroundColor: theme.colors.primary },
-            ]}
-          >
-            <User size={20} color={theme.colors.surface} strokeWidth={2.5} />
-          </View>
-        </View>
+        <Text style={[styles.title, { color: theme.colors.text }]}>
+          Tell Us About Yourself
+        </Text>
+        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+          Share your background so people can connect and call you with confidence.
+        </Text>
         {profileLoading ? (
           <InlineLoading message="Loading your information..." />
         ) : (
@@ -216,7 +207,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepContentCompact: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     width: '100%',
   },
   iconContainerCompact: {
@@ -234,6 +225,19 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  title: {
+    fontSize: 28,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 15,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 22,
   },
   titleCompact: {
     fontSize: 16,
@@ -265,9 +269,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 22,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 5,
   },
   input: {
     flex: 1,

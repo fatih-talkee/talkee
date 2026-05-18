@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontFamily: 'Inter-Bold',
     color: '#FFFFFF',
     marginBottom: 8,
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
   ctaContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.90)',
+    backgroundColor: 'rgba(255, 255, 255, 0.50)',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,

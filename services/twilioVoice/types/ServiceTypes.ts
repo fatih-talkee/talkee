@@ -77,7 +77,7 @@ export interface MakeCallParams {
   userBalance?: number;
   voice: Voice;
   accessToken: string | null;
-  getAccessToken: () => Promise<void>;
+  getAccessToken: () => Promise<string>;
   setupCallListeners: (
     call: Call,
     callId: string,

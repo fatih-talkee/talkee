@@ -226,8 +226,7 @@ export default function WalletScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+      style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header showLogo={true} />
 
       <ScrollView
@@ -254,7 +253,7 @@ export default function WalletScreen() {
                 { color: theme.colors.textSecondary },
               ]}
             >
-              Current Balance
+              Total Balance
             </Text>
           </View>
           {balanceLoading ? (

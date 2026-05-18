@@ -3,8 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   SafeAreaView,
+  ScrollView,
   Switch,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -127,9 +127,8 @@ export default function StatusScreen() {
   if (loading || profileLoading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        <Header showLogo showBack onBackPress={() => router.back()} />
+        style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <Header showLogo={false} title="Status & Visibility" showBack onBackPress={() => router.back()} />
         <PageLoading message="Loading status information..." />
       </SafeAreaView>
     );
@@ -137,22 +136,13 @@ export default function StatusScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
-      <Header showLogo showBack onBackPress={() => router.back()} />
+      style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <Header showLogo={false} title="Status & Visibility" showBack onBackPress={() => router.back()} />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>
-            Status & Visibility
-          </Text>
-          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-            Manage your profile visibility and availability status
-          </Text>
-        </View>
 
         <View style={styles.form}>
           {/* Availability Status */}
@@ -223,13 +213,13 @@ export default function StatusScreen() {
                     styles.iconContainer,
                     {
                       backgroundColor: isPublic
-                        ? theme.colors.primary + '15'
+                        ? theme.colors.pinkTwo + '15'
                         : theme.colors.textMuted + '15',
                     },
                   ]}
                 >
                   {isPublic ? (
-                    <Eye size={24} color={theme.colors.primary} />
+                    <Eye size={24} color={theme.colors.pinkTwo} />
                   ) : (
                     <EyeOff size={24} color={theme.colors.textMuted} />
                   )}
@@ -255,9 +245,9 @@ export default function StatusScreen() {
                 onValueChange={setIsPublic}
                 trackColor={{
                   false: theme.colors.border,
-                  true: theme.colors.primary + '80',
+                  true: theme.colors.pinkTwo + '80',
                 }}
-                thumbColor={isPublic ? theme.colors.primary : '#f4f3f4'}
+                thumbColor={isPublic ? theme.colors.pinkTwo : '#f4f3f4'}
               />
             </View>
           </Card>
@@ -267,12 +257,12 @@ export default function StatusScreen() {
             style={[
               styles.infoCard,
               {
-                backgroundColor: theme.colors.primary + '10',
-                borderColor: theme.colors.primary + '40',
+                backgroundColor: theme.colors.pinkTwo + '10',
+                borderColor: theme.colors.pinkTwo + '40',
               },
             ]}
           >
-            <Text style={[styles.infoTitle, { color: theme.colors.primary }]}>
+            <Text style={[styles.infoTitle, { color: theme.colors.pinkTwo }]}>
               💡 Information
             </Text>
             <Text
@@ -306,7 +296,7 @@ export default function StatusScreen() {
           title={saving ? 'Saving...' : 'Save Changes'}
           onPress={handleSave}
           disabled={saving}
-          style={styles.saveButton}
+          style={[styles.saveButton, { backgroundColor: theme.colors.pinkTwo }]}
         />
       </View>
     </SafeAreaView>
@@ -400,4 +390,3 @@ const styles = StyleSheet.create({
     width: '100%',
   },
 });
-

@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
+  TouchableOpacity,
   ActivityIndicator,
   Image,
   Animated,
@@ -31,574 +31,179 @@ interface CallDetails {
   callId: string | null;
 }
 
-// ✅ Timeout for incoming calls (60 seconds - industry standard)
 const INCOMING_CALL_TIMEOUT_MS = 60 * 1000;
 
 export default function IncomingCallHandler() {
-  // ✅ DEBUG: Log when component mounts
-  useEffect(() => {
-    logger.info('[IncomingCallHandler] 🎬 Component MOUNTED - Twilio SDK should initialize now', {
-      timestamp: new Date().toISOString(),
-    });
-    return () => {
-      logger.info('[IncomingCallHandler] 🔚 Component UNMOUNTED', {
-        timestamp: new Date().toISOString(),
-      });
-    };
-  }, []);
-
   const { theme } = useTheme();
-  const { callState, acceptIncomingCall, rejectIncomingCall } =
-    useTwilioVoice();
+  const { callState, acceptIncomingCall, rejectIncomingCall } = useTwilioVoice();
   const { user: currentUser, isLoading: profileLoading } = useProfile();
   const [showModal, setShowModal] = useState(false);
   const [callDetails, setCallDetails] = useState<CallDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [userBalance, setUserBalance] = useState<number | undefined>(undefined);
   const [fadeAnim] = useState(new Animated.Value(0));
-  const [scaleAnim] = useState(new Animated.Value(0.8));
+  const [scaleAnim] = useState(new Animated.Value(0.9));
   const [pulseAnim] = useState(new Animated.Value(1));
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
   const loadingDetailsRef = useRef(false);
   const lastCallSidRef = useRef<string | null>(null);
   const callDetailsRef = useRef<CallDetails | null>(null);
 
-  // ✅ REFACTORED: Use service for loading call details
   const loadIncomingCallDetailsData = useCallback(async () => {
     if (!callState.callInvite || loadingDetailsRef.current) return;
-
     const callInvite = callState.callInvite;
-    const currentCallSid = CallSidExtractor.extractFromCallInvite(
-      callInvite,
-      'IncomingCallHandler'
-    );
-
-    // Skip if we already loaded details for this call
-    if (lastCallSidRef.current === currentCallSid) {
-      logger.debug(
-        '[IncomingCallHandler] ⏭️ Skipping load - already loaded for this call',
-        {
-          callSid: currentCallSid?.substring(0, 20) + '...',
-          timestamp: new Date().toISOString(),
-        }
-      );
-      return;
-    }
+    const currentCallSid = CallSidExtractor.extractFromCallInvite(callInvite, 'IncomingCallHandler');
+    if (lastCallSidRef.current === currentCallSid) return;
 
     loadingDetailsRef.current = true;
     lastCallSidRef.current = currentCallSid || null;
 
-    logger.info('[IncomingCallHandler] 📞 Loading incoming call details', {
-      status: callState.status,
-      hasCallInvite: !!callState.callInvite,
-      timestamp: new Date().toISOString(),
-    });
-
     try {
-      // ✅ REFACTORED: Use service for loading details
-      const details = await loadIncomingCallDetails(
-        callInvite,
-        currentCallSid || undefined
-      );
+      const details = await loadIncomingCallDetails(callInvite, currentCallSid || undefined);
       setCallDetails(details);
       callDetailsRef.current = details;
-
-      // ✅ REFACTORED: Load user balance using service
       if (currentUser?.id) {
         const balance = await loadUserBalance(currentUser.id);
         setUserBalance(balance);
       }
-
-      logger.info('[IncomingCallHandler] ✅ Call details loaded', {
-        callerName: details.callerName,
-        hasAvatar: !!details.callerAvatar,
-        hasCallId: !!details.callId,
-        timestamp: new Date().toISOString(),
-      });
     } catch (error) {
-      logger.error(
-        '[IncomingCallHandler] ❌ Failed to load call details',
-        error,
-        {
-          errorMessage: error instanceof Error ? error.message : String(error),
-          timestamp: new Date().toISOString(),
-        }
-      );
-
-      const fallbackCallDetails: CallDetails = {
-        callerName: 'Unknown Caller',
-        callerAvatar: null,
-        callId: null,
-      };
-      setCallDetails(fallbackCallDetails);
-      callDetailsRef.current = fallbackCallDetails;
+      const fallback = { callerName: 'Bilinmeyen Arama', callerAvatar: null, callId: null };
+      setCallDetails(fallback);
+      callDetailsRef.current = fallback;
     } finally {
       loadingDetailsRef.current = false;
     }
-  }, [callState.callInvite, callState.status, currentUser?.id]);
+  }, [callState.callInvite, currentUser?.id]);
 
   useEffect(() => {
-    // ✅ SECURITY: Don't show incoming call modal if user is not authenticated
-    // But wait for profile loading to finish first to avoid false positives on startup
     if (!currentUser && !profileLoading) {
-      if (callState.callInvite) {
-        logger.warn(
-          '[IncomingCallHandler] ⚠️ Incoming call received but user is not authenticated, rejecting',
-          {
-            hasCallInvite: !!callState.callInvite,
-            status: callState.status,
-            timestamp: new Date().toISOString(),
-          }
-        );
-        void rejectIncomingCall();
-      }
+      if (callState.callInvite) void rejectIncomingCall();
       setShowModal(false);
       setCallDetails(null);
-      lastCallSidRef.current = null;
       return;
     }
 
-    // If still loading profile, just wait
-    if (!currentUser && profileLoading) {
-      return;
-    }
+    if (!currentUser && profileLoading) return;
 
-    // ✅ FIX: Show modal only if we have a PENDING callInvite
-    // Once the callInvite is accepted (either from JS or native notification), hide the modal
     const isPending = callState.callInvite ? isCallInvitePending(callState.callInvite) : false;
-    const inviteState = callState.callInvite ? getCallInviteState(callState.callInvite) : null;
-    
-    // Only show if callInvite exists, is still pending, and status is ringing
-    // Don't show for 'connecting' status since that means call was already accepted
-    const shouldShow = !!callState.callInvite && 
-      isPending &&
-      callState.status === 'ringing';
-
-    logger.info('[IncomingCallHandler] 🔍 Checking if should show modal', {
-      status: callState.status,
-      hasCallInvite: !!callState.callInvite,
-      inviteState,
-      isPending,
-      hasCurrentUser: !!currentUser,
-      shouldShow,
-      currentShowModal: showModal,
-      callInviteSid: callState.callInvite
-        ? CallSidExtractor.extractFromCallInvite(
-            callState.callInvite,
-            'IncomingCallHandler-check'
-          )?.substring(0, 20) + '...'
-        : null,
-      timestamp: new Date().toISOString(),
-    });
+    const shouldShow = !!callState.callInvite && isPending && callState.status === 'ringing';
 
     if (shouldShow) {
-      if (!showModal) {
-        logger.info('[IncomingCallHandler] ✅ Showing incoming call modal', {
-          status: callState.status,
-          hasCallInvite: !!callState.callInvite,
-          timestamp: new Date().toISOString(),
-        });
-      }
       setShowModal(true);
+      const currentCallSid = callState.callInvite ? CallSidExtractor.extractFromCallInvite(callState.callInvite) : null;
+      if (lastCallSidRef.current !== currentCallSid) void loadIncomingCallDetailsData();
 
-      // Load details if not already loaded for this call
-      const currentCallSid = callState.callInvite
-        ? CallSidExtractor.extractFromCallInvite(
-            callState.callInvite,
-            'IncomingCallHandler'
-          )
-        : null;
-      if (lastCallSidRef.current !== currentCallSid) {
-        void loadIncomingCallDetailsData();
-      }
-
-      // Animate in
       Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          tension: 50,
-          friction: 7,
-          useNativeDriver: true,
-        }),
+        Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.spring(scaleAnim, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
       ]).start();
 
-      // Set timeout to auto-reject if not answered
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
+      if (timeoutId) clearTimeout(timeoutId);
       const newTimeoutId = setTimeout(() => {
-        const currentCallDetails = callDetailsRef.current;
-        logger.warn(
-          '[IncomingCallHandler] ⏰ Incoming call timeout - auto-rejecting',
-          {
-            timeoutMs: INCOMING_CALL_TIMEOUT_MS,
-            status: callState.status,
-            hasCallInvite: !!callState.callInvite,
-            callId: currentCallDetails?.callId,
-            timestamp: new Date().toISOString(),
-          }
-        );
-        if (callState.callInvite) {
-          void rejectIncomingCall({
-            callId: currentCallDetails?.callId || undefined,
-            debugId: `timeout-${Date.now()}`,
-          });
-        }
+        if (callState.callInvite) void rejectIncomingCall();
         setShowModal(false);
         setCallDetails(null);
-        callDetailsRef.current = null;
-        lastCallSidRef.current = null;
-        setTimeoutId(null);
       }, INCOMING_CALL_TIMEOUT_MS);
       setTimeoutId(newTimeoutId as unknown as NodeJS.Timeout);
     } else {
-      // Clear timeout when call is no longer ringing
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        setTimeoutId(null);
-      }
-      if (showModal) {
-        logger.debug('[IncomingCallHandler] 🔄 Hiding modal', {
-          status: callState.status,
-          hasCallInvite: !!callState.callInvite,
-          timestamp: new Date().toISOString(),
-        });
-      }
+      if (timeoutId) clearTimeout(timeoutId);
       setShowModal(false);
       setCallDetails(null);
-      callDetailsRef.current = null;
-      lastCallSidRef.current = null;
       fadeAnim.setValue(0);
-      scaleAnim.setValue(0.8);
+      scaleAnim.setValue(0.9);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    callState.status,
-    callState.callInvite,
-    currentUser,
-    rejectIncomingCall,
-    loadIncomingCallDetailsData,
-  ]);
+  }, [callState.status, callState.callInvite, currentUser, profileLoading]);
 
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        setTimeoutId(null);
-      }
-    };
-  }, [timeoutId]);
-
-  // Pulse animation for incoming call
   useEffect(() => {
     if (showModal && callDetails) {
       const pulse = Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.15,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
+          Animated.timing(pulseAnim, { toValue: 1.08, duration: 1000, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
         ])
       );
       pulse.start();
       return () => pulse.stop();
-    } else {
-      pulseAnim.setValue(1);
     }
-  }, [showModal, callDetails, pulseAnim]);
+  }, [showModal, callDetails]);
 
-  // ✅ REFACTORED: Memoized handlers
   const handleAccept = useCallback(async () => {
-    if (!currentUser) {
-      Alert.alert('Error', 'You must be logged in to accept calls');
-      void rejectIncomingCall();
-      setShowModal(false);
-      return;
-    }
-
-    if (!callState.callInvite || loading) return;
-
+    if (!currentUser || !callState.callInvite || loading) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
-    logger.info('[IncomingCallHandler] ✅ User accepted call', {
-      callerName: callDetails?.callerName,
-      userId: currentUser.id,
-      timestamp: new Date().toISOString(),
-    });
-
     try {
-      // Double-check authentication
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) {
-        setLoading(false);
-        Alert.alert('Error', 'You must be logged in to accept calls');
-        void rejectIncomingCall();
-        setShowModal(false);
-        return;
-      }
-
       setShowModal(false);
-
       await acceptIncomingCall({
         callId: callDetails?.callId || undefined,
-        ratePerMinute: undefined,
         userBalance,
         debugId: `accept-${Date.now()}`,
       });
-
-      logger.info('[IncomingCallHandler] ✅ Call accepted successfully', {
-        timestamp: new Date().toISOString(),
-      });
     } catch (error) {
-      logger.error('[IncomingCallHandler] ❌ Failed to accept call', error, {
-        errorMessage: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
-      });
       setShowModal(true);
     } finally {
       setLoading(false);
     }
-  }, [
-    currentUser,
-    callState.callInvite,
-    loading,
-    callDetails,
-    userBalance,
-    acceptIncomingCall,
-    rejectIncomingCall,
-  ]);
+  }, [currentUser, callState.callInvite, loading, callDetails, userBalance]);
 
   const handleDecline = useCallback(async () => {
     if (!callState.callInvite || loading) return;
-
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
-    logger.info('[IncomingCallHandler] ❌ User declined call', {
-      callerName: callDetails?.callerName,
-      timestamp: new Date().toISOString(),
-    });
-
     try {
       setShowModal(false);
       await rejectIncomingCall({
         callId: callDetails?.callId || undefined,
         debugId: `decline-${Date.now()}`,
       });
-
-      logger.info('[IncomingCallHandler] ✅ Call declined successfully', {
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      logger.error('[IncomingCallHandler] ❌ Failed to decline call', error, {
-        errorMessage: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
-      });
     } finally {
       setLoading(false);
     }
-  }, [callState.callInvite, loading, callDetails, rejectIncomingCall]);
+  }, [callState.callInvite, loading, callDetails]);
 
-  if (!showModal) {
-    return null;
-  }
+  if (!showModal) return null;
+
+  const callerName = callDetails?.callerName || 'Bilinmeyen Arama';
+  const callerAvatar = callDetails?.callerAvatar;
 
   return (
-    <Modal
-      visible={showModal}
-      transparent
-      animationType="fade"
-      onRequestClose={handleDecline}
-      statusBarTranslucent
-    >
+    <Modal visible={showModal} transparent animationType="fade" statusBarTranslucent>
       <View style={styles.overlay}>
-        <Animated.View
-          style={[
-            styles.container,
-            {
-              opacity: fadeAnim,
-              transform: [{ scale: scaleAnim }],
-            },
-          ]}
-        >
-          <View style={styles.content}>
-            {callDetails ? (
-              <>
-                {/* Caller Avatar */}
-                <Animated.View
-                  style={[
-                    styles.avatarContainer,
-                    {
-                      transform: [{ scale: pulseAnim }],
-                    },
-                  ]}
-                >
-                  {callDetails.callerAvatar ? (
-                    <Image
-                      source={{ uri: callDetails.callerAvatar }}
-                      style={[
-                        styles.avatar,
-                        { borderColor: theme.colors.border },
-                      ]}
-                    />
-                  ) : (
-                    <LinearGradient
-                      colors={[
-                        theme.colors.primary,
-                        theme.colors.primary + 'DD',
-                      ]}
-                      style={[
-                        styles.avatarPlaceholder,
-                        { borderColor: theme.colors.border },
-                      ]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                    >
-                      <Text
-                        style={[
-                          styles.avatarText,
-                          { color: theme.colors.text },
-                        ]}
-                      >
-                        {callDetails.callerName.charAt(0).toUpperCase()}
-                      </Text>
-                    </LinearGradient>
-                  )}
-                  <View
-                    style={[
-                      styles.avatarRing,
-                      { borderColor: theme.colors.primary + '40' },
-                    ]}
-                  />
-                  <View
-                    style={[
-                      styles.avatarRingOuter,
-                      { borderColor: theme.colors.primary + '20' },
-                    ]}
-                  />
-                </Animated.View>
+        <Animated.View style={[styles.modalContainer, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
+          <LinearGradient colors={['#1f2937', '#111827']} style={styles.card}>
+            <View style={styles.typeBadge}>
+              <Phone size={14} color="#10b981" />
+              <Text style={styles.typeText}>Incoming Voice Call</Text>
+            </View>
 
-                {/* Caller Name */}
-                <Text style={[styles.callerName, { color: theme.colors.text }]}>
-                  {callDetails.callerName}
-                </Text>
-              </>
-            ) : (
-              <>
-                {/* Loading State */}
-                <View style={styles.avatarContainer}>
-                  <ActivityIndicator
-                    size="large"
-                    color={theme.colors.primary}
-                  />
+            <Animated.View style={[styles.avatarWrapper, { transform: [{ scale: pulseAnim }] }]}>
+              {callerAvatar ? (
+                <Image source={{ uri: callerAvatar }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={{ color: '#fff', fontSize: 40, fontWeight: 'bold' }}>{callerName.charAt(0)}</Text>
                 </View>
-                <Text style={[styles.callerName, { color: theme.colors.text }]}>
-                  Loading...
-                </Text>
-              </>
-            )}
+              )}
+            </Animated.View>
 
-            {/* Call Type Badge */}
-            <View
-              style={[
-                styles.callTypeBadge,
-                { backgroundColor: theme.colors.card + '80' },
-              ]}
-            >
-              <Text
-                style={[styles.callType, { color: theme.colors.textMuted }]}
-              >
-                📞 Incoming Call
-              </Text>
+            <Text style={styles.callerName}>{callerName}</Text>
+            <Text style={styles.statusText}>Calling...</Text>
+
+            <View style={styles.buttonRow}>
+              <TouchableOpacity style={[styles.actionBtn, styles.declineBtn]} onPress={handleDecline} disabled={loading}>
+                <PhoneOff size={24} color="#ffffff" />
+                <Text style={styles.btnLabel}>Reddet</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={[styles.actionBtn, styles.acceptBtn]} onPress={handleAccept} disabled={loading}>
+                {loading ? <ActivityIndicator color="#fff" /> : (
+                  <>
+                    <Phone size={24} color="#ffffff" />
+                    <Text style={styles.btnLabel}>Cevapla</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
-
-            {/* Action Buttons */}
-            <View style={styles.buttons}>
-              {/* Decline Button */}
-              <Pressable
-                onPress={handleDecline}
-                disabled={loading}
-                style={({ pressed }) => [
-                  styles.button,
-                  pressed && styles.buttonPressed,
-                  loading && styles.buttonDisabled,
-                ]}
-              >
-                <LinearGradient
-                  colors={[theme.colors.error, theme.colors.error + 'DD']}
-                  style={styles.buttonGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  {loading ? (
-                    <ActivityIndicator size="small" color={theme.colors.text} />
-                  ) : (
-                    <>
-                      <PhoneOff size={20} color={theme.colors.text} />
-                      <Text
-                        style={[
-                          styles.buttonText,
-                          { color: theme.colors.text },
-                        ]}
-                      >
-                        Decline
-                      </Text>
-                    </>
-                  )}
-                </LinearGradient>
-              </Pressable>
-
-              {/* Accept Button - Always render, but disable if no callInvite */}
-              <Pressable
-                onPress={handleAccept}
-                disabled={loading || !callState.callInvite}
-                style={({ pressed }) => [
-                  styles.button,
-                  styles.acceptButton,
-                  pressed && styles.buttonPressed,
-                  (loading || !callState.callInvite) && styles.buttonDisabled,
-                ]}
-              >
-                <LinearGradient
-                  colors={
-                    loading || !callState.callInvite
-                      ? [theme.colors.textMuted, theme.colors.textMuted + 'DD']
-                      : [theme.colors.success, theme.colors.success + 'DD']
-                  }
-                  style={styles.buttonGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  {loading ? (
-                    <ActivityIndicator size="small" color={theme.colors.text} />
-                  ) : (
-                    <>
-                      <Phone size={20} color={theme.colors.text} />
-                      <Text
-                        style={[
-                          styles.buttonText,
-                          { color: theme.colors.text },
-                        ]}
-                      >
-                        Accept
-                      </Text>
-                    </>
-                  )}
-                </LinearGradient>
-              </Pressable>
-            </View>
-          </View>
+          </LinearGradient>
         </Animated.View>
       </View>
     </Modal>
@@ -608,116 +213,84 @@ export default function IncomingCallHandler() {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-  },
-  container: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingBottom: 40,
-    paddingHorizontal: 40,
-    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.85)',
     justifyContent: 'center',
-    position: 'relative',
+    alignItems: 'center',
+    padding: 24,
   },
-  avatarContainer: {
-    position: 'relative',
+  modalContainer: {
+    width: '100%',
+    maxWidth: 360,
+  },
+  card: {
+    borderRadius: 32,
+    padding: 30,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(16,185,129,0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  typeText: {
+    color: '#10b981',
+    fontSize: 12,
+    fontFamily: 'Inter-Bold',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  avatarWrapper: {
     marginBottom: 20,
   },
   avatar: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     borderWidth: 4,
-  },
-  avatarPlaceholder: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 4,
-  },
-  avatarText: {
-    fontSize: 56,
-    fontFamily: 'Inter-Bold',
-  },
-  avatarRing: {
-    position: 'absolute',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    borderWidth: 2,
-    top: -10,
-    left: -10,
-  },
-  avatarRingOuter: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    borderWidth: 2,
-    top: -20,
-    left: -20,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   callerName: {
-    fontSize: 32,
+    color: '#ffffff',
+    fontSize: 28,
     fontFamily: 'Inter-Bold',
-    marginBottom: 12,
     textAlign: 'center',
-    letterSpacing: -0.5,
   },
-  callTypeBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginBottom: 12,
+  statusText: {
+    color: '#9ca3af',
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    marginTop: 6,
+    marginBottom: 30,
   },
-  callType: {
-    fontSize: 15,
-    fontFamily: 'Inter-Medium',
-  },
-  buttons: {
+  buttonRow: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 20,
     width: '100%',
   },
-  button: {
+  actionBtn: {
     flex: 1,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  buttonPressed: {
-    transform: [{ scale: 0.97 }],
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  acceptButton: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 12,
-  },
-  buttonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    height: 60,
+    borderRadius: 20,
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    alignItems: 'center',
+    gap: 4,
   },
-  buttonText: {
+  declineBtn: {
+    backgroundColor: '#ef4444',
+  },
+  acceptBtn: {
+    backgroundColor: '#10b981',
+  },
+  btnLabel: {
+    color: '#ffffff',
     fontSize: 14,
     fontFamily: 'Inter-Bold',
-    letterSpacing: 0.5,
   },
 });

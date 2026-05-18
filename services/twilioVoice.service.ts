@@ -1,4 +1,4 @@
-// import { Voice, Call, CallInvite } from '@twilio/voice-react-native-sdk';
+import { Voice, Call, CallInvite } from '@twilio/voice-react-native-sdk';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { AppState, Platform } from 'react-native';
@@ -44,19 +44,34 @@ class TwilioVoiceService {
   private isMakingCall: boolean = false;
   private isAcceptingCall: boolean = false;
   private lastDisconnectWasConnected: boolean = false;
+  private isPushRegistryInitialized: boolean = false;
+  private isInitializing: boolean = false;
+  private initializationPromise: Promise<void> | null = null;
 
   constructor() {
     this.stateManager = new CallStateManager();
   }
 
   async initialize(): Promise<void> {
-    const initStartTime = Date.now();
-    logger.info('[TwilioVoice] 🎬 Initializing Twilio Voice SDK (delayed)...', {
-      hasVoice: !!this.voice,
-      timestamp: new Date().toISOString(),
-    });
+    if (this.voice) {
+      logger.debug('[TwilioVoice] ℹ️ SDK already initialized, skipping');
+      return;
+    }
 
-    try {
+    if (this.isInitializing && this.initializationPromise) {
+      logger.info('[TwilioVoice] ⏳ Initialization already in progress, waiting...');
+      return this.initializationPromise;
+    }
+
+    this.isInitializing = true;
+    this.initializationPromise = (async () => {
+      const initStartTime = Date.now();
+      logger.info('[TwilioVoice] 🎬 Initializing Twilio Voice SDK (delayed)...', {
+        hasVoice: !!this.voice,
+        timestamp: new Date().toISOString(),
+      });
+
+      try {
       // ✅ FIX: Wait for React Native context to be fully ready before loading native module
       // This prevents the NullPointerException: jsEventEmitter on null object
       await new Promise(resolve => setTimeout(resolve, 3000));
@@ -127,6 +142,11 @@ class TwilioVoiceService {
 
       this.setupAppStateListener();
 
+      // ✅ GÖREV 2: Initialize PushKit registry for iOS
+      if (Platform.OS === 'ios') {
+        await this.initializePushRegistry();
+      }
+
       const totalElapsed = Date.now() - initStartTime;
       logger.info('[TwilioVoice] ✅ Initialized successfully', {
         voiceCreateElapsed: `${voiceCreateElapsed}ms`,
@@ -143,8 +163,13 @@ class TwilioVoiceService {
         timestamp: new Date().toISOString(),
       });
       throw error;
+    } finally {
+      this.isInitializing = false;
     }
-  }
+  })();
+  
+  return this.initializationPromise;
+}
 
   private setupAppStateListener(): void {
     logger.info('[TwilioVoice] 🔧 Setting up AppState listener', {
@@ -200,6 +225,19 @@ class TwilioVoiceService {
     return isInitialized;
   }
 
+  // ✅ PATCH C: Readiness check
+  isReadyForCalls(): boolean {
+    const isReady = this.isSdkInitialized() && this.isRegistered;
+    if (!isReady) {
+      logger.warn('[TwilioVoice] ⚠️ SDK is not fully ready for calls', {
+        isSdkInitialized: this.isSdkInitialized(),
+        isRegistered: this.isRegistered,
+        timestamp: new Date().toISOString()
+      });
+    }
+    return isReady;
+  }
+
   async getAccessToken(): Promise<string> {
     const tokenStartTime = Date.now();
     logger.info('[TwilioVoice] 🔑 Fetching access token...', {
@@ -211,10 +249,18 @@ class TwilioVoiceService {
     try {
       const invokeStartTime = Date.now();
       logger.debug('[TwilioVoice] 📡 Invoking twilio-token function', {
+        platform: Platform.OS,
         timestamp: new Date().toISOString(),
       });
 
-      const { data, error } = await supabase.functions.invoke('twilio-token');
+      // ✅ GÖREV 3: Platform ve Environment bilgisi ekleniyor
+      const BUILD_ENV = __DEV__ ? 'development' : 'production';
+      const { data, error } = await supabase.functions.invoke('twilio-token', {
+        headers: {
+          'x-platform': Platform.OS,
+          'x-build-environment': BUILD_ENV,
+        },
+      });
       const invokeElapsed = Date.now() - invokeStartTime;
 
       if (error) {
@@ -401,6 +447,20 @@ class TwilioVoiceService {
         const registerCallStartTime = Date.now();
         if (this.voice && typeof this.voice.register === 'function') {
           await this.voice.register(token);
+          
+          try {
+            const deviceToken = await this.voice.getDeviceToken();
+            logger.info('[TwilioVoice] 📱 Push Device Token (FCM/APNS)', {
+              deviceTokenPrefix: deviceToken ? deviceToken.substring(0, 15) + '...' : 'null',
+              deviceTokenLength: deviceToken?.length,
+              timestamp: new Date().toISOString(),
+            });
+          } catch (tokenError) {
+            logger.warn('[TwilioVoice] ⚠️ Could not fetch device token', {
+              error: tokenError instanceof Error ? tokenError.message : String(tokenError),
+              timestamp: new Date().toISOString(),
+            });
+          }
         } else {
           throw new Error('this.voice or register method is unexpectedly null');
         }
@@ -571,8 +631,8 @@ class TwilioVoiceService {
         ...params,
         voice: this.voice!,
         accessToken: this.accessToken,
-        getAccessToken: async (): Promise<void> => {
-          await this.getAccessToken();
+        getAccessToken: async (): Promise<string> => {
+          return await this.getAccessToken();
         },
         setupCallListeners: (
           call: Call,
@@ -1436,6 +1496,23 @@ class TwilioVoiceService {
         errorStack: error instanceof Error ? error.stack : undefined,
         timestamp: new Date().toISOString(),
       });
+    }
+  }
+
+  private async initializePushRegistry(): Promise<void> {
+    if (this.isPushRegistryInitialized) return;
+    if (!this.voice) {
+      logger.warn('[TwilioVoice] ⚠️ Cannot initialize push registry: Voice SDK not ready');
+      return;
+    }
+
+    try {
+      logger.info('[TwilioVoice] 📲 Initializing PushKit registry for iOS...');
+      await this.voice.initializePushRegistry();
+      this.isPushRegistryInitialized = true;
+      logger.info('[TwilioVoice] ✅ Push registry initialized');
+    } catch (error) {
+      logger.error('[TwilioVoice] ❌ Push registry init failed', error);
     }
   }
 }

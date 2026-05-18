@@ -12,7 +12,7 @@
  *   - URL: https://<your-project>.supabase.co/functions/v1/send-availability-reminder
  *   - Method: POST
  *   - Headers: Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>
- *   - Schedule: Every 5 minutes (*/5 * * * *)
+ *   - Schedule: Every 5 minutes
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';

@@ -27,35 +27,10 @@ export function Step3EducationExperience({
   return (
     <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
       <View style={[styles.stepContent, styles.stepContentCompact]}>
-        <View
-          style={[
-            styles.iconContainerCompact,
-            { backgroundColor: theme.colors.surface },
-          ]}
-        >
-          <View
-            style={[
-              styles.iconCircleCompact,
-              { backgroundColor: theme.colors.primary },
-            ]}
-          >
-            <GraduationCap
-              size={20}
-              color={theme.colors.surface}
-              strokeWidth={2.5}
-            />
-          </View>
-        </View>
-
-        <Text style={[styles.titleCompact, { color: theme.colors.text }]}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>
           Education & Experience
         </Text>
-        <Text
-          style={[
-            styles.subtitleCompact,
-            { color: theme.colors.textSecondary },
-          ]}
-        >
+        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
           Add your educational background and work experience
         </Text>
 
@@ -82,12 +57,12 @@ export function Step3EducationExperience({
             style={[
               styles.infoCard,
               {
-                backgroundColor: theme.colors.primary + '10',
-                borderColor: theme.colors.primary + '40',
+                backgroundColor: theme.colors.pinkTwo + '10',
+                borderColor: theme.colors.pinkTwo + '40',
               },
             ]}
           >
-            <Text style={[styles.infoTitle, { color: theme.colors.primary }]}>
+            <Text style={[styles.infoTitle, { color: theme.colors.pinkTwo }]}>
               💡 Pro Tip
             </Text>
             <Text
@@ -112,7 +87,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepContentCompact: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     width: '100%',
   },
   iconContainerCompact: {
@@ -130,6 +105,19 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  title: {
+    fontSize: 28,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 15,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 22,
   },
   titleCompact: {
     fontSize: 16,

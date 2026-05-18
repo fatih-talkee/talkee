@@ -24,6 +24,12 @@ import {
   Plus,
   Check,
 } from 'lucide-react-native';
+import {
+  GoogleIcon,
+  FacebookIcon,
+  LinkedInIcon,
+  EmailIcon,
+} from '@/components/ui/ProviderIcons';
 import { Header } from '@/components/ui/Header';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -79,17 +85,21 @@ export default function AccountSettingsScreen() {
     totalMinutes: 0,
   });
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
+  
+  const [authProviders, setAuthProviders] = useState<string[]>([]);
+  const [authProviderEmails, setAuthProviderEmails] = useState<Record<string, string>>({});
 
   // Check if user has password (email provider means they registered with password)
   const hasPassword = user?.oauth_providers?.includes('email') ?? true;
 
   // All available providers
+  // All available providers
   const allProviders = [
-    { id: 'email', name: 'Email & Password', icon: '🔑' },
-    { id: 'google', name: 'Google', icon: '🔵' },
-    { id: 'facebook', name: 'Facebook', icon: '🔵' },
-    { id: 'linkedin', name: 'LinkedIn', icon: '🔵' },
-  ] as const;
+    { id: 'email', name: 'Email & Password', Icon: EmailIcon },
+    { id: 'google', name: 'Google', Icon: GoogleIcon },
+    { id: 'facebook', name: 'Facebook', Icon: FacebookIcon },
+    { id: 'linkedin', name: 'LinkedIn', Icon: LinkedInIcon },
+  ];
 
   // Handle linking a provider
   const handleLinkProvider = async (
@@ -107,9 +117,7 @@ export default function AccountSettingsScreen() {
           const result = await signInWithGoogle();
 
           if (result.success && result.session) {
-            // Session is established, callback handler will link the provider
-            toast.show({
-              type: 'info',
+            toast.info({
               title: 'Connecting...',
               message: 'Google account is being linked',
             });
@@ -125,8 +133,7 @@ export default function AccountSettingsScreen() {
             });
           } else {
             // Browser flow - callback handler will process
-            toast.show({
-              type: 'info',
+            toast.info({
               title: 'Connecting...',
               message: 'Please complete the Google authentication',
             });
@@ -158,8 +165,7 @@ export default function AccountSettingsScreen() {
             message: error.message || 'Failed to connect account',
           });
         } else {
-          toast.show({
-            type: 'info',
+          toast.info({
             title: 'Connecting...',
             message: `Please complete the ${provider} authentication`,
           });
@@ -184,6 +190,26 @@ export default function AccountSettingsScreen() {
       });
       loadUserStats();
     }
+    
+    // Fetch auth providers from Supabase source of truth
+    const fetchAuthData = async () => {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        setAuthProviders(authUser.app_metadata?.providers || []);
+        
+        const emails: Record<string, string> = {};
+        if (authUser.identities) {
+          authUser.identities.forEach(identity => {
+            if (identity.provider && identity.identity_data?.email) {
+              emails[identity.provider] = identity.identity_data.email;
+            }
+          });
+        }
+        setAuthProviderEmails(emails);
+      }
+    };
+    
+    fetchAuthData();
   }, [user]);
 
   // Listen for auth state changes (e.g., when provider is linked)
@@ -194,6 +220,21 @@ export default function AccountSettingsScreen() {
       if (session) {
         // Refresh profile data when auth state changes (e.g., after linking provider)
         await refetch();
+        
+        // Also update local auth provider states
+        const authUser = session.user;
+        if (authUser) {
+          setAuthProviders(authUser.app_metadata?.providers || []);
+          const emails: Record<string, string> = {};
+          if (authUser.identities) {
+            authUser.identities.forEach(identity => {
+              if (identity.provider && identity.identity_data?.email) {
+                emails[identity.provider] = identity.identity_data.email;
+              }
+            });
+          }
+          setAuthProviderEmails(emails);
+        }
       }
     });
 
@@ -346,8 +387,7 @@ export default function AccountSettingsScreen() {
   if (profileLoading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
+        style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <Header showLogo showBack />
         <PageLoading message="Loading..." />
       </SafeAreaView>
@@ -357,8 +397,7 @@ export default function AccountSettingsScreen() {
   if (!user) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
+        style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <Header showLogo showBack />
         <PageLoading message="User not found" />
       </SafeAreaView>
@@ -367,8 +406,7 @@ export default function AccountSettingsScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+      style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Header
         showLogo
         showBack
@@ -440,7 +478,7 @@ export default function AccountSettingsScreen() {
               {
                 borderColor:
                   focusedInput === 'fullName' && isEditing
-                    ? theme.colors.primary
+                    ? theme.colors.pinkTwo
                     : theme.colors.border,
                 backgroundColor: theme.colors.surface,
               },
@@ -471,7 +509,7 @@ export default function AccountSettingsScreen() {
               {
                 borderColor:
                   focusedInput === 'email' && isEditing
-                    ? theme.colors.primary
+                    ? theme.colors.pinkTwo
                     : theme.colors.border,
                 backgroundColor: theme.colors.surface,
               },
@@ -502,7 +540,7 @@ export default function AccountSettingsScreen() {
               {
                 borderColor:
                   focusedInput === 'phone' && isEditing
-                    ? theme.colors.primary
+                    ? theme.colors.pinkTwo
                     : theme.colors.border,
                 backgroundColor: theme.colors.surface,
               },
@@ -562,12 +600,12 @@ export default function AccountSettingsScreen() {
               activeOpacity={0.7}
             >
               <View style={styles.settingLeft}>
-                <Lock size={20} color={theme.colors.primary} />
+                <Lock size={20} color={theme.colors.pinkTwo} />
                 <View style={styles.settingInfo}>
                   <Text
                     style={[
                       styles.settingLabel,
-                      { color: theme.colors.primary },
+                      { color: theme.colors.pinkTwo },
                     ]}
                   >
                     Change Password
@@ -644,11 +682,15 @@ export default function AccountSettingsScreen() {
             Connected Accounts
           </Text>
           <View style={styles.connectedAccountsList}>
-            {allProviders.map((providerInfo) => {
-              const isConnected = user.oauth_providers?.includes(
-                providerInfo.id
-              );
-              const providerEmail = user.oauth_emails?.[providerInfo.id];
+            {allProviders.map((providerInfo, index) => {
+              // Check auth providers array first, fallback to user profile record
+              const isConnected = authProviders.includes(providerInfo.id) ||
+                user.oauth_providers?.includes(providerInfo.id) || false;
+                
+              const providerEmail = authProviderEmails[providerInfo.id] || 
+                user.oauth_emails?.[providerInfo.id];
+              
+              const isLastItem = index === allProviders.length - 1;
 
               return (
                 <View
@@ -656,13 +698,13 @@ export default function AccountSettingsScreen() {
                   style={[
                     styles.accountItem,
                     {
-                      backgroundColor: theme.colors.surface,
                       borderColor: theme.colors.border,
+                      borderBottomWidth: isLastItem ? 0 : 1,
                     },
                   ]}
                 >
                   <View style={styles.accountItemLeft}>
-                    <Text style={styles.providerIcon}>{providerInfo.icon}</Text>
+                    <providerInfo.Icon size={32} style={styles.providerIcon} />
                     <View style={styles.accountItemInfo}>
                       <Text
                         style={[
@@ -728,7 +770,7 @@ export default function AccountSettingsScreen() {
                     <TouchableOpacity
                       style={[
                         styles.linkButton,
-                        { backgroundColor: theme.colors.primary },
+                        { backgroundColor: theme.colors.pinkTwo },
                       ]}
                       onPress={() =>
                         handleLinkProvider(
@@ -1005,10 +1047,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 20,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
+    paddingVertical: 5,
+    marginBottom: 5,
   },
   input: {
     flex: 1,
@@ -1051,7 +1093,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   connectedAccountsList: {
-    gap: 12,
+    // gap: 12, // Removed gap
   },
   accountItem: {
     flexDirection: 'row',
@@ -1059,7 +1101,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 12,
     borderRadius: 12,
-    borderWidth: 1,
+    // borderWidth: 1, // Removed border
   },
   accountItemLeft: {
     flexDirection: 'row',

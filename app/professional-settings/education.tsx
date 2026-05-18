@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -204,7 +203,7 @@ export default function EducationScreen() {
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
-        <Header showLogo showBack onBackPress={() => router.back()} />
+        <Header showLogo={false} title="CV" showBack onBackPress={() => router.back()} />
         <PageLoading message="Loading education and experience..." />
       </SafeAreaView>
     );
@@ -214,22 +213,12 @@ export default function EducationScreen() {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <Header showLogo showBack onBackPress={() => router.back()} />
+      <Header showLogo={false} title="CV" showBack onBackPress={() => router.back()} />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>
-            Education & Experience
-          </Text>
-          <Text
-            style={[styles.subtitle, { color: theme.colors.textSecondary }]}
-          >
-            Add your educational background and work experience
-          </Text>
-        </View>
 
         <View style={styles.form}>
           {/* Education */}
@@ -288,7 +277,7 @@ export default function EducationScreen() {
           title={saving ? 'Saving...' : 'Save Changes'}
           onPress={handleSave}
           disabled={saving}
-          style={styles.saveButton}
+          style={[styles.saveButton, { backgroundColor: theme.colors.pinkTwo }]}
         />
       </View>
     </SafeAreaView>

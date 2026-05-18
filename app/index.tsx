@@ -35,15 +35,25 @@ export default function Index() {
       checkSession();
     }, 500); // Small delay to let callback complete
 
-    // Listen for auth changes
+    // Auth değişikliklerini dinle
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       const isOnCallbackNow =
         segments[0] === 'auth' && segments[1] === 'callback';
-      if (!isOnCallbackNow) {
-        setIsAuthenticated(!!session);
+
+      // Callback sayfasındayken index müdahale etmez
+      if (isOnCallbackNow) return;
+
+      // iOS Fix: SIGNED_IN event'i geldiğinde ve session mevcutsa asla false set etme.
+      // segments, router.replace() sonrasında gecikmeli güncellenir.
+      // Bu race condition iOS'ta login sayfasına geri dönüşe yol açıyor.
+      if (_event === 'SIGNED_IN' && session) {
+        setIsAuthenticated(true);
+        return;
       }
+
+      setIsAuthenticated(!!session);
     });
 
     return () => {

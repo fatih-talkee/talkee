@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "net.talkee.app",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "net.talkee.app",
       "displayName": "Talkee",
@@ -115,7 +115,8 @@
           "merchantIdentifier": "merchant.net.talkee.app"
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "./plugins/withTwilioVideoConfig.js"
     ],
     "web": {
       "favicon": "./assets/images/favicon.png",

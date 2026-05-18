@@ -168,9 +168,8 @@ export default function InformationScreen() {
   if (loading || profileLoading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        <Header showLogo showBack onBackPress={() => router.back()} />
+        style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <Header showLogo={false} title="Basic Information" showBack onBackPress={() => router.back()} />
         <PageLoading message="Loading information..." />
       </SafeAreaView>
     );
@@ -178,9 +177,8 @@ export default function InformationScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
-      <Header showLogo showBack onBackPress={() => router.back()} />
+      style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <Header showLogo={false} title="Basic Information" showBack onBackPress={() => router.back()} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoid}
@@ -192,16 +190,6 @@ export default function InformationScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>
-            Information
-          </Text>
-          <Text
-            style={[styles.subtitle, { color: theme.colors.textSecondary }]}
-          >
-            Update your name, email, and professional bio
-          </Text>
-        </View>
 
         <View style={styles.form}>
           {/* Full Name */}
@@ -215,7 +203,7 @@ export default function InformationScreen() {
                 {
                   borderColor:
                     focusedInput === 'fullName'
-                      ? theme.colors.primary
+                      ? theme.colors.pinkTwo
                       : theme.colors.border,
                   backgroundColor: theme.colors.surface,
                 },
@@ -250,7 +238,7 @@ export default function InformationScreen() {
                 {
                   borderColor:
                     focusedInput === 'email'
-                      ? theme.colors.primary
+                      ? theme.colors.pinkTwo
                       : theme.colors.border,
                   backgroundColor: theme.colors.surface,
                 },
@@ -309,7 +297,7 @@ export default function InformationScreen() {
                   backgroundColor: theme.colors.surface,
                   borderColor:
                     focusedInput === 'bio'
-                      ? theme.colors.primary
+                      ? theme.colors.pinkTwo
                       : isBioValid
                       ? theme.colors.border
                       : theme.colors.error || '#ef4444',
@@ -361,7 +349,7 @@ export default function InformationScreen() {
           title={saving ? 'Saving...' : 'Save Changes'}
           onPress={handleSave}
           disabled={saving || !isBioValid}
-          style={styles.saveButton}
+          style={[styles.saveButton, { backgroundColor: theme.colors.pinkTwo }]}
         />
       </View>
     </SafeAreaView>
@@ -416,9 +404,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 20,
     paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingVertical: 8,
   },
   input: {
     flex: 1,

@@ -43,10 +43,10 @@ function AvailabilityCard({
           <View
             style={[
               styles.iconContainerSmall,
-              { backgroundColor: theme.colors.primary + '20' },
+              { backgroundColor: theme.colors.pinkTwo + '20' },
             ]}
           >
-            <Calendar size={24} color={theme.colors.primary} />
+            <Calendar size={24} color={theme.colors.pinkTwo} />
           </View>
           <View style={styles.cardInfo}>
             {item.availableAt === 'urgent' ? (
@@ -85,8 +85,8 @@ function AvailabilityCard({
                     style={[
                       styles.scheduleBadge,
                       {
-                        backgroundColor: theme.colors.primary + '20',
-                        color: theme.colors.primary,
+                        backgroundColor: theme.colors.pinkTwo + '20',
+                        color: theme.colors.pinkTwo,
                       },
                     ]}
                   >
@@ -100,15 +100,15 @@ function AvailabilityCard({
                       style={[
                         styles.dayTag,
                         {
-                          backgroundColor: theme.colors.primary + '15',
-                          borderColor: theme.colors.primary + '40',
+                          backgroundColor: theme.colors.pinkTwo + '15',
+                          borderColor: theme.colors.pinkTwo + '40',
                         },
                       ]}
                     >
                       <Text
                         style={[
                           styles.dayTagText,
-                          { color: theme.colors.primary },
+                          { color: theme.colors.pinkTwo },
                         ]}
                       >
                         {day.substring(0, 3)}
@@ -211,15 +211,15 @@ function AvailabilityCard({
             {
               backgroundColor:
                 theme.name === 'dark'
-                  ? theme.colors.primary + '40'
-                  : theme.colors.primary + '20',
+                  ? theme.colors.pinkTwo + '40'
+                  : theme.colors.pinkTwo + '20',
               borderWidth: theme.name === 'dark' ? 1 : 0,
-              borderColor: theme.colors.primary + '60',
+              borderColor: theme.colors.pinkTwo + '60',
             },
           ]}
         >
-          <Phone size={16} color={theme.colors.primary} />
-          <Text style={[styles.priceText, { color: theme.colors.primary }]}>
+          <Phone size={16} color={theme.colors.pinkTwo} />
+          <Text style={[styles.priceText, { color: theme.colors.pinkTwo }]}>
             ${parseFloat(item.pricePerMinute).toFixed(2)} / min
           </Text>
         </View>
@@ -261,28 +261,10 @@ export function Step5Availability({
 
   return (
     <View style={[styles.stepContent, styles.stepContentCompact]}>
-      <View
-        style={[
-          styles.iconContainerCompact,
-          { backgroundColor: theme.colors.surface },
-        ]}
-      >
-        <View
-          style={[
-            styles.iconCircleCompact,
-            { backgroundColor: theme.colors.primary },
-          ]}
-        >
-          <Calendar size={20} color={theme.colors.surface} strokeWidth={2.5} />
-        </View>
-      </View>
-
-      <Text style={[styles.titleCompact, { color: theme.colors.text }]}>
+      <Text style={[styles.title, { color: theme.colors.text }]}>
         Set Your Availability
       </Text>
-      <Text
-        style={[styles.subtitleCompact, { color: theme.colors.textSecondary }]}
-      >
+      <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
         Add your availability schedule
       </Text>
 
@@ -318,7 +300,7 @@ export function Step5Availability({
               <Button
                 title="Add Availability"
                 onPress={onAddAvailability}
-                style={styles.emptyButton}
+                style={[styles.emptyButton, { backgroundColor: theme.colors.pinkTwo || theme.colors.brandPink }]}
               />
             </Card>
           ) : (
@@ -337,7 +319,7 @@ export function Step5Availability({
                   styles.addAvailabilityButton,
                   {
                     backgroundColor: theme.colors.surface,
-                    borderColor: theme.colors.primary,
+                    borderColor: theme.colors.pinkTwo,
                     borderWidth: 1.5,
                     borderRadius: 12,
                     paddingVertical: 12,
@@ -349,12 +331,12 @@ export function Step5Availability({
                   },
                 ]}
               >
-                <Plus size={20} color={theme.colors.primary} />
+                <Plus size={20} color={theme.colors.pinkTwo} />
                 <Text
                   style={[
                     styles.addAvailabilityText,
                     {
-                      color: theme.colors.primary,
+                      color: theme.colors.pinkTwo,
                       marginLeft: 8,
                       fontFamily: 'Inter-Bold',
                       fontSize: 15,
@@ -377,7 +359,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepContentCompact: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     width: '100%',
   },
   iconContainerCompact: {
@@ -395,6 +377,19 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  title: {
+    fontSize: 28,
+    fontFamily: 'Inter-Bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 15,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 22,
   },
   titleCompact: {
     fontSize: 16,

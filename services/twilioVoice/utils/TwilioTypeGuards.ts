@@ -26,7 +26,8 @@ export function getCallInviteState(callInvite: CallInvite): string | undefined {
  */
 export function isCallInvitePending(callInvite: CallInvite): boolean {
   const state = getCallInviteState(callInvite);
-  return state === 'pending' || state === 'PENDING' || !state;
+  if (!state) return true;
+  return String(state).toLowerCase() === 'pending';
 }
 
 /**

@@ -6,12 +6,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   Switch,
   TextInput,
   Platform,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import {
   X,
   DollarSign,
@@ -22,12 +21,15 @@ import {
   Globe,
   Briefcase,
   Award,
+  Wifi,
+  Timer,
+  Search,
 } from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useCategories } from '@/hooks/useCategories';
 
-interface FilterState {
+export interface FilterState {
   priceRange: [number, number];
   availability: 'all' | 'online' | 'urgent-call';
   categories: string[];
@@ -37,6 +39,8 @@ interface FilterState {
   skills: string[];
 }
 
+export type FilterMode = 'all' | 'categories' | 'availability' | 'language';
+
 interface FilterModalProps {
   visible: boolean;
   onClose: () => void;
@@ -44,6 +48,7 @@ interface FilterModalProps {
   initialFilters: Omit<FilterState, 'featured'>;
   featured?: boolean;
   onFeaturedChange?: (featured: boolean) => void;
+  mode?: FilterMode;
 }
 
 export function FilterModal({
@@ -53,6 +58,7 @@ export function FilterModal({
   initialFilters,
   featured = false,
   onFeaturedChange,
+  mode = 'all',
 }: FilterModalProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -67,6 +73,10 @@ export function FilterModal({
     insets.top + (Platform.OS === 'android' ? 16 : 0),
     Platform.OS === 'android' ? 64 : 0
   );
+
+  // Theme-aware selected state colors (matching backup design)
+  const selectedBackground = theme.name === 'light' ? theme.colors.pinkTwo : theme.colors.primary;
+  const selectedTextColor = theme.name === 'light' ? '#FFFFFF' : '#1C1C1E';
 
   // Update filters when modal opens (sync with parent state)
   React.useEffect(() => {
@@ -91,9 +101,9 @@ export function FilterModal({
   ];
 
   const availabilityOptions = [
-    { label: 'All Professionals', value: 'all' as const },
-    { label: 'Online Now', value: 'online' as const },
-    { label: 'Urgent Call', value: 'urgent-call' as const },
+    { label: 'All Professionals', value: 'all' as const, icon: Clock },
+    { label: 'Online Now', value: 'online' as const, icon: Wifi },
+    { label: 'Urgent Call', value: 'urgent-call' as const, icon: Timer },
   ];
 
   // Common languages
@@ -128,6 +138,19 @@ export function FilterModal({
     return commonLanguages.filter((lang) => lang.toLowerCase().includes(query));
   }, [languageSearch]);
 
+  const getModalTitle = () => {
+    switch (mode) {
+      case 'categories':
+        return 'Categories';
+      case 'availability':
+        return 'Availability';
+      case 'language':
+        return 'Language';
+      default:
+        return 'Filters';
+    }
+  };
+
   const handleApply = () => {
     const { featured, ...filtersToApply } = filters;
     onApply(filtersToApply);
@@ -135,19 +158,29 @@ export function FilterModal({
   };
 
   const handleReset = () => {
-    setFilters({
-      priceRange: [0, 100],
-      availability: 'all',
-      categories: [],
-      featured: false,
-      languages: [],
-      specialties: [],
-      skills: [],
-    });
-    setCategorySearch('');
-    setLanguageSearch('');
-    setSpecialtySearch('');
-    setSkillSearch('');
+    if (mode === 'categories') {
+      setFilters({ ...filters, categories: [] });
+      setCategorySearch('');
+    } else if (mode === 'availability') {
+      setFilters({ ...filters, availability: 'all' });
+    } else if (mode === 'language') {
+      setFilters({ ...filters, languages: [] });
+      setLanguageSearch('');
+    } else {
+      setFilters({
+        priceRange: [0, 100],
+        availability: 'all',
+        categories: [],
+        featured: false,
+        languages: [],
+        specialties: [],
+        skills: [],
+      });
+      setCategorySearch('');
+      setLanguageSearch('');
+      setSpecialtySearch('');
+      setSkillSearch('');
+    }
   };
 
   const toggleCategory = (categoryId: string) => {
@@ -195,27 +228,30 @@ export function FilterModal({
     >
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
+        edges={['bottom', 'left', 'right']}
       >
         {/* Header */}
-        <View style={[styles.header, { backgroundColor: '#000000', paddingTop: topPadding }]}>
-          <Text style={[styles.title, { color: '#FFFFFF' }]}>Filters</Text>
+        <View style={[styles.header, {
+          backgroundColor: theme.name === 'dark' ? '#1C1C1E' : theme.colors.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.border,
+          paddingTop: topPadding
+        }]}>
+                    <Text style={[styles.title, { color: theme.colors.text }]}>{getModalTitle()}</Text>
           <View style={styles.headerRight}>
             <TouchableOpacity
               onPress={handleReset}
               style={[
                 styles.resetButton,
                 {
-                  backgroundColor:
-                    theme.name === 'dark'
-                      ? theme.colors.surface
-                      : theme.name === 'light'
-                      ? theme.colors.brandPink
-                      : '#000000',
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                  borderWidth: 1,
                 },
               ]}
             >
-              <RotateCcw size={20} color="#FFFFFF" />
-              <Text style={[styles.resetText, { color: '#FFFFFF' }]}>
+              <RotateCcw size={16} color={theme.colors.text} />
+              <Text style={[styles.resetText, { color: theme.colors.text }]}>
                 Reset
               </Text>
             </TouchableOpacity>
@@ -223,17 +259,10 @@ export function FilterModal({
               onPress={onClose} 
               style={[
                 styles.closeButton,
-                {
-                  backgroundColor:
-                    theme.name === 'dark'
-                      ? theme.colors.surface
-                      : theme.name === 'light'
-                      ? '#d60f83'
-                      : '#000000',
-                },
+                { backgroundColor: theme.colors.surface },
               ]}
             >
-              <X size={20} color="#FFFFFF" />
+              <X size={20} color={theme.colors.text} />
             </TouchableOpacity>
           </View>
         </View>
@@ -246,9 +275,10 @@ export function FilterModal({
           keyboardShouldPersistTaps="handled"
         >
           {/* Price Range */}
+          {mode === 'all' && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <DollarSign size={20} color={theme.colors.primary} />
+              <DollarSign size={20} color={theme.colors.pinkTwo} />
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Price Range
               </Text>
@@ -265,10 +295,10 @@ export function FilterModal({
                       styles.optionChip,
                       {
                         backgroundColor: isSelected
-                          ? theme.colors.accent
+                          ? selectedBackground
                           : theme.colors.card,
                         borderColor: isSelected
-                          ? theme.colors.accent
+                          ? selectedBackground
                           : theme.colors.border,
                       },
                     ]}
@@ -280,7 +310,7 @@ export function FilterModal({
                       style={[
                       styles.optionText,
                       {
-                        color: isSelected ? '#000000' : theme.colors.text,
+                        color: isSelected ? selectedTextColor : theme.colors.text,
                         },
                       ]}
                     >
@@ -291,11 +321,13 @@ export function FilterModal({
               })}
             </View>
           </View>
+          )}
 
           {/* Availability */}
+          {(mode === 'all' || mode === 'availability') && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Clock size={20} color={theme.colors.primary} />
+              <Clock size={20} color={theme.colors.pinkTwo || theme.colors.primary} />
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Availability
               </Text>
@@ -303,6 +335,7 @@ export function FilterModal({
             <View style={styles.availabilityOptions}>
               {availabilityOptions.map((option) => {
                 const isSelected = filters.availability === option.value;
+                const IconComponent = option.icon;
                 return (
                   <TouchableOpacity
                     key={option.value}
@@ -310,10 +343,10 @@ export function FilterModal({
                       styles.availabilityOption,
                       {
                         backgroundColor: isSelected
-                          ? theme.colors.accent
+                          ? selectedBackground
                           : theme.colors.card,
                         borderColor: isSelected
-                          ? theme.colors.accent
+                          ? selectedBackground
                           : theme.colors.border,
                       },
                     ]}
@@ -321,11 +354,13 @@ export function FilterModal({
                       setFilters({ ...filters, availability: option.value })
                     }
                   >
+                    <IconComponent size={18} color={isSelected ? selectedTextColor : theme.colors.textSecondary} />
+                    
                     <Text
                       style={[
                       styles.optionText,
                       {
-                        color: isSelected ? '#000000' : theme.colors.text,
+                        color: isSelected ? selectedTextColor : theme.colors.text,
                         },
                       ]}
                     >
@@ -336,11 +371,13 @@ export function FilterModal({
               })}
             </View>
           </View>
+          )}
 
           {/* Featured */}
+          {mode === 'all' && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Star size={20} color={theme.colors.primary} />
+              <Star size={20} color={theme.colors.pinkTwo} />
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Featured Only
               </Text>
@@ -363,29 +400,63 @@ export function FilterModal({
               </Text>
             </View>
           </View>
+          )}
 
           {/* Categories */}
+          {(mode === 'all' || mode === 'categories') && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Tag size={20} color={theme.colors.primary} />
+              <Tag size={20} color={theme.colors.pinkTwo} />
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Categories
               </Text>
             </View>
-            <TextInput
-              style={[
-                styles.searchInput,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                  color: theme.colors.text,
-                },
-              ]}
-              placeholder="Search categories..."
-              placeholderTextColor={theme.colors.textMuted}
-              value={categorySearch}
-              onChangeText={setCategorySearch}
-            />
+
+            <View style={styles.searchBarWrapper}>
+              <View
+                style={[
+                  styles.searchContainer,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <Search size={20} color={theme.colors.textMuted} />
+                <TextInput
+                  value={categorySearch}
+                  onChangeText={setCategorySearch}
+                  placeholder="Search categories..."
+                  placeholderTextColor={theme.colors.textMuted}
+                  style={[styles.searchInput, { color: theme.colors.text }]}
+                />
+                {categorySearch.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setCategorySearch('')}
+                    style={styles.clearButton}
+                  >
+                    <X size={18} color={theme.colors.textMuted} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Selection Count */}
+            {filters.categories.length > 0 && (
+              <View style={styles.selectedCountContainer}>
+                <Text
+                  style={[
+                    styles.selectedCountText,
+                    { color: '#007AFF' }, // Consistent Blue
+                  ]}
+                >
+                  {filters.categories.length}{' '}
+                  {filters.categories.length === 1 ? 'category' : 'categories'}{' '}
+                  selected
+                </Text>
+              </View>
+            )}
+
             <View style={styles.categoryGrid}>
               {filteredCategories.slice(0, 20).map((category) => {
                 const isSelected = filters.categories.includes(category.id);
@@ -393,13 +464,13 @@ export function FilterModal({
                   <TouchableOpacity
                     key={category.id}
                     style={[
-                      styles.categoryChip,
+                      styles.categoryPill,
                       {
                         backgroundColor: isSelected
-                          ? theme.colors.accent
-                          : theme.colors.card,
+                          ? '#007AFF'
+                          : theme.colors.surface,
                         borderColor: isSelected
-                          ? theme.colors.accent
+                          ? '#007AFF'
                           : theme.colors.border,
                       },
                     ]}
@@ -407,14 +478,23 @@ export function FilterModal({
                   >
                     <Text
                       style={[
-                      styles.categoryChipText,
-                      {
-                        color: isSelected ? '#000000' : theme.colors.text,
+                        styles.categoryPillText,
+                        {
+                          color: '#FFFFFF',
                         },
                       ]}
                     >
-                      {category.emoji ? `${category.emoji} ` : ''}
                       {category.name}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.categoryPillIcon,
+                        {
+                          color: '#FFFFFF',
+                        },
+                      ]}
+                    >
+                      {isSelected ? '✓' : '+'}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -428,29 +508,47 @@ export function FilterModal({
               </Text>
             )}
           </View>
+          )}
 
           {/* Languages */}
+          {(mode === 'all' || mode === 'language') && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Globe size={20} color={theme.colors.primary} />
+              <Globe size={20} color={theme.colors.pinkTwo} />
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Languages
               </Text>
             </View>
-            <TextInput
-              style={[
-                styles.searchInput,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                  color: theme.colors.text,
-                },
-              ]}
-              placeholder="Search languages..."
-              placeholderTextColor={theme.colors.textMuted}
-              value={languageSearch}
-              onChangeText={setLanguageSearch}
-            />
+
+            <View style={styles.searchBarWrapper}>
+              <View
+                style={[
+                  styles.searchContainer,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+              >
+                <Search size={20} color={theme.colors.textMuted} />
+                <TextInput
+                  value={languageSearch}
+                  onChangeText={setLanguageSearch}
+                  placeholder="Search languages..."
+                  placeholderTextColor={theme.colors.textMuted}
+                  style={[styles.searchInput, { color: theme.colors.text }]}
+                />
+                {languageSearch.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setLanguageSearch('')}
+                    style={styles.clearButton}
+                  >
+                    <X size={18} color={theme.colors.textMuted} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
             <View style={styles.tagGrid}>
               {filteredLanguages.map((language) => {
                 const isSelected = filters.languages.includes(language);
@@ -461,10 +559,10 @@ export function FilterModal({
                       styles.tagChip,
                       {
                         backgroundColor: isSelected
-                          ? theme.colors.accent
-                          : theme.colors.card,
+                          ? '#007AFF'
+                          : theme.colors.surface,
                         borderColor: isSelected
-                          ? theme.colors.accent
+                          ? '#007AFF'
                           : theme.colors.border,
                       },
                     ]}
@@ -474,22 +572,34 @@ export function FilterModal({
                       style={[
                         styles.tagChipText,
                         {
-                          color: isSelected ? '#000000' : theme.colors.text,
+                          color: '#FFFFFF',
                         },
                       ]}
                     >
                       {language}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.categoryPillIcon,
+                        {
+                          color: '#FFFFFF',
+                        },
+                      ]}
+                    >
+                      {isSelected ? '✓' : '+'}
                     </Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
           </View>
+          )}
 
           {/* Specialties */}
+          {mode === 'all' && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Briefcase size={20} color={theme.colors.primary} />
+              <Briefcase size={20} color={theme.colors.pinkTwo} />
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Specialties
               </Text>
@@ -539,11 +649,13 @@ export function FilterModal({
               </View>
             )}
           </View>
+          )}
 
           {/* Skills & Certifications */}
+          {mode === 'all' && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Award size={20} color={theme.colors.primary} />
+              <Award size={20} color={theme.colors.pinkTwo} />
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
                 Skills & Certifications
               </Text>
@@ -593,6 +705,7 @@ export function FilterModal({
               </View>
             )}
           </View>
+          )}
         </ScrollView>
 
         {/* Footer */}
@@ -600,7 +713,7 @@ export function FilterModal({
           style={[
             styles.footer,
             {
-              backgroundColor: '#000000',
+              backgroundColor: theme.colors.surface,
               borderTopColor: theme.colors.border,
               paddingBottom: Math.max(insets.bottom, 60),
             },
@@ -609,7 +722,7 @@ export function FilterModal({
           <Button
             title="Apply Filters"
             onPress={handleApply}
-            style={styles.applyButton}
+            style={[styles.applyButton, { backgroundColor: theme.colors.pinkTwo || theme.colors.brandPink }]}
           />
         </View>
       </SafeAreaView>
@@ -643,19 +756,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 20,
+    fontSize: 24,
     fontFamily: 'Inter-Bold',
   },
   resetButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   resetText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Inter-Medium',
   },
   content: {
@@ -687,7 +800,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
   optionText: {
     fontSize: 14,
@@ -697,10 +810,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   availabilityOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
   switchContainer: {
     flexDirection: 'row',
@@ -713,45 +829,75 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   searchInput: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
+    flex: 1,
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-    marginBottom: 12,
+  },
+  searchBarWrapper: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 24,
+    borderWidth: 2,
+    gap: 12,
+  },
+  clearButton: {
+    padding: 4,
+  },
+  selectedCountContainer: {
+    marginBottom: 8,
+    marginTop: -8,
+  },
+  selectedCountText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
   },
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
     marginTop: 12,
   },
-  categoryChip: {
-    paddingHorizontal: 16,
+  categoryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    gap: 8,
   },
-  categoryChipText: {
+  categoryPillText: {
     fontSize: 14,
-    fontFamily: 'Inter-Medium',
+    fontFamily: 'Inter-SemiBold',
+  },
+  categoryPillIcon: {
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   tagGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 12,
     marginTop: 12,
   },
   tagChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    gap: 8,
   },
   tagChipText: {
-    fontSize: 13,
-    fontFamily: 'Inter-Medium',
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
   },
   moreText: {
     fontSize: 12,
@@ -761,6 +907,8 @@ const styles = StyleSheet.create({
   },
   footer: {
     padding: 20,
+    paddingTop: 12,
+    paddingBottom: 0,
     borderTopWidth: 1,
   },
   applyButton: {

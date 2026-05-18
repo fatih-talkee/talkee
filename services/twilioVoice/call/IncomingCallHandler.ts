@@ -292,20 +292,27 @@ export class IncomingCallHandler {
         timestamp: new Date().toISOString(),
       });
 
-      // Update state to connecting
-      updateState({ status: 'connecting', call, callInvite: null });
-
-      logger.debug('[IncomingCallHandler] 🔧 Setting up call listeners', {
-        debugId,
-        callId,
-        timestamp: new Date().toISOString(),
-      });
-
-      setupCallListeners(call, callId, debugId, ratePerMinute, userBalance);
-
       try {
         const callState = getCallState(call);
         const isAlreadyConnected = isCallConnected(call);
+
+        // Mirror the real native call state immediately so both devices render
+        // the same connection state even if the connected event is missed.
+        updateState({
+          status: isAlreadyConnected ? 'connected' : 'connecting',
+          call,
+          callInvite: null,
+        });
+
+        logger.debug('[IncomingCallHandler] 🔧 Setting up call listeners', {
+          debugId,
+          callId,
+          nativeCallState: callState,
+          isAlreadyConnected,
+          timestamp: new Date().toISOString(),
+        });
+
+        setupCallListeners(call, callId, debugId, ratePerMinute, userBalance);
 
         if (isAlreadyConnected && callId) {
           logger.info(
@@ -322,11 +329,6 @@ export class IncomingCallHandler {
           const callSid = CallSidExtractor.extractFromCallInvite(callInvite, debugId);
           await updateCallOnConnect(callId, debugId, callSid || undefined);
 
-          // ✅ REMOVED: Don't update state to 'connected' or start duration tracking here
-          // CallEventListener will handle this when the 'connected' event fires
-          // This ensures duration tracking only starts when the call is actually connected,
-          // not when accept is called (which may happen before the call is fully connected)
-          // The same applies to billing - CallEventListener will start it on the connected event
           logger.debug(
             '[IncomingCallHandler] ⏭️ Skipping state update and duration tracking - CallEventListener will handle on connected event',
             {
@@ -543,4 +545,3 @@ export class IncomingCallHandler {
     }
   }
 }
-

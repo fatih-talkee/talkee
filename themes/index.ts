@@ -55,7 +55,7 @@ export const lightTheme: Theme = {
   name: 'light',
   displayName: 'Light',
   colors: {
-    background: '# ',
+    background: '#FFFFFF',
     surface: '#f8fafc',
 
     card: '#ffffff',
@@ -98,7 +98,7 @@ export const darkTheme: Theme = {
   name: 'dark',
   displayName: 'Dark',
   colors: {
-    background: '#000000',
+    background: '#1C1C1E',
     surface: '#2C2C2E',
     card: '#2C2C2E',
 

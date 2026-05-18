@@ -3,13 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   SafeAreaView,
-  Modal,
   Pressable,
   TouchableOpacity,
   TextInput,
   Platform,
+  ScrollView,
+  Modal,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
@@ -392,9 +392,8 @@ export default function AvailabilityScreen() {
   if (loading || profileLoading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        <Header showLogo showBack onBackPress={() => router.back()} />
+        style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <Header showLogo={false} title="Availability" showBack onBackPress={() => router.back()} />
         <PageLoading message="Loading availabilities..." />
       </SafeAreaView>
     );
@@ -402,24 +401,13 @@ export default function AvailabilityScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
-      <Header showLogo showBack onBackPress={() => router.back()} />
+      style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <Header showLogo={false} title="Availability" showBack onBackPress={() => router.back()} />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>
-            Availability
-          </Text>
-          <Text
-            style={[styles.subtitle, { color: theme.colors.textSecondary }]}
-          >
-            Set your schedule and pricing
-          </Text>
-        </View>
 
         {availabilities.length === 0 ? (
           <Card
@@ -469,10 +457,10 @@ export default function AvailabilityScreen() {
                     <View
                       style={[
                         styles.iconContainerSmall,
-                        { backgroundColor: theme.colors.primary + '20' },
+                        { backgroundColor: theme.colors.pinkTwo + '20' },
                       ]}
                     >
-                      <Calendar size={24} color={theme.colors.primary} />
+                      <Calendar size={24} color={theme.colors.pinkTwo} />
                     </View>
                     <View style={styles.cardInfo}>
                       {item.availableAt === 'urgent' ? (
@@ -511,8 +499,8 @@ export default function AvailabilityScreen() {
                               style={[
                                 styles.scheduleBadge,
                                 {
-                                  backgroundColor: theme.colors.primary + '20',
-                                  color: theme.colors.primary,
+                                  backgroundColor: theme.colors.pinkTwo + '20',
+                                  color: theme.colors.pinkTwo,
                                 },
                               ]}
                             >
@@ -527,15 +515,15 @@ export default function AvailabilityScreen() {
                                   styles.dayTag,
                                   {
                                     backgroundColor:
-                                      theme.colors.primary + '15',
-                                    borderColor: theme.colors.primary + '40',
+                                      theme.colors.pinkTwo + '15',
+                                    borderColor: theme.colors.pinkTwo + '40',
                                   },
                                 ]}
                               >
                                 <Text
                                   style={[
                                     styles.dayTagText,
-                                    { color: theme.colors.primary },
+                                    { color: theme.colors.pinkTwo },
                                   ]}
                                 >
                                   {day.substring(0, 3)}
@@ -661,18 +649,18 @@ export default function AvailabilityScreen() {
                       {
                         backgroundColor:
                           theme.name === 'dark'
-                            ? theme.colors.primary + '40'
-                            : theme.colors.primary + '20',
+                            ? theme.colors.pinkTwo + '40'
+                            : theme.colors.pinkTwo + '20',
                         borderWidth: theme.name === 'dark' ? 1 : 0,
-                        borderColor: theme.colors.primary + '60',
+                        borderColor: theme.colors.pinkTwo + '60',
                       },
                     ]}
                   >
-                    <Phone size={16} color={theme.colors.primary} />
+                    <Phone size={16} color={theme.colors.pinkTwo} />
                     <Text
                       style={[
                         styles.priceText,
-                        { color: theme.colors.primary },
+                        { color: theme.colors.pinkTwo },
                       ]}
                     >
                       ${parseFloat(item.pricePerMinute).toFixed(2)} / min
@@ -718,7 +706,7 @@ export default function AvailabilityScreen() {
                 styles.addAvailabilityButton,
                 {
                   backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.primary,
+                  borderColor: theme.colors.pinkTwo,
                   borderWidth: 1.5,
                   borderRadius: 12,
                   paddingVertical: 12,
@@ -730,12 +718,12 @@ export default function AvailabilityScreen() {
                 },
               ]}
             >
-              <Plus size={20} color={theme.colors.primary} />
+              <Plus size={20} color={theme.colors.pinkTwo} />
               <Text
                 style={[
                   styles.addAvailabilityText,
                   {
-                    color: theme.colors.primary,
+                    color: theme.colors.pinkTwo,
                     marginLeft: 8,
                     fontFamily: 'Inter-Bold',
                     fontSize: 15,
@@ -869,7 +857,7 @@ export default function AvailabilityScreen() {
                         {
                           backgroundColor:
                             availabilityFormData.availableAt === 'every'
-                              ? theme.colors.primary + '20'
+                              ? theme.colors.pinkTwo + '20'
                                   : 'transparent',
                               borderBottomColor: theme.colors.border,
                         },
@@ -890,7 +878,7 @@ export default function AvailabilityScreen() {
                           {
                                 color:
                               availabilityFormData.availableAt === 'every'
-                                ? theme.colors.primary
+                                ? theme.colors.pinkTwo
                                     : theme.colors.text,
                                 fontFamily:
                                   availabilityFormData.availableAt === 'every'
@@ -904,7 +892,7 @@ export default function AvailabilityScreen() {
                         {availabilityFormData.availableAt === 'every' && (
                             <Check
                               size={18}
-                              color={theme.colors.primary}
+                              color={theme.colors.pinkTwo}
                           />
                         )}
                     </TouchableOpacity>
@@ -914,7 +902,7 @@ export default function AvailabilityScreen() {
                         {
                           backgroundColor:
                             availabilityFormData.availableAt === 'specific'
-                              ? theme.colors.primary + '20'
+                              ? theme.colors.pinkTwo + '20'
                                   : 'transparent',
                               borderBottomColor: theme.colors.border,
                         },
@@ -935,7 +923,7 @@ export default function AvailabilityScreen() {
                           {
                                 color:
                               availabilityFormData.availableAt === 'specific'
-                                ? theme.colors.primary
+                                ? theme.colors.pinkTwo
                                     : theme.colors.text,
                                 fontFamily:
                                   availabilityFormData.availableAt === 'specific'
@@ -949,7 +937,7 @@ export default function AvailabilityScreen() {
                         {availabilityFormData.availableAt === 'specific' && (
                             <Check
                               size={18}
-                              color={theme.colors.primary}
+                              color={theme.colors.pinkTwo}
                           />
                         )}
                     </TouchableOpacity>
@@ -1019,10 +1007,10 @@ export default function AvailabilityScreen() {
                               styles.dayButton,
                               {
                                 backgroundColor: isSelected
-                                  ? theme.colors.primary + '20'
+                                  ? theme.colors.pinkTwo + '20'
                                   : theme.colors.card,
                                 borderColor: isSelected
-                                  ? theme.colors.primary
+                                  ? theme.colors.pinkTwo
                                   : theme.colors.border,
                               },
                             ]}
@@ -1044,7 +1032,7 @@ export default function AvailabilityScreen() {
                                 styles.dayButtonText,
                                 {
                                   color: isSelected
-                                    ? theme.colors.primary
+                                    ? theme.colors.pinkTwo
                                     : theme.colors.text,
                                 },
                               ]}
@@ -1299,7 +1287,7 @@ export default function AvailabilityScreen() {
                                     (showTimePicker === 'end' &&
                                       availabilityFormData.endHour ===
                                         time.value)
-                                      ? theme.colors.primary + '20'
+                                      ? theme.colors.pinkTwo + '20'
                                       : 'transparent',
                                   borderBottomColor: theme.colors.border,
                                 },
@@ -1339,7 +1327,7 @@ export default function AvailabilityScreen() {
                                       (showTimePicker === 'end' &&
                                         availabilityFormData.endHour ===
                                           time.value)
-                                        ? theme.colors.primary
+                                        ? theme.colors.pinkTwo
                                         : theme.colors.text,
                                   },
                                 ]}
@@ -1404,10 +1392,10 @@ export default function AvailabilityScreen() {
                         styles.checkbox,
                         {
                           backgroundColor: availabilityFormData.videoCallEnabled
-                            ? theme.colors.primary
+                            ? theme.colors.pinkTwo
                             : 'transparent',
                           borderColor: availabilityFormData.videoCallEnabled
-                            ? theme.colors.primary
+                            ? theme.colors.pinkTwo
                             : theme.colors.border,
                         },
                       ]}

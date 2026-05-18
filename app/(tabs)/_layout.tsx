@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
-import { Chrome as Home, Wallet, Search, User } from 'lucide-react-native';
+import { Chrome as Home, Users, Wallet, Search, User } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -22,10 +22,10 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: theme.colors.tabBarBackground,
           borderTopColor: theme.colors.tabBarBorder,
-          borderTopWidth: 1,
+          borderTopWidth: 0,
           paddingTop: 6,
           paddingBottom: bottomPadding,
-          height: Platform.OS === 'android' ? 70 + (bottomPadding - 8) : 70,
+          height: Platform.OS === 'android' ? 80 + (bottomPadding - 8) : 80,
           // shiny upward shadow/elevation
           ...(Platform.OS === 'web'
             ? { boxShadow: '0px -8px 16px rgba(0,0,0,0.08)' }
@@ -60,6 +60,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="people"
+        options={{
+          title: 'People',
+          tabBarIcon: ({ color }) => (
+            <Users size={22} color={color} strokeWidth={2} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="wallet"
         options={{
           title: 'Wallet',
@@ -84,6 +93,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => (
             <User size={22} color={color} strokeWidth={2} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="search-results"
+        options={{
+          href: null,
+          title: 'Search Results',
         }}
       />
     </Tabs>

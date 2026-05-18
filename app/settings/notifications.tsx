@@ -118,8 +118,7 @@ export default function NotificationsSettingsScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.surface }]}
-    >
+      style={[styles.container, { backgroundColor: theme.colors.surface }]}>
       <Header
         showLogo
         showBack

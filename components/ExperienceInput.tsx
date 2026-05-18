@@ -81,11 +81,11 @@ export function ExperienceInput({
           onPress={handleAdd}
           style={[
             styles.addButton,
-            { backgroundColor: theme.colors.primary + '20' },
+            { backgroundColor: theme.colors.pinkTwo + '20' },
           ]}
         >
-          <Plus size={18} color={theme.colors.primary} />
-          <Text style={[styles.addButtonText, { color: theme.colors.primary }]}>
+          <Plus size={18} color={theme.colors.pinkTwo} />
+          <Text style={[styles.addButtonText, { color: theme.colors.pinkTwo }]}>
             Add
           </Text>
         </TouchableOpacity>
@@ -183,13 +183,13 @@ export function ExperienceInput({
                         <View
                           style={[
                             styles.currentBadge,
-                            { backgroundColor: theme.colors.primary + '20' },
+                            { backgroundColor: theme.colors.pinkTwo + '20' },
                           ]}
                         >
                           <Text
                             style={[
                               styles.currentText,
-                              { color: theme.colors.primary },
+                              { color: theme.colors.pinkTwo },
                             ]}
                           >
                             Currently working
@@ -515,10 +515,10 @@ function ExperienceFormModal({
                   modalStyles.checkbox,
                   {
                     backgroundColor: isCurrent
-                      ? theme.colors.primary
+                      ? theme.colors.pinkTwo
                       : theme.colors.card,
                     borderColor: isCurrent
-                      ? theme.colors.primary
+                      ? theme.colors.pinkTwo
                       : theme.colors.border,
                   },
                 ]}
@@ -568,7 +568,7 @@ function ExperienceFormModal({
             <Button
               title="Add"
               onPress={handleSave}
-              style={modalStyles.modalButtonFullWidth}
+              style={[modalStyles.modalButtonFullWidth, { backgroundColor: theme.colors.pinkTwo }]}
             />
           </View>
         </View>
@@ -637,7 +637,7 @@ const modalStyles = StyleSheet.create({
   },
   textInput: {
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 20,
     borderWidth: 1,
     fontSize: 15,
     fontFamily: 'Inter-Regular',

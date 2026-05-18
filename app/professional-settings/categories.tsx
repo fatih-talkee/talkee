@@ -3,11 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   SafeAreaView,
-  TextInput,
   TouchableOpacity,
   Platform,
+  ScrollView,
+  Switch,
+  TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,7 +20,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { professionalsService } from '@/services/supabase/professionals.service';
 import { useToast } from '@/lib/toastService';
 import { useCategoriesGrouped } from '@/hooks/useCategories';
-import { Tag, Search, X, Check } from 'lucide-react-native';
+import { Search, X } from 'lucide-react-native';
 
 export default function CategoriesScreen() {
   const router = useRouter();
@@ -107,7 +108,7 @@ export default function CategoriesScreen() {
   };
 
   const handleSave = async () => {
-    if (!profileData?.professional?.id) {
+    if (!profileData?.professional?.id || !professional?.id) {
       toast.error({
         title: 'Error',
         message: 'Professional data not found',
@@ -120,14 +121,6 @@ export default function CategoriesScreen() {
       toast.error({
         title: 'Validation Error',
         message: 'Please select at least one category',
-      });
-      return;
-    }
-
-    if (!professional?.id) {
-      toast.error({
-        title: 'Error',
-        message: 'Professional data not found',
       });
       return;
     }
@@ -172,9 +165,8 @@ export default function CategoriesScreen() {
   if (loading || profileLoading || categoriesLoading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        <Header showLogo showBack onBackPress={() => router.back()} />
+        style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <Header showLogo={false} title="Professions" showBack onBackPress={() => router.back()} />
         <PageLoading message="Loading categories..." />
       </SafeAreaView>
     );
@@ -182,26 +174,15 @@ export default function CategoriesScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
-      <Header showLogo showBack onBackPress={() => router.back()} />
+      style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <Header showLogo={false} title="Professions" showBack onBackPress={() => router.back()} />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.colors.text }]}>
-            Categories
-          </Text>
-          <Text
-            style={[styles.subtitle, { color: theme.colors.textSecondary }]}
-          >
-            Choose one or more categories where you can provide expertise
-          </Text>
-        </View>
-
-        {/* Search Bar */}
+        
+        {/* Search Bar - Full Width with Enhanced Design */}
         <View style={styles.searchBarWrapper}>
           <View
             style={[
@@ -209,7 +190,9 @@ export default function CategoriesScreen() {
               {
                 backgroundColor: theme.colors.surface,
                 borderColor: theme.colors.border,
-                shadowColor: theme.colors.text,
+                ...(Platform.OS === 'web'
+                  ? { boxShadow: `0px 0px 8px ${theme.colors.text}20` }
+                  : { shadowColor: theme.colors.text }),
               },
             ]}
           >
@@ -241,7 +224,7 @@ export default function CategoriesScreen() {
             <Text
               style={[
                 styles.selectedCountText,
-                { color: theme.colors.primary },
+                { color: theme.colors.pinkTwo },
               ]}
             >
               {selectedCategories.length}{' '}
@@ -262,57 +245,31 @@ export default function CategoriesScreen() {
           </View>
         )}
 
-        {/* Grouped Categories */}
-        {filteredGroups.map((group) => (
-          <View key={group.id} style={styles.categoryGroup}>
-            {/* Group Header */}
-            <View style={styles.groupHeader}>
-              <Text style={styles.groupEmoji}>{group.emoji}</Text>
-              <Text style={[styles.groupName, { color: theme.colors.text }]}>
-                {group.name}
-              </Text>
-              <Text
-                style={[styles.groupCount, { color: theme.colors.textMuted }]}
-              >
-                ({group.categories.length})
-              </Text>
-            </View>
-
-            {/* Categories Grid */}
-            <View style={styles.categoriesGrid}>
-              {group.categories.map((category) => {
+        {/* Categories as Pills - Flattened List from all groups */}
+        <View style={styles.categoriesGrid}>
+          {filteredGroups.length > 0 ? (
+            filteredGroups.flatMap((group) =>
+              group.categories.map((category) => {
                 const isSelected = selectedCategories.includes(category.id);
                 return (
                   <TouchableOpacity
                     key={category.id}
                     onPress={() => handleCategoryToggle(category.id)}
                     style={[
-                      styles.categoryCard,
+                      styles.categoryPill,
                       {
                         backgroundColor: isSelected
-                          ? theme.colors.primary
-                          : theme.colors.surface,
+                          ? theme.colors.pinkTwo
+                          : 'transparent',
                         borderColor: isSelected
-                          ? theme.colors.primary
+                          ? theme.colors.pinkTwo
                           : theme.colors.border,
                       },
                     ]}
                   >
-                    {isSelected && (
-                      <View style={styles.checkBadge}>
-                        <Check
-                          size={12}
-                          color={theme.colors.surface}
-                          strokeWidth={3}
-                        />
-                      </View>
-                    )}
-                    <Text style={styles.categoryEmoji}>
-                      {category.emoji || '⭐'}
-                    </Text>
                     <Text
                       style={[
-                        styles.categoryName,
+                        styles.categoryPillText,
                         {
                           color: isSelected
                             ? theme.colors.surface
@@ -322,31 +279,42 @@ export default function CategoriesScreen() {
                     >
                       {category.name}
                     </Text>
+                    <Text
+                      style={[
+                        styles.categoryPillIcon,
+                        {
+                          color: isSelected
+                            ? theme.colors.surface
+                            : theme.colors.text,
+                        },
+                      ]}
+                    >
+                      {isSelected ? '✓' : '+'}
+                    </Text>
                   </TouchableOpacity>
                 );
-              })}
+              })
+            )
+          ) : (
+            <View style={styles.emptySearchContainer}>
+              <Search size={48} color={theme.colors.textMuted} />
+              <Text
+                style={[styles.emptySearchText, { color: theme.colors.text }]}
+              >
+                No categories found
+              </Text>
+              <Text
+                style={[
+                  styles.emptySearchSubtext,
+                  { color: theme.colors.textMuted },
+                ]}
+              >
+                Try searching with different keywords
+              </Text>
             </View>
-          </View>
-        ))}
+          )}
+        </View>
 
-        {filteredGroups.length === 0 && (
-          <View style={styles.emptySearchContainer}>
-            <Search size={48} color={theme.colors.textMuted} />
-            <Text
-              style={[styles.emptySearchText, { color: theme.colors.text }]}
-            >
-              No categories found
-            </Text>
-            <Text
-              style={[
-                styles.emptySearchSubtext,
-                { color: theme.colors.textMuted },
-              ]}
-            >
-              Try searching with different keywords
-            </Text>
-          </View>
-        )}
       </ScrollView>
 
       {/* Footer with Save Button */}
@@ -364,7 +332,7 @@ export default function CategoriesScreen() {
           title={saving ? 'Saving...' : 'Save Changes'}
           onPress={handleSave}
           disabled={saving || selectedCategories.length === 0}
-          style={styles.saveButton}
+          style={[styles.saveButton, { backgroundColor: theme.colors.pinkTwo }]}
         />
       </View>
     </SafeAreaView>
@@ -382,19 +350,6 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 100,
   },
-  header: {
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 28,
-    fontFamily: 'Inter-Bold',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    fontFamily: 'Inter-Regular',
-    lineHeight: 22,
-  },
   searchBarWrapper: {
     width: '100%',
     marginBottom: 16,
@@ -403,8 +358,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 2,
+    borderRadius: 24,
     borderWidth: 2,
     gap: 12,
     ...(Platform.OS === 'web'
@@ -443,66 +398,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Medium',
   },
-  categoryGroup: {
-    marginBottom: 24,
-  },
-  groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
-  },
-  groupEmoji: {
-    fontSize: 20,
-  },
-  groupName: {
-    fontSize: 16,
-    fontFamily: 'Inter-Bold',
-  },
-  groupCount: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-  },
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    gap: 12,
+    width: '100%',
   },
-  categoryCard: {
-    width: '48%',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+  categoryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 24,
     borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    marginBottom: 12,
+    gap: 8,
   },
-  checkBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  categoryPillText: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
   },
-  categoryEmoji: {
-    fontSize: 24,
-    marginBottom: 4,
-  },
-  categoryName: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    textAlign: 'center',
+  categoryPillIcon: {
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   emptySearchContainer: {
     alignItems: 'center',
     padding: 40,
     marginTop: 40,
+    width: '100%',
   },
   emptySearchText: {
     fontSize: 18,
